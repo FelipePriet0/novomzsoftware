@@ -58,3 +58,4 @@ yarn.lock           text eol=lf
 *.woff2 binary
 *.pdf   binary
 *.zip   binary
+.gitattributes text eol=lf
