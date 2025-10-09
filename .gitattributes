@@ -1,6 +1,7 @@
-﻿* text=auto
+﻿.gitattributes text eol=lf
+* text=auto
 
-# --- Código/Config (LF) ---
+# Código/Config (LF)
 *.ts      text eol=lf
 *.tsx     text eol=lf
 *.js      text eol=lf
@@ -11,23 +12,20 @@
 *.jsonc   text eol=lf
 *.tsbuildinfo text eol=lf
 
-# Estilos/markup/docs (LF)
-*.css     text eol=lf
-*.scss    text eol=lf
-*.sass    text eol=lf
-*.less    text eol=lf
-*.html    text eol=lf
+# Docs/markup (LF)
 *.md      text eol=lf
 *.mdx     text eol=lf
 *.yml     text eol=lf
 *.yaml    text eol=lf
+*.html    text eol=lf
+*.css     text eol=lf
+*.scss    text eol=lf
+*.less    text eol=lf
 *.svg     text eol=lf
+*.txt     text eol=lf     # <-- cobre public/robots.txt
 
-# Supabase/SQL (LF)
+# SQL (LF)
 *.sql     text eol=lf
-
-# Env de exemplo (LF)
-.env.example text eol=lf
 
 # Scripts Unix (LF)
 *.sh      text eol=lf
@@ -43,7 +41,7 @@ package-lock.json   text eol=lf
 pnpm-lock.yaml      text eol=lf
 yarn.lock           text eol=lf
 
-# Imagens e fontes (binário)
+# Imagens e fontes (binários)
 *.png   binary
 *.jpg   binary
 *.jpeg  binary
@@ -58,4 +56,3 @@ yarn.lock           text eol=lf
 *.woff2 binary
 *.pdf   binary
 *.zip   binary
-.gitattributes text eol=lf
