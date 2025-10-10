@@ -251,8 +251,11 @@ export function ExpandedFichaModal({
               await supabase.from('kanban_cards').update(basics).eq('id', applicationId);
             }
           }
+          // Chamar fluxo original de submissão do formulário PF
+          await onSubmit(formData);
+          onRefetch?.();
         } catch (_) {
-          // ignore errors
+          // ignore errors, manter UX
         } finally {
           await clearEditingSession();
         }
