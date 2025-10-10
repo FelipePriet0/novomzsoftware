@@ -9,7 +9,7 @@ import NovaFichaComercialForm, { ComercialFormValues } from '@/components/NovaFi
 import { BasicInfoData } from './BasicInfoModal';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useDraftPersistence } from '@/hooks/useDraftPersistence';
+import { useDraftForm } from '@/hooks/useDraftForm';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, SaveIcon, CheckIcon, X } from 'lucide-react';
 import {
@@ -51,7 +51,7 @@ export function ExpandedFichaModal({
   onStatusChange,
   onRefetch
 }: ExpandedFichaModalProps) {
-  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftPersistence();
+  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const [showFirstConfirmDialog, setShowFirstConfirmDialog] = useState(false);
   const [showSecondConfirmDialog, setShowSecondConfirmDialog] = useState(false);
@@ -62,6 +62,19 @@ export function ExpandedFichaModal({
   const [isInitialized, setIsInitialized] = useState(false);
   const [loadedDraftData, setLoadedDraftData] = useState<any>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [lastFormSnapshot, setLastFormSnapshot] = useState<ComercialFormValues | null>(null);
+
+  const ensureCommercialEntrada = async (appId?: string) => {
+    if (!appId) return;
+    try {
+      await supabase
+        .from('kanban_cards')
+        .update({ area: 'comercial', stage: 'entrada' })
+        .eq('id', appId);
+    } catch (_) {
+      // ignore
+    }
+  };
 
   // Auto-save status component
   const SaveStatus = () => {
@@ -113,6 +126,7 @@ export function ExpandedFichaModal({
 
   const handleFormChange = (formData: any) => {
     setFormData(formData);
+    setLastFormSnapshot(formData);
     
     // Only set hasChanges if we're initialized and there are actual changes
     if (isInitialized && initialFormData) {
@@ -130,7 +144,7 @@ export function ExpandedFichaModal({
     }
 
     // Set new timer for auto-save
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const draftData = {
         customer_data: {
           ...basicInfo,
@@ -151,7 +165,8 @@ export function ExpandedFichaModal({
       };
       
       if (applicationId) {
-        saveDraft(applicationId, draftData, 'full', false); // Don't show toast for auto-save
+        await ensureCommercialEntrada(applicationId);
+        await saveDraft(draftData, applicationId, 'full', false);
       }
     }, 700); // Save after 700ms of inactivity (optimized debounce)
 
@@ -177,8 +192,40 @@ export function ExpandedFichaModal({
     
     if (pendingAction === 'close' || pendingAction === 'save') {
       if (formData) {
-        await onSubmit(formData);
-        await clearEditingSession();
+        try {
+          if (applicationId) {
+            const draftData = {
+              customer_data: { ...basicInfo, ...formData.cliente },
+              address_data: formData.endereco,
+              employment_data: formData.empregoRenda,
+              household_data: formData.relacoes,
+              spouse_data: formData.conjuge,
+              references_data: formData.referencias,
+              other_data: {
+                spc: formData.spc,
+                pesquisador: formData.pesquisador,
+                filiacao: formData.filiacao,
+                outras: formData.outras,
+                infoRelevantes: formData.infoRelevantes,
+              },
+            };
+            await ensureCommercialEntrada(applicationId);
+            await saveDraft(draftData, applicationId, 'full', false);
+            // Atualiza campos básicos do card
+            const basics: any = {};
+            if (formData?.cliente?.nome) basics.title = formData.cliente.nome;
+            if (formData?.cliente?.tel) basics.phone = formData.cliente.tel;
+            if (formData?.cliente?.email) basics.email = formData.cliente.email;
+            if (formData?.cliente?.cpf) basics.cpf_cnpj = formData.cliente.cpf;
+            if (Object.keys(basics).length > 0) {
+              await supabase.from('kanban_cards').update(basics).eq('id', applicationId);
+            }
+          }
+        } catch (_) {
+          // ignore errors
+        } finally {
+          await clearEditingSession();
+        }
       }
       onClose();
     }
@@ -506,7 +553,32 @@ export function ExpandedFichaModal({
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-hidden">
+          <div
+            className="flex-1 overflow-hidden"
+            onBlurCapture={async () => {
+              if (!applicationId || !lastFormSnapshot) return;
+              const formData = lastFormSnapshot;
+              const draftData = {
+                customer_data: { ...basicInfo, ...formData.cliente },
+                address_data: formData.endereco,
+                employment_data: formData.empregoRenda,
+                household_data: formData.relacoes,
+                spouse_data: formData.conjuge,
+                references_data: formData.referencias,
+                other_data: {
+                  spc: formData.spc,
+                  pesquisador: formData.pesquisador,
+                  filiacao: formData.filiacao,
+                  outras: formData.outras,
+                  infoRelevantes: formData.infoRelevantes,
+                },
+              };
+              try {
+                await ensureCommercialEntrada(applicationId);
+                await saveDraft(draftData, applicationId, 'full', false);
+              } catch {}
+            }}
+          >
             {isLoadingDraft ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />

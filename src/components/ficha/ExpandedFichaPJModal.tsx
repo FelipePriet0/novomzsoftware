@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useDraftForm } from "@/hooks/useDraftForm";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +65,21 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [pendingAction, setPendingAction] = useState<'close' | 'save' | null>(null);
   const [initialValues, setInitialValues] = useState<Partial<PJFormValues> | null>(null);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
+  const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
+
+  const ensureCommercialEntrada = async (appId?: string) => {
+    if (!appId) return;
+    try {
+      await supabase
+        .from('kanban_cards')
+        .update({ area: 'comercial', stage: 'entrada' })
+        .eq('id', appId);
+    } catch (_) {
+      // ignore
+    }
+  };
 
   // Load notes from kanban_cards
   const loadPareceres = useCallback(async () => {
@@ -171,7 +187,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         }
 
         if (!mounted) return;
-        const defaults: Partial<PJFormValues> = {
+        let defaults: Partial<PJFormValues> = {
           empresa: {
             razao: (card as any)?.title || '',
             cnpj: (card as any)?.cpf_cnpj || '',
@@ -183,6 +199,20 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             email: (card as any)?.email || '',
           },
         } as any;
+        // Tentar carregar rascunho salvo para esta aplicação e usuário
+        try {
+          const { data: draft } = await supabase
+            .from('applications_drafts')
+            .select('other_data, application_id, user_id')
+            .eq('application_id', applicationId)
+            .maybeSingle();
+          const pjDraft = (draft as any)?.other_data?.pj as Partial<PJFormValues> | undefined;
+          if (pjDraft && typeof pjDraft === 'object') {
+            defaults = { ...defaults, ...pjDraft } as Partial<PJFormValues>;
+          }
+        } catch (_) {
+          // ignore
+        }
         setInitialValues(defaults);
         if (import.meta?.env?.DEV) console.log('[PJ] Initial defaults ready');
         setIsInitialized(false);
@@ -533,6 +563,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   // Track form changes similar to PF flow
   const handleFormChange = (data: PJFormValues) => {
     setFormData(data);
+    setLastFormSnapshot(data);
     if (!isInitialized) {
       setIsInitialized(true);
       setHasChanges(false);
@@ -548,6 +579,23 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
     } else {
       setHasChanges(true);
     }
+
+    // Debounced auto-save to drafts
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    const timer = setTimeout(async () => {
+      if (!applicationId) return;
+      const draftPayload = {
+        // Guardar toda a ficha PJ em other_data.pj para restauração fiel
+        other_data: { pj: data },
+      } as any;
+      try {
+        await ensureCommercialEntrada(applicationId);
+        await saveDraft(draftPayload, applicationId, 'pj', false);
+      } catch (_) {
+        // ignore
+      }
+    }, 700);
+    setAutoSaveTimer(timer);
   };
 
   const handleClose = () => {
@@ -571,6 +619,11 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       if (formData && applicationId) {
         // Salvar os dados da ficha PJ no banco
         try {
+          // Salvar rascunho final
+          try {
+            await ensureCommercialEntrada(applicationId);
+            await saveDraft({ other_data: { pj: formData } } as any, applicationId, 'pj', false);
+          } catch (_) {}
           // Atualizar kanban_cards com os dados básicos
           const updates: any = {};
           if (formData.empresa?.razao) updates.title = formData.empresa.razao;
@@ -660,6 +713,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           });
         }
       }
+      try { await clearEditingSession(); } catch {}
       onClose();
     }
     
@@ -708,7 +762,16 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             </Button>
           </div>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden space-y-6">
+        <div
+          className="flex-1 overflow-hidden space-y-6"
+          onBlurCapture={async () => {
+            if (!applicationId || !lastFormSnapshot) return;
+            try {
+              await ensureCommercialEntrada(applicationId);
+              await saveDraft({ other_data: { pj: lastFormSnapshot } } as any, applicationId, 'pj', false);
+            } catch (_) {}
+          }}
+        >
           {isLoadingInitial && (
             <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando dados básicos...
