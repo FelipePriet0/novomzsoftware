@@ -89,7 +89,7 @@ export function usePjFichasTestConnection() {
         .from('pj_fichas_test')
         .select('id')
         .eq('applicant_id', applicantId)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         console.log('✅ [usePjFichasTestConnection] PJ Ficha já existe:', existing.id);

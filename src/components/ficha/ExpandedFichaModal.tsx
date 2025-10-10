@@ -174,6 +174,33 @@ export function ExpandedFichaModal({
         await ensureCommercialEntrada(applicationId);
         await saveDraft(draftData, applicationId, 'full', false);
 
+        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
+        try {
+          const updates: any = {};
+          if (formData?.cliente?.nome) updates.title = formData.cliente.nome;
+          if (formData?.cliente?.tel) updates.phone = formData.cliente.tel;
+          if (formData?.cliente?.email) updates.email = formData.cliente.email;
+          if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
+          // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
+          if (formData?.endereco) {
+            if (formData.endereco.end) updates.endereco = formData.endereco.end;
+            if (formData.endereco.n) updates.numero = formData.endereco.n;
+            if (formData.endereco.compl) updates.complemento = formData.endereco.compl;
+            if (formData.endereco.cep) updates.cep = formData.endereco.cep;
+            if (formData.endereco.bairro) updates.bairro = formData.endereco.bairro;
+          }
+          if (formData?.outras) {
+            if (formData.outras.planoEscolhido) updates.plano_acesso = formData.outras.planoEscolhido;
+            if (formData.outras.diaVencimento) updates.venc = Number(formData.outras.diaVencimento);
+            if (typeof formData.outras.carneImpresso !== 'undefined') {
+              updates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
+            }
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+          }
+        } catch (_) {}
+
         // Dev-safe: mirror into pf_fichas_test (debounced)
         try {
           // Ensure applicants_test record exists and cache its id
@@ -203,13 +230,31 @@ export function ExpandedFichaModal({
     setAutoSaveTimer(timer);
   };
 
-  const handleClose = () => {
-    if (!hasChanges) {
-      onClose();
-      return;
-    }
-    setPendingAction('close');
-    setShowFirstConfirmDialog(true);
+  const handleClose = async () => {
+    // Salva silenciosamente o último snapshot antes de fechar (UX mais liso)
+    try {
+      if (applicationId && lastFormSnapshot) {
+        const formData = lastFormSnapshot;
+        const draftData = {
+          customer_data: { ...basicInfo, ...formData.cliente },
+          address_data: formData.endereco,
+          employment_data: formData.empregoRenda,
+          household_data: formData.relacoes,
+          spouse_data: formData.conjuge,
+          references_data: formData.referencias,
+          other_data: {
+            spc: formData.spc,
+            pesquisador: formData.pesquisador,
+            filiacao: formData.filiacao,
+            outras: formData.outras,
+            infoRelevantes: formData.infoRelevantes,
+          },
+        };
+        await ensureCommercialEntrada(applicationId);
+        await saveDraft(draftData, applicationId, 'full', false);
+      }
+    } catch {}
+    onClose();
   };
 
   const handleFirstConfirm = () => {
@@ -241,15 +286,30 @@ export function ExpandedFichaModal({
             };
             await ensureCommercialEntrada(applicationId);
             await saveDraft(draftData, applicationId, 'full', false);
-            // Atualiza campos básicos do card
-            const basics: any = {};
-            if (formData?.cliente?.nome) basics.title = formData.cliente.nome;
-            if (formData?.cliente?.tel) basics.phone = formData.cliente.tel;
-            if (formData?.cliente?.email) basics.email = formData.cliente.email;
-            if (formData?.cliente?.cpf) basics.cpf_cnpj = formData.cliente.cpf;
-            if (Object.keys(basics).length > 0) {
-              await supabase.from('kanban_cards').update(basics).eq('id', applicationId);
+          // Atualiza campos do card (espelho com Editar Ficha)
+          const updates: any = {};
+          if (formData?.cliente?.nome) updates.title = formData.cliente.nome;
+          if (formData?.cliente?.tel) updates.phone = formData.cliente.tel;
+          if (formData?.cliente?.email) updates.email = formData.cliente.email;
+          if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
+          // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
+          if (formData?.endereco) {
+            if (formData.endereco.end) updates.endereco = formData.endereco.end;
+            if (formData.endereco.n) updates.numero = formData.endereco.n;
+            if (formData.endereco.compl) updates.complemento = formData.endereco.compl;
+            if (formData.endereco.cep) updates.cep = formData.endereco.cep;
+            if (formData.endereco.bairro) updates.bairro = formData.endereco.bairro;
+          }
+          if (formData?.outras) {
+            if (formData.outras.planoEscolhido) updates.plano_acesso = formData.outras.planoEscolhido;
+            if (formData.outras.diaVencimento) updates.venc = Number(formData.outras.diaVencimento);
+            if (typeof formData.outras.carneImpresso !== 'undefined') {
+              updates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
             }
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+          }
           }
           // Chamar fluxo original de submissão do formulário PF
           await onSubmit(formData);

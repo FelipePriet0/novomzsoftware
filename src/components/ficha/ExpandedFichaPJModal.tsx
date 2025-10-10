@@ -656,6 +656,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           if (formData.empresa?.cnpj) updates.cpf_cnpj = formData.empresa.cnpj;
           if (formData.contatos?.tel) updates.phone = formData.contatos.tel;
           if (formData.contatos?.email) updates.email = formData.contatos.email;
+          // Plano/Venc da PJ
+          if (formData.solicitacao?.planoAcesso) updates.plano_acesso = formData.solicitacao.planoAcesso;
+          if (formData.solicitacao?.venc) updates.venc = Number(formData.solicitacao.venc);
           
           if (Object.keys(updates).length > 0) {
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);

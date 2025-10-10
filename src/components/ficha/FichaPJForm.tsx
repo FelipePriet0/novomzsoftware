@@ -39,7 +39,8 @@ const pjSchema = z.object({
   socios: z.array(z.object({ nome: z.string().optional(), cpf: z.string().optional(), tel: z.string().optional() })).default([]),
   solicitacao: z.object({
     quem: z.string().optional(), meio: z.string().optional(), tel: z.string().optional(),
-    planoAcesso: z.enum(['A definir']).optional(), svaAvulso: z.enum(['A definir']).optional(), venc: z.enum(['5','10','15','20','25']).optional(),
+    // Permitir qualquer string para comportar a nova lista de planos
+    planoAcesso: z.string().optional(), svaAvulso: z.enum(['A definir']).optional(), venc: z.enum(['5','10','15','20','25']).optional(),
     protocolo: z.string().optional(), // Novo campo experimental
   }),
   info: z.object({
@@ -61,6 +62,32 @@ interface FichaPJFormProps {
 export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, onFormChange, applicationId }: FichaPJFormProps) {
   const form = useForm<PJFormValues>({ resolver: zodResolver(pjSchema), defaultValues });
   const changeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Plan selector state (PJ)
+  const [pjPlanCTA, setPjPlanCTA] = React.useState<'CGNAT' | 'DIN' | 'FIXO'>('CGNAT');
+  const pjPlans = React.useMemo(() => {
+    const base = {
+      CGNAT: [
+        '100 Mega por R$59,90',
+        '250 Mega por R$69,90',
+        '500 Mega por R$79,90',
+        '1000 Mega (1Gb) por R$99,90',
+      ],
+      DIN: [
+        '100 Mega + IP Dinâmico por R$74,90',
+        '250 Mega + IP Dinâmico por R$89,90',
+        '500 Mega + IP Dinâmico por R$94,90',
+        '1000 Mega (1Gb) + IP Dinâmico por R$114,90',
+      ],
+      FIXO: [
+        '100 Mega + IP Fixo por R$259,90',
+        '250 Mega + IP Fixo por R$269,90',
+        '500 Mega + IP Fixo por R$279,90',
+        '1000 Mega (1Gb) + IP Fixo por R$299,90',
+      ],
+    } as const;
+    return base[pjPlanCTA];
+  }, [pjPlanCTA]);
   
   // Hook para conectar com a tabela applicants_test
   const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
@@ -437,18 +464,105 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         {/* Solicitação */}
         <section>
           <h3 className="text-base font-semibold mb-3">Solicitação</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (<FormItem><FormLabel>Quem solicitou</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
-            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (<FormItem><FormLabel>Meio</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
-            <FormField control={form.control} name="solicitacao.tel" render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quem solicitou</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Meio</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Ligação">Ligação</SelectItem>
+                    <SelectItem value="Presencial">Presencial</SelectItem>
+                    <SelectItem value="Whatsapp">Whatsapp</SelectItem>
+                    <SelectItem value="Whats - Uber">Whats - Uber</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.tel" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tel</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.protocolo" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Protocolo MK</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Número do protocolo" className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                </FormControl>
+              </FormItem>
+            )} />
             <FormField control={form.control} name="solicitacao.planoAcesso" render={({ field }) => (
-              <FormItem><FormLabel>Plano de Acesso</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="A definir" /></SelectTrigger></FormControl><SelectContent><SelectItem value="A definir">A definir</SelectItem></SelectContent></Select></FormItem>
+              <FormItem>
+                <FormLabel>Plano de Acesso</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar plano" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {/* CTAs verdes dentro do dropdown */}
+                    <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
+                      {([
+                        { key: 'CGNAT', label: 'CGNAT' },
+                        { key: 'DIN', label: 'DINÂMICO' },
+                        { key: 'FIXO', label: 'FIXO' },
+                      ] as const).map(({ key, label }) => {
+                        const active = pjPlanCTA === key;
+                        return (
+                          <Button
+                            key={key}
+                            type="button"
+                            variant="outline"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => { e.stopPropagation(); setPjPlanCTA(key); field.onChange(undefined); }}
+                            className={
+                              (active
+                                ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 '
+                                : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') +
+                              'h-7 px-2 text-xs rounded-[30px]'
+                            }
+                            size="sm"
+                          >
+                            {label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    {pjPlans.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormItem>
             )} />
             <FormField control={form.control} name="solicitacao.svaAvulso" render={({ field }) => (
               <FormItem><FormLabel>SVA Avulso</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="A definir" /></SelectTrigger></FormControl><SelectContent><SelectItem value="A definir">A definir</SelectItem></SelectContent></Select></FormItem>
             )} />
             <FormField control={form.control} name="solicitacao.venc" render={({ field }) => (
-              <FormItem><FormLabel>Venc</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent>{['5','10','15','20','25'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></FormItem>
+              <FormItem>
+                <FormLabel>Venc</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {['5','10','15','20','25'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormItem>
             )} />
           </div>
         </section>
@@ -493,43 +607,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           )} />
         </section>
 
-        {/* NOVOS CAMPOS EXPERIMENTAIS - APLICANTS_TEST */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Dados da Solicitação</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quem Solicitou</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Nome do colaborador" />
-                </FormControl>
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="solicitacao.protocolo" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Protocolo MK</FormLabel>
-                <FormControl>
-                  <Input {...field} placeholder="Número do protocolo" />
-                </FormControl>
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Meio</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Ligação">Ligação</SelectItem>
-                    <SelectItem value="Whatsapp">Whatsapp</SelectItem>
-                    <SelectItem value="Presencial">Presencial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormItem>
-            )} />
-          </div>
-        </section>
+        {/* Campos duplicados de Solicitação removidos conforme solicitação */}
 
         {afterMkSlot}
 

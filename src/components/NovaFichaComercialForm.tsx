@@ -195,6 +195,32 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
+  // Plan selector state (PF)
+  const [pfPlanCTA, setPfPlanCTA] = React.useState<'CGNAT' | 'DIN' | 'FIXO'>('CGNAT');
+  const pfPlans = React.useMemo(() => {
+    const base = {
+      CGNAT: [
+        '100 Mega por R$59,90',
+        '250 Mega por R$69,90',
+        '500 Mega por R$79,90',
+        '1000 Mega (1Gb) por R$99,90',
+      ],
+      DIN: [
+        '100 Mega + IP Dinâmico por R$74,90',
+        '250 Mega + IP Dinâmico por R$89,90',
+        '500 Mega + IP Dinâmico por R$94,90',
+        '1000 Mega (1Gb) + IP Dinâmico por R$114,90',
+      ],
+      FIXO: [
+        '100 Mega + IP Fixo por R$259,90',
+        '250 Mega + IP Fixo por R$269,90',
+        '500 Mega + IP Fixo por R$279,90',
+        '1000 Mega (1Gb) + IP Fixo por R$299,90',
+      ],
+    } as const;
+    return base[pfPlanCTA];
+  }, [pfPlanCTA]);
+  
   // Hook para conectar com a tabela applicants_test
   const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
   // Hook para conectar com a tabela pf_fichas_test
@@ -1496,12 +1522,42 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Plano escolhido</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecionar" />
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                      <SelectValue placeholder="Selecionar plano" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="A definir">A definir</SelectItem>
+                    {/* CTAs verdes dentro do dropdown */}
+                    <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
+                      {([
+                        { key: 'CGNAT', label: 'CGNAT' },
+                        { key: 'DIN', label: 'DINÂMICO' },
+                        { key: 'FIXO', label: 'FIXO' },
+                      ] as const).map(({ key, label }) => {
+                        const active = pfPlanCTA === key;
+                        return (
+                          <Button
+                            key={key}
+                            type="button"
+                            variant="outline"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => { e.stopPropagation(); setPfPlanCTA(key); field.onChange(undefined); }}
+                            className={
+                              (active
+                                ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 '
+                                : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') +
+                              'h-7 px-2 text-xs rounded-[30px]'
+                            }
+                            size="sm"
+                          >
+                            {label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    {pfPlans.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </FormItem>
@@ -1511,7 +1567,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Dia de vencimento</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="5">5</SelectItem>
@@ -1528,7 +1584,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>SVA Avulso</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
                       <SelectValue placeholder="Selecionar" />
                     </SelectTrigger>
                   </FormControl>
@@ -1555,12 +1611,20 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           </div>
 
           {/* NOVOS CAMPOS EXPERIMENTAIS - APLICANTS_TEST */}
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3 mt-4">
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-4 mt-4">
             <FormField control={form.control} name="outras.administrativas.quemSolicitou" render={({ field }) => (
               <FormItem>
                 <FormLabel>Quem Solicitou</FormLabel>
                 <FormControl>
                   <Input {...field} placeholder="Nome do colaborador" />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="outras.administrativas.fone" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tel</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Ex: (11) 99999-0000" />
                 </FormControl>
               </FormItem>
             )} />
@@ -1583,6 +1647,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                     <SelectItem value="Ligação">Ligação</SelectItem>
                     <SelectItem value="Whatsapp">Whatsapp</SelectItem>
                     <SelectItem value="Presencial">Presencial</SelectItem>
+                    <SelectItem value="Whats - Uber">Whats - Uber</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>

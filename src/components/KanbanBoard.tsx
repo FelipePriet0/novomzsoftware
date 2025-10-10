@@ -93,6 +93,7 @@ export interface CardItem {
   cpf?: string;
   receivedAt: string; // ISO
   deadline: string; // ISO
+  hasDueAt?: boolean; // indica se veio de due_at (Instalação agendada)
   responsavel?: string; // Nome do responsável (assignee)
   responsavelId?: string; // UUID do responsável (assignee_id do banco)
   telefone?: string;
@@ -158,7 +159,7 @@ const initialCards: CardItem[] = [];
 
 const RESPONSAVEIS: string[] = [];
 
-type PrazoFiltro = "todos" | "hoje" | "atrasados";
+type PrazoFiltro = "todos" | "hoje" | "amanha" | "atrasados" | "data";
 type ViewFilter = "all" | "mine" | "company";
 type KanbanArea = "analise" | "comercial";
 type CommercialStage = Extract<ColumnId, `com_${string}`>;
@@ -169,6 +170,7 @@ export default function KanbanBoard() {
   const [query, setQuery] = useState("");
   const [responsavelFiltro, setResponsavelFiltro] = useState<string>("todos");
   const [prazoFiltro, setPrazoFiltro] = useState<PrazoFiltro>("todos");
+  const [prazoData, setPrazoData] = useState<Date | null>(null);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   // Foco inicial no setor comercial (habilitado para DnD)
   const [kanbanArea, setKanbanArea] = useState<KanbanArea>("comercial");
@@ -268,13 +270,15 @@ export default function KanbanBoard() {
       if (!data) return;
       const mapped: CardItem[] = (data as any[]).map((row: any) => {
         const receivedAt = row.received_at ? new Date(row.received_at).toISOString() : new Date().toISOString();
-        const deadline = row.due_at ? new Date(row.due_at).toISOString() : receivedAt;
-        return {
-          id: row.id,
-          nome: row.title ?? row.applicant?.primary_name ?? 'Cliente',
+      const hasDueAt = !!row.due_at;
+      const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
+      return {
+        id: row.id,
+        nome: row.title ?? row.applicant?.primary_name ?? 'Cliente',
           cpf: row.cpf_cnpj ?? '',
           receivedAt,
           deadline,
+          hasDueAt,
           responsavel: row.assignee?.full_name ?? undefined,
           responsavelId: row.assignee_id ?? undefined,
           telefone: row.phone ?? undefined,
@@ -548,16 +552,25 @@ export default function KanbanBoard() {
       const matchesResp =
         responsavelFiltro === "todos" || (c.responsavel ?? "") === responsavelFiltro;
 
+      // Filtragem de prazo deve seguir "Instalação agendada para" (due_at)
+      if (prazoFiltro !== 'todos' && !c.hasDueAt) return false;
       const deadlineDate = new Date(c.deadline);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const isHoje =
-        new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate()).getTime() ===
-        today.getTime();
+      const deadlineMid = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
+      const isHoje = deadlineMid.getTime() === today.getTime();
+      const amanha = new Date(today);
+      amanha.setDate(amanha.getDate() + 1);
+      const isAmanha = deadlineMid.getTime() === amanha.getTime();
       const isAtrasado = deadlineDate < new Date();
+      const matchesData = prazoData ? (deadlineMid.getTime() === new Date(prazoData.getFullYear(), prazoData.getMonth(), prazoData.getDate()).getTime()) : false;
 
       const matchesPrazo =
-        prazoFiltro === "todos" || (prazoFiltro === "hoje" ? isHoje : isAtrasado);
+        prazoFiltro === "todos"
+        || (prazoFiltro === "hoje" && isHoje)
+        || (prazoFiltro === "amanha" && isAmanha)
+        || (prazoFiltro === "atrasados" && isAtrasado)
+        || (prazoFiltro === "data" && matchesData);
 
       // View filter
       const matchesView = viewFilter === "all" || 
@@ -565,7 +578,7 @@ export default function KanbanBoard() {
 
       return matchesQuery && matchesResp && matchesPrazo && matchesView;
     });
-  }, [cards, query, responsavelFiltro, prazoFiltro, viewFilter, profile]);
+  }, [cards, query, responsavelFiltro, prazoFiltro, prazoData, viewFilter, profile]);
 
   // Avoid repeated filter computations per column during render
   const analysisByColumn = useMemo(() => {
@@ -1209,7 +1222,7 @@ useEffect(() => {
               responsavel: editing.responsavel || undefined,
               parecer: editing.parecer.trim(),
               receivedAt: editing.recebido ? editing.recebido.toISOString() : c.receivedAt,
-              deadline: editing.prazo ? editing.prazo.toISOString() : c.deadline,
+              deadline: editing.prazo ? new Date(Date.UTC(editing.prazo.getFullYear(), editing.prazo.getMonth(), editing.prazo.getDate(), 12, 0, 0)).toISOString() : c.deadline,
               updatedAt: new Date().toISOString(),
             }
           : c
@@ -1265,16 +1278,35 @@ useEffect(() => {
             </div>
             <div className="flex items-center gap-1">
               <Label>Prazo</Label>
-              <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => setPrazoFiltro(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                  <SelectValue placeholder="Prazo" />
-                </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="hoje">Vence hoje</SelectItem>
-                  <SelectItem value="atrasados">Atrasados</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { setPrazoFiltro(v); }}>
+                  <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
+                    <SelectValue placeholder="Prazo" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="hoje">Agendada para hoje</SelectItem>
+                    <SelectItem value="amanha">Agendada para amanhã</SelectItem>
+                    <SelectItem value="atrasados">Atrasado</SelectItem>
+                    <SelectItem value="data">Escolher Data…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {prazoFiltro === 'data' && (
+                  <div className="rounded-md border border-[#018942]/40 p-1 bg-white">
+                    <Calendar
+                      mode="single"
+                      selected={prazoData ?? undefined}
+                      onSelect={(d) => { setPrazoData(d ?? null); }}
+                      classNames={{
+                        day: "h-9 w-9 p-0 font-normal text-[#018942] aria-selected:opacity-100",
+                        head_cell: "text-[#018942] rounded-md w-9 font-normal text-[0.8rem]",
+                        nav_button: "h-7 w-7 p-0 border border-[#018942] text-[#018942] bg-transparent hover:bg-[#018942]/10",
+                      }}
+                      initialFocus
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             {(profile?.role === "analista" || profile?.role === "gestor") && (
               <div className="flex items-center gap-2">
@@ -1330,7 +1362,7 @@ useEffect(() => {
                       nome: form.nome ?? c.nome,
                       telefone: form.telefone || undefined,
                       // Atualiza apenas a data de instalação agendada
-                      deadline: form.agendamento ? new Date(form.agendamento).toISOString() : c.deadline,
+                      deadline: form.agendamento ? new Date(Date.UTC(new Date(form.agendamento).getFullYear(), new Date(form.agendamento).getMonth(), new Date(form.agendamento).getDate(), 12, 0, 0)).toISOString() : c.deadline,
                       // "Feito em" é imutável (data de criação/recebimento)
                       updatedAt: new Date().toISOString(),
                     }

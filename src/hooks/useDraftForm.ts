@@ -13,6 +13,8 @@ export interface DraftData {
   step?: string;
 }
 
+const ENABLE_PROFILE_EDIT_SESSION = false; // desativa PATCH em profiles para evitar 400 no console
+
 export function useDraftForm() {
   const [currentDraft, setCurrentDraft] = useState<{ id: string; data: DraftData; applicationId?: string; step?: string } | null>(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -128,11 +130,15 @@ export function useDraftForm() {
       }
 
       // Update current_edit_application_id in profile if applicationId provided
-      if (applicationId) {
-        await supabase
-          .from('profiles')
-          .update({ current_edit_application_id: applicationId })
-          .eq('id', (await supabase.auth.getUser()).data.user?.id);
+      if (ENABLE_PROFILE_EDIT_SESSION && applicationId) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ current_edit_application_id: applicationId })
+            .eq('id', (await supabase.auth.getUser()).data.user?.id);
+        } catch (e) {
+          // ignorar
+        }
       }
 
       if (mountedRef.current) setLastSaved(new Date());
@@ -193,13 +199,14 @@ export function useDraftForm() {
   };
 
   const clearEditingSession = async () => {
+    if (!ENABLE_PROFILE_EDIT_SESSION) return;
     try {
       await supabase
         .from('profiles')
         .update({ current_edit_application_id: null })
         .eq('id', (await supabase.auth.getUser()).data.user?.id);
     } catch (error) {
-      console.error('Error clearing editing session:', error);
+      // ignorar
     }
   };
 

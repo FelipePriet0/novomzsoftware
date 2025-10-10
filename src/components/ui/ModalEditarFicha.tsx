@@ -41,11 +41,19 @@ interface ModalEditarFichaProps {
 }
 
 export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar, responsaveis = [], onRefetch, autoOpenExpanded = false }: ModalEditarFichaProps) {
+  const toDateInput = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
   const initialForm = {
     nome: card?.nome ?? "",
     telefone: card?.telefone ?? "",
-    agendamento: card?.deadline ? new Date(card.deadline).toISOString().slice(0, 10) : "",
-    feito_em: card?.receivedAt ? new Date(card.receivedAt).toISOString().slice(0, 10) : "",
+    agendamento: card?.deadline ? toDateInput(card.deadline) : "",
+    feito_em: card?.receivedAt ? toDateInput(card.receivedAt) : "",
     observacoes: card?.observacoes ?? "",
     // Novos campos PF
     cpf: card?.cpf_cnpj ?? "",
@@ -55,9 +63,38 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     complemento: card?.complemento ?? "",
     cep: card?.cep ?? "",
     bairro: card?.bairro ?? "",
+    // Novos campos Plano/Venc/Carnê
+    plano_acesso: card?.plano_acesso ?? "",
+    venc: card?.venc ? String(card.venc) : "",
+    carne_impresso: (card?.carne_impresso === true ? 'Sim' : card?.carne_impresso === false ? 'Não' : ''),
   };
   
   const [form, setForm] = useState(initialForm);
+  // CTA de planos dentro do dropdown
+  const [planCTA, setPlanCTA] = useState<'CGNAT' | 'DIN' | 'FIXO'>('CGNAT');
+  const planOptions = React.useMemo(() => {
+    const base = {
+      CGNAT: [
+        '100 Mega por R$59,90',
+        '250 Mega por R$69,90',
+        '500 Mega por R$79,90',
+        '1000 Mega (1Gb) por R$99,90',
+      ],
+      DIN: [
+        '100 Mega + IP Dinâmico por R$74,90',
+        '250 Mega + IP Dinâmico por R$89,90',
+        '500 Mega + IP Dinâmico por R$94,90',
+        '1000 Mega (1Gb) + IP Dinâmico por R$114,90',
+      ],
+      FIXO: [
+        '100 Mega + IP Fixo por R$259,90',
+        '250 Mega + IP Fixo por R$269,90',
+        '500 Mega + IP Fixo por R$279,90',
+        '1000 Mega (1Gb) + IP Fixo por R$299,90',
+      ],
+    } as const;
+    return base[planCTA];
+  }, [planCTA]);
   const [pareceres, setPareceres] = useState<Array<{id:string; author_id?:string; author_name:string; author_role?:string; created_at:string; text:string; updated_by_id?:string; updated_by_name?:string; updated_at?:string; parent_id?:string; level?:number; thread_id?:string; is_thread_starter?:boolean}>>([]);
   const [showNewParecerEditor, setShowNewParecerEditor] = useState(false);
   const [newParecerText, setNewParecerText] = useState("");
@@ -261,16 +298,26 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         const updates: any = {};
         if (form.nome !== initialForm.nome) updates.title = form.nome;
         if (form.telefone !== initialForm.telefone) updates.phone = form.telefone;
-        if (form.agendamento) updates.due_at = new Date(form.agendamento).toISOString();
+        if (form.agendamento) {
+          const d = new Date(form.agendamento);
+          const noonUTC = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0));
+          updates.due_at = noonUTC.toISOString();
+        }
         if (form.observacoes !== initialForm.observacoes) updates.comments = form.observacoes;
         // Novos campos PF
         if (form.cpf !== initialForm.cpf) updates.cpf_cnpj = form.cpf;
-        if (form.whatsapp !== initialForm.whatsapp) updates.whatsapp = form.whatsapp;
+        // if (form.whatsapp !== initialForm.whatsapp) updates.whatsapp = form.whatsapp; // evitar 400 se coluna não existir
         if (form.endereco !== initialForm.endereco) updates.endereco = form.endereco;
         if (form.numero !== initialForm.numero) updates.numero = form.numero;
         if (form.complemento !== initialForm.complemento) updates.complemento = form.complemento;
         if (form.cep !== initialForm.cep) updates.cep = form.cep;
         if (form.bairro !== initialForm.bairro) updates.bairro = form.bairro;
+        // Novos campos Plano/Venc/Carnê
+        if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
+        if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
+        if (form.carne_impresso !== initialForm.carne_impresso) {
+          updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
+        }
         if (Object.keys(updates).length > 0) {
           await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
         }
@@ -289,6 +336,22 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     }, 700);
     return () => clearTimeout(timer);
   }, [form.nome, form.telefone, form.agendamento, form.observacoes, form.cpf, form.whatsapp, form.endereco, form.numero, form.complemento, form.cep, form.bairro]);
+  // incluir dependências novas
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const updates: any = {};
+        if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
+        if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
+        if (form.carne_impresso !== initialForm.carne_impresso) updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
+        if (Object.keys(updates).length > 0) {
+          await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+        }
+      } catch {}
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [form.plano_acesso, form.venc, form.carne_impresso]);
 
   // Load pareceres (read-only) from backend for this ficha/card
   const loadPareceres = useCallback(async () => {
@@ -350,6 +413,23 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         (payload) => {
           console.log('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
           loadPareceres();
+          const k: any = (payload as any).new || {};
+          // Espelhar campos básicos + plano/venc/carnê
+          setForm((prev) => ({
+            ...prev,
+            nome: k.title ?? prev.nome,
+            telefone: k.phone ?? prev.telefone,
+            cpf: k.cpf_cnpj ?? prev.cpf,
+            whatsapp: k.whatsapp ?? prev.whatsapp,
+            endereco: k.endereco ?? prev.endereco,
+            numero: k.numero ?? prev.numero,
+            complemento: k.complemento ?? prev.complemento,
+            cep: k.cep ?? prev.cep,
+            bairro: k.bairro ?? prev.bairro,
+            plano_acesso: k.plano_acesso ?? prev.plano_acesso,
+            venc: typeof k.venc !== 'undefined' && k.venc !== null ? String(k.venc) : prev.venc,
+            carne_impresso: typeof k.carne_impresso === 'boolean' ? (k.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+          }));
         }
       )
       .subscribe((status) => {
@@ -701,8 +781,39 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     setShowSecondConfirmDialog(true);
   };
 
-  const handleSecondConfirm = () => {
+  const handleSecondConfirm = async () => {
     setShowSecondConfirmDialog(false);
+    // Persistir alterações imediatamente para evitar perda por debounce
+    try {
+      if (card?.id) {
+        // Persistir todos os campos espelhados
+        const updates: any = {
+          title: form.nome,
+          phone: form.telefone,
+          cpf_cnpj: form.cpf,
+          // whatsapp: form.whatsapp, // evitar 400 se coluna não existir no backend
+          endereco: form.endereco,
+          numero: form.numero,
+          complemento: form.complemento,
+          cep: form.cep,
+          bairro: form.bairro,
+          plano_acesso: form.plano_acesso || null,
+          venc: form.venc ? Number(form.venc) : null,
+          carne_impresso: form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null,
+        };
+        await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+
+        // due_at separado (formatado ao meio-dia UTC)
+        if (form.agendamento && form.agendamento !== initialForm.agendamento) {
+          const d = new Date(form.agendamento);
+          const noonUTC = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0));
+          await (supabase as any).from('kanban_cards').update({ due_at: noonUTC.toISOString() }).eq('id', card.id);
+        }
+        if (!form.agendamento && initialForm.agendamento) {
+          await (supabase as any).from('kanban_cards').update({ due_at: null }).eq('id', card.id);
+        }
+      }
+    } catch (_) {}
     onSave(form);
     // Defer closing parent modal to allow nested portals to unmount cleanly
     if (pendingAction === 'close') {
@@ -782,7 +893,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   mask={card?.personType === 'PJ' ? "99.999.999/9999-99" : "999.999.999-99"}
                   value={form.cpf || ""}
                   onChange={(e) => handleMaskChange('cpf', e.target.value)}
-                  maskChar=" "
+                  maskChar={null}
+                  alwaysShowMask={false}
                 >
                   {(inputProps) => (
                     <Input
@@ -804,7 +916,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   mask="(99) 99999-9999"
                   value={form.telefone || ""}
                   onChange={(e) => handleMaskChange('telefone', e.target.value)}
-                  maskChar=" "
+                  maskChar={null}
+                  alwaysShowMask={false}
                 >
                   {(inputProps) => (
                     <Input
@@ -823,7 +936,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   mask="(99) 99999-9999"
                   value={form.whatsapp || ""}
                   onChange={(e) => handleMaskChange('whatsapp', e.target.value)}
-                  maskChar=" "
+                  maskChar={null}
+                  alwaysShowMask={false}
                 >
                   {(inputProps) => (
                     <Input
@@ -878,6 +992,79 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
             </div>
           </div>
 
+          {/* Plano / Vencimento / Carnê impresso */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+            <div className="sm:col-span-1">
+              <Label>Plano</Label>
+              <Select
+                onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
+                value={form.plano_acesso}
+              >
+                <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                  <SelectValue placeholder="Selecionar plano" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
+                    {([
+                      { key: 'CGNAT', label: 'CGNAT' },
+                      { key: 'DIN', label: 'DINÂMICO' },
+                      { key: 'FIXO', label: 'FIXO' },
+                    ] as const).map(({ key, label }) => {
+                      const active = planCTA === key;
+                      return (
+                        <Button
+                          key={key}
+                          type="button"
+                          variant="outline"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
+                          className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-2 text-xs rounded-[30px]'}
+                          size="sm"
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {planOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-1">
+              <Label>Dia de vencimento</Label>
+              <Select
+                onValueChange={(v) => setForm((p) => ({ ...p, venc: v }))}
+                value={form.venc}
+              >
+                <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                  <SelectValue placeholder="Selecionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {['5','10','15','20','25'].map(v => (
+                    <SelectItem key={v} value={v}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-1">
+              <Label>Carnê impresso</Label>
+              <Select
+                onValueChange={(v) => setForm((p) => ({ ...p, carne_impresso: v }))}
+                value={form.carne_impresso}
+              >
+                <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                  <SelectValue placeholder="Selecionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Sim">Sim</SelectItem>
+                  <SelectItem value="Não">Não</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
@@ -886,7 +1073,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   mask="99999-999"
                   value={form.cep || ""}
                   onChange={(e) => handleMaskChange('cep', e.target.value)}
-                  maskChar=" "
+                  maskChar={null}
+                  alwaysShowMask={false}
                 >
                   {(inputProps) => (
                     <Input

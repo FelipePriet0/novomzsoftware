@@ -130,7 +130,7 @@ export function usePfFichasTestConnection() {
         .from('pf_fichas_test')
         .select('id')
         .eq('applicant_id', applicantId)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         console.log('✅ [usePfFichasTestConnection] PF Ficha já existe:', existing.id);
@@ -159,9 +159,17 @@ export function usePfFichasTestConnection() {
 
       const updateData: any = {};
 
+      // Helper para datas (evita enviar string vazia para colunas DATE)
+      const normalizeDate = (v?: string | null) => {
+        const t = (v || '').trim();
+        if (!t) return null;
+        // Aceita apenas YYYY-MM-DD por segurança
+        return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
+      };
+
       // Map cliente data
       if (formData.cliente) {
-        updateData.birth_date = formData.cliente.nasc;
+        updateData.birth_date = normalizeDate(formData.cliente.nasc);
         updateData.naturalidade = formData.cliente.naturalidade;
         updateData.uf_naturalidade = formData.cliente.uf;
       }
