@@ -730,29 +730,49 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           telefone: values.cliente.tel,
           email: values.cliente.email,
         });
+        if (!applicantTestId) {
+          toast({ title: 'Erro ao garantir applicant de teste', description: 'Não foi possível criar/obter applicants_test para esta ficha (PF).', variant: 'destructive' });
+          console.error('[PF submit] ensureApplicantExists retornou null');
+        }
 
         if (applicantTestId) {
           // Salvar dados de solicitação (via id explícito)
-          await saveSolicitacaoDataFor(applicantTestId, {
-            quem_solicitou: values.outras?.administrativas?.quemSolicitou,
-            meio: values.outras?.administrativas?.meio,
-            protocolo_mk: values.outras?.administrativas?.protocoloMk,
-          });
+          try {
+            await saveSolicitacaoDataFor(applicantTestId, {
+              quem_solicitou: values.outras?.administrativas?.quemSolicitou,
+              meio: values.outras?.administrativas?.meio,
+              protocolo_mk: values.outras?.administrativas?.protocoloMk,
+            });
+          } catch (e: any) {
+            toast({ title: 'Falha ao salvar Solicitação (PF)', description: e?.message || String(e), variant: 'destructive' });
+            console.error('[PF submit] saveSolicitacaoDataFor erro:', e);
+          }
 
           // Salvar dados de análise (via id explícito)
-          await saveAnaliseDataFor(applicantTestId, {
-            spc: values.spc,
-            pesquisador: values.pesquisador,
-            plano_acesso: values.outras?.planoEscolhido,
-            venc: values.outras?.diaVencimento,
-            sva_avulso: values.outras?.svaAvulso,
-          });
+          try {
+            await saveAnaliseDataFor(applicantTestId, {
+              spc: values.spc,
+              pesquisador: values.pesquisador,
+              plano_acesso: values.outras?.planoEscolhido,
+              venc: values.outras?.diaVencimento,
+              sva_avulso: values.outras?.svaAvulso,
+            });
+          } catch (e: any) {
+            toast({ title: 'Falha ao salvar Análise (PF)', description: e?.message || String(e), variant: 'destructive' });
+            console.error('[PF submit] saveAnaliseDataFor erro:', e);
+          }
 
           // Salvar dados pessoais na tabela pf_fichas_test
-          await savePersonalData(applicantTestId, values);
+          try {
+            await savePersonalData(applicantTestId, values);
+          } catch (e: any) {
+            toast({ title: 'Falha ao salvar PF Ficha (teste)', description: e?.message || String(e), variant: 'destructive' });
+            console.error('[PF submit] savePersonalData erro:', e);
+          }
         }
       } catch (error) {
-        console.error('❌ Erro ao salvar dados experimentais:', error);
+        console.error('❌ [PF submit] Erro ao salvar dados experimentais:', error);
+        toast({ title: 'Erro ao salvar dados (teste)', description: (error as any)?.message || String(error), variant: 'destructive' });
         // Não bloquear o submit principal por erro experimental
       }
     }
