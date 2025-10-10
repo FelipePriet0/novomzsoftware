@@ -136,7 +136,13 @@ export default function AvisosPage() {
                       <Input placeholder="https://link-opcional" value={linkHref} onChange={(e)=> setLinkHref(e.target.value)} />
                     </div>
                     <div className="flex items-center justify-between">
-                      <Button variant="outline" className="gap-2" type="button"><Paperclip className="h-4 w-4" /> Anexar (em breve)</Button>
+                      <Button
+                        variant="secondary"
+                        className="gap-2 bg-gray-200 text-gray-700 hover:bg-gray-200 border-gray-300"
+                        type="button"
+                      >
+                        <Paperclip className="h-4 w-4" /> Anexar (em breve)
+                      </Button>
                       <Button onClick={publish} className="bg-[#018942] text-white hover:bg-[#018942]/90">Publicar aviso</Button>
                     </div>
                   </CardContent>
