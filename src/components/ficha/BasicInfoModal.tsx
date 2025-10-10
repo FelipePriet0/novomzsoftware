@@ -74,6 +74,35 @@ export function BasicInfoModal({ open, onClose, onSubmit, initialData, onBack }:
     },
   });
 
+  // Resetar o formulário sempre que abrir sem dados iniciais
+  // ou quando initialData mudar (evita valores "antigos" aparecerem)
+  React.useEffect(() => {
+    if (open) {
+      const defaults = {
+        nome: initialData?.nome || "",
+        cpf: initialData?.cpf || "",
+        telefone: initialData?.telefone || "",
+        whatsapp: initialData?.whatsapp || "",
+        nascimento: ((): string => {
+          const n = initialData?.nascimento as unknown as any;
+          if (!n) return "";
+          if (typeof n === 'string') return n;
+          if (n instanceof Date && !isNaN(n.getTime())) {
+            const d = n.getDate().toString().padStart(2,'0');
+            const m = (n.getMonth()+1).toString().padStart(2,'0');
+            const y = n.getFullYear();
+            return `${d}/${m}/${y}`;
+          }
+          return "";
+        })(),
+        naturalidade: initialData?.naturalidade || "",
+        uf: initialData?.uf || "",
+        email: initialData?.email || "",
+      } as BasicInfoData;
+      form.reset(defaults, { keepDirty: false });
+    }
+  }, [open, initialData]);
+
   const handleSubmit = async (data: BasicInfoData) => {
     setIsSubmitting(true);
     try {

@@ -76,19 +76,19 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      // 1) Garantir applicant PJ (TESTE) — find-or-create por CNPJ
-      let applicant: { id: string } | null = null;
-      const { data: existing } = await supabase
-        .from('applicants_test')
+      // 1) Garantir applicant PJ em PRODUÇÃO (kanban_cards exige FK não nulo)
+      let applicantProd: { id: string } | null = null;
+      const { data: existingProd } = await supabase
+        .from('applicants')
         .select('id')
         .eq('cpf_cnpj', values.cnpj)
         .eq('person_type', 'PJ')
         .maybeSingle();
-      if (existing?.id) {
-        applicant = existing as any;
+      if (existingProd?.id) {
+        applicantProd = existingProd as any;
       } else {
-        const { data: created, error: aErr1 } = await supabase
-          .from('applicants_test')
+        const { data: createdProd, error: aErr1 } = await supabase
+          .from('applicants')
           .insert({
             person_type: 'PJ',
             primary_name: values.corporate_name,
@@ -99,24 +99,51 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           .select('id')
           .single();
         if (aErr1) throw aErr1;
-        applicant = created as any;
+        applicantProd = createdProd as any;
       }
 
-      // 2) Detalhes PJ mínimos (TESTE)
-      await supabase
-        .from('pj_fichas_test')
-        .insert({ 
-          applicant_id: applicant.id, 
-          nome_fantasia: values.trade_name || null, 
-          contato_tecnico: values.contact_name 
-        });
+      // 1b) Garantir ESPELHO em applicants_test (para testes)
+      let applicantTestId: string | null = null;
+      const { data: existingTest } = await supabase
+        .from('applicants_test')
+        .select('id')
+        .eq('cpf_cnpj', values.cnpj)
+        .eq('person_type', 'PJ')
+        .maybeSingle();
+      if (existingTest?.id) {
+        applicantTestId = existingTest.id;
+      } else {
+        const { data: createdTest } = await supabase
+          .from('applicants_test')
+          .insert({
+            person_type: 'PJ',
+            primary_name: values.corporate_name,
+            cpf_cnpj: values.cnpj,
+            phone: values.phone,
+            email: values.email,
+          })
+          .select('id')
+          .single();
+        applicantTestId = createdTest?.id || null;
+      }
 
-      // 3) Card no Kanban (Comercial/entrada)
+      // 2) Detalhes PJ mínimos (TESTE) apontando para applicants_test
+      if (applicantTestId) {
+        await supabase
+          .from('pj_fichas_test')
+          .insert({ 
+            applicant_id: applicantTestId, 
+            nome_fantasia: values.trade_name || null, 
+            contato_tecnico: values.contact_name 
+          });
+      }
+
+      // 3) Card no Kanban (Comercial/entrada) com applicant_id de PRODUÇÃO
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')
         .insert({
-          applicant_id: null, // não vincular ao applicants (prod) durante testes
+          applicant_id: applicantProd!.id,
           person_type: 'PJ',
           area: 'comercial',
           stage: 'entrada',
@@ -140,7 +167,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         phone: createdCard.phone ?? undefined,
         email: createdCard.email ?? undefined,
         received_at: createdCard.received_at ?? undefined,
-        applicant_id: undefined as any,
+        applicant_id: applicantProd!.id,
       });
       onClose();
     } catch (e: any) {

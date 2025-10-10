@@ -1406,20 +1406,20 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
-        // 1) Garantir applicant PF em tabela de TESTE (find-or-create)
+        // 1) Garantir applicant PF em PRODUÇÃO (para satisfazer FK do kanban_cards)
         const cpf = data.cpf.replace(/\D+/g, '');
-        let applicantTest: { id: string } | null = null;
-        const { data: existingTest } = await (supabase as any)
-          .from('applicants_test')
+        let applicantProd: { id: string } | null = null;
+        const { data: existingProd } = await (supabase as any)
+          .from('applicants')
           .select('id')
           .eq('cpf_cnpj', cpf)
           .eq('person_type', 'PF')
           .maybeSingle();
-        if (existingTest?.id) {
-          applicantTest = { id: existingTest.id };
+        if (existingProd?.id) {
+          applicantProd = { id: existingProd.id };
         } else {
-          const { data: createdTest, error: aErr } = await (supabase as any)
-            .from('applicants_test')
+          const { data: createdProd, error: aErrProd } = await (supabase as any)
+            .from('applicants')
             .insert({
               person_type: 'PF',
               primary_name: data.nome,
@@ -1431,8 +1431,29 @@ useEffect(() => {
             })
             .select('id')
             .single();
-          if (aErr) throw aErr;
-          applicantTest = createdTest;
+          if (aErrProd) throw aErrProd;
+          applicantProd = createdProd;
+        }
+
+        // 2) Garantir espelho na tabela de TESTE (find-or-create)
+        const { data: existingTest } = await (supabase as any)
+          .from('applicants_test')
+          .select('id')
+          .eq('cpf_cnpj', cpf)
+          .eq('person_type', 'PF')
+          .maybeSingle();
+        if (!existingTest?.id) {
+          await (supabase as any)
+            .from('applicants_test')
+            .insert({
+              person_type: 'PF',
+              primary_name: data.nome,
+              cpf_cnpj: cpf,
+              phone: data.telefone,
+              email: data.email || null,
+              city: data.naturalidade,
+              uf: data.uf,
+            });
         }
 
         // 2) Card no Kanban (Comercial/entrada)
@@ -1440,7 +1461,7 @@ useEffect(() => {
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
           .insert({
-            applicant_id: null, // nas fichas de teste não vinculamos ao applicants (prod)
+            applicant_id: applicantProd!.id, // FK não-nulo exige apontar para applicants (prod)
             person_type: 'PF',
             area: 'comercial',
             stage: 'entrada',
@@ -1474,7 +1495,7 @@ useEffect(() => {
                 email: created.email || undefined,
                 naturalidade: data.naturalidade,
                 uf: data.uf,
-                applicantId: undefined,
+                applicantId: applicantProd!.id,
                 parecer: '',
                 columnId: 'recebido',
                 createdAt: new Date().toISOString(),
