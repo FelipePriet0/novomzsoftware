@@ -114,8 +114,22 @@ create policy channel_attachments_delete on public.channel_attachments for delet
 
 do $$
 begin
-  if not exists (select 1 from storage.buckets where id = 'channel-attachments') then
-    perform storage.create_bucket('channel-attachments', false);
+  if exists (
+    select 1 from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'storage' and p.proname = 'create_bucket'
+  ) then
+    begin
+      perform storage.create_bucket('channel-attachments'::text, false, false);
+    exception when others then
+      insert into storage.buckets (id, name, public)
+      select 'channel-attachments', 'channel-attachments', false
+      where not exists (select 1 from storage.buckets where id = 'channel-attachments');
+    end;
+  else
+    insert into storage.buckets (id, name, public)
+    select 'channel-attachments', 'channel-attachments', false
+    where not exists (select 1 from storage.buckets where id = 'channel-attachments');
   end if;
 end $$;
 
@@ -130,4 +144,3 @@ create policy "channel-attachments-update" on storage.objects for update using (
 
 drop policy if exists "channel-attachments-delete" on storage.objects;
 create policy "channel-attachments-delete" on storage.objects for delete using (bucket_id = 'channel-attachments' and exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'gestor'));
-

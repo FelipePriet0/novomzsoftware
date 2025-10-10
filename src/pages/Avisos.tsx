@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,10 +11,11 @@ import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Megaphone, Paperclip, ThumbsUp, Eye, AlertCircle, Users, CheckCircle2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 type ReactionKey = 'like' | 'seen' | 'important';
 
-type ChannelAttachment = { id: string; name: string; url?: string; size?: number; type?: string };
+type ChannelAttachment = { id: string; name: string; url?: string; size?: number; type?: string; storagePath?: string; file?: File };
 
 type ChannelMessage = {
   id: string;
@@ -33,8 +34,10 @@ export default function AvisosPage() {
   const { profile } = useAuth();
   const { name: currentUserName } = useCurrentUser();
   const isGestor = profile?.role === 'gestor';
-
-  // Estado local (placeholder). TODO: integrar com Supabase (channels/channel_messages/reactions)
+  const [channelId, setChannelId] = useState<string | null>(null);
+  const [audienceCount, setAudienceCount] = useState<number>(1);
+  const [loading, setLoading] = useState<boolean>(false);
+  // Estado local + integração
   const [messages, setMessages] = useState<ChannelMessage[]>([]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -49,7 +52,7 @@ export default function AvisosPage() {
     const monthMsgs = messages.filter(m => new Date(m.createdAt) >= startMonth);
     const total = monthMsgs.length;
     const reacted = monthMsgs.reduce((acc, m) => acc + (m.reactions.like?.length || 0), 0);
-    const audience = 1; // TODO: substituir por total de colaboradores
+    const audience = audienceCount || 1;
     const confirmationPct = audience > 0 ? Math.round((reacted / (total || 1)) * 100) : 0;
     const last = messages[0];
     return {
@@ -57,9 +60,99 @@ export default function AvisosPage() {
       confirmationPct,
       lastInfo: last ? `${last.authorName} — ${format(new Date(last.createdAt), "dd/MM HH:mm", { locale: ptBR })}` : '—',
     };
-  }, [messages]);
+  }, [messages, audienceCount]);
 
-  const publish = () => {
+  // Carregar channelId, audience e feed inicial
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoading(true);
+        const { data: ch } = await supabase
+          .from('channels')
+          .select('id')
+          .eq('slug', 'avisos')
+          .maybeSingle();
+        if (ch?.id) setChannelId(ch.id);
+
+        // Audience ~ total profiles (ajuste conforme política)
+        const { count } = await supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true });
+        if (typeof count === 'number' && count > 0) setAudienceCount(count);
+
+        if (ch?.id) await loadMessages(ch.id);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  // Realtime para mensagens e reações
+  useEffect(() => {
+    if (!channelId) return;
+    const channel = supabase
+      .channel(`avisos-feed-${channelId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_messages' }, (payload) => {
+        // Filtrar por canal
+        const row: any = payload.new || payload.old;
+        if (row?.channel_id === channelId) loadMessages(channelId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_reactions' }, () => {
+        loadMessages(channelId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'channel_attachments' }, () => {
+        loadMessages(channelId);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [channelId]);
+
+  const loadMessages = async (chId: string) => {
+    try {
+      const { data: msgs } = await supabase
+        .from('channel_messages')
+        .select('id, title, body, links, created_at, author:author_id ( id, full_name )')
+        .eq('channel_id', chId)
+        .order('created_at', { ascending: false });
+      const ids = (msgs || []).map((m: any) => m.id);
+      const [attRes, reactRes] = await Promise.all([
+        ids.length ? supabase.from('channel_attachments').select('id, message_id, file_name, storage_path, mime_type, file_size').in('message_id', ids) : Promise.resolve({ data: [] as any[] }),
+        ids.length ? supabase.from('channel_reactions').select('message_id, user_id, reaction') : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const attachmentsByMsg = new Map<string, ChannelAttachment[]>();
+      (attRes.data || []).forEach((a: any) => {
+        const list = attachmentsByMsg.get(a.message_id) || [];
+        list.push({ id: a.id, name: a.file_name, storagePath: a.storage_path, size: a.file_size, type: a.mime_type });
+        attachmentsByMsg.set(a.message_id, list);
+      });
+
+      const reactionsByMsg = new Map<string, Record<ReactionKey, string[]>>();
+      (reactRes.data || []).forEach((r: any) => {
+        const map = reactionsByMsg.get(r.message_id) || { like: [], seen: [], important: [] };
+        (map as any)[r.reaction] = [ ...(map as any)[r.reaction] || [], r.user_id ];
+        reactionsByMsg.set(r.message_id, map);
+      });
+
+      const normalized: ChannelMessage[] = (msgs || []).map((m: any) => ({
+        id: m.id,
+        title: m.title,
+        body: m.body,
+        createdAt: m.created_at,
+        authorId: m.author?.id || '',
+        authorName: m.author?.full_name || 'Usuário',
+        attachments: attachmentsByMsg.get(m.id) || [],
+        reactions: reactionsByMsg.get(m.id) || { like: [], seen: [], important: [] },
+        links: Array.isArray(m.links) ? m.links : [],
+      }));
+      setMessages(normalized);
+    } catch (e) {
+      // silent
+    }
+  };
+
+  const publish = async () => {
     if (!isGestor) return;
     const t = title.trim();
     const b = body.trim();
@@ -67,37 +160,61 @@ export default function AvisosPage() {
       toast({ title: 'Preencha título e descrição', variant: 'destructive' });
       return;
     }
-    const msg: ChannelMessage = {
-      id: crypto.randomUUID(),
-      title: t,
-      body: b,
-      createdAt: new Date().toISOString(),
-      authorId: profile?.id || 'user',
-      authorName: currentUserName || profile?.full_name || 'Gestor',
-      attachments: composerAttachments,
-      reactions: { like: [], seen: [], important: [] },
-      links: linkHref && linkLabel ? [{ label: linkLabel, href: linkHref }] : undefined,
-    };
-    setMessages(prev => [msg, ...prev]);
-    setTitle('');
-    setBody('');
-    setLinkHref('');
-    setLinkLabel('');
-    setComposerAttachments([]);
-    toast({ title: 'Aviso publicado' });
+    if (!channelId || !profile?.id) {
+      toast({ title: 'Canal não inicializado', variant: 'destructive' });
+      return;
+    }
+    try {
+      const links = (linkLabel && linkHref) ? [{ label: linkLabel, href: linkHref }] : [];
+      const { data: created, error } = await supabase
+        .from('channel_messages')
+        .insert({ channel_id: channelId, author_id: profile.id, title: t, body: b, links })
+        .select('id')
+        .single();
+      if (error) throw error;
+      const messageId = created.id as string;
+
+      // Upload anexos
+      for (const att of composerAttachments) {
+        if (!att.file) continue;
+        const path = `avisos/${messageId}/${encodeURIComponent(att.file.name)}`;
+        const up = await supabase.storage.from('channel-attachments').upload(path, att.file, { upsert: true });
+        if (!up.error) {
+          await supabase.from('channel_attachments').insert({
+            message_id: messageId,
+            file_name: att.file.name,
+            storage_path: path,
+            mime_type: att.file.type,
+            file_size: att.file.size,
+          });
+        }
+      }
+      setTitle(''); setBody(''); setLinkHref(''); setLinkLabel(''); setComposerAttachments([]);
+      await loadMessages(channelId);
+      toast({ title: 'Aviso publicado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao publicar', description: e?.message || String(e), variant: 'destructive' });
+    }
   };
 
-  const react = (id: string, key: ReactionKey) => {
+  const react = async (id: string, key: ReactionKey) => {
     if (!profile?.id) return;
-    if (isGestor) {
-      // Gestor pode reagir também, mas regra é focar colaboradores — manter simples
+    try {
+      // toggle: tenta excluir; se não excluiu, insere
+      const del = await supabase
+        .from('channel_reactions')
+        .delete()
+        .eq('message_id', id)
+        .eq('user_id', profile.id)
+        .eq('reaction', key);
+      const deleted = (del?.count || 0) > 0;
+      if (!deleted) {
+        await supabase.from('channel_reactions').insert({ message_id: id, user_id: profile.id, reaction: key });
+      }
+      if (channelId) await loadMessages(channelId);
+    } catch (e) {
+      // ignore
     }
-    setMessages(prev => prev.map(m => {
-      if (m.id !== id) return m;
-      const set = new Set(m.reactions[key] || []);
-      if (set.has(profile.id)) set.delete(profile.id); else set.add(profile.id);
-      return { ...m, reactions: { ...m.reactions, [key]: Array.from(set) } };
-    }));
   };
 
   const allAttachments = useMemo(() => (
@@ -109,7 +226,7 @@ export default function AvisosPage() {
     const next: ChannelAttachment[] = [];
     Array.from(files).forEach(f => {
       const url = URL.createObjectURL(f);
-      next.push({ id: crypto.randomUUID(), name: f.name, url, size: f.size, type: f.type });
+      next.push({ id: crypto.randomUUID(), name: f.name, url, size: f.size, type: f.type, file: f });
     });
     setComposerAttachments(prev => [...prev, ...next]);
   }, []);
@@ -248,9 +365,33 @@ export default function AvisosPage() {
                       </div>
                     )}
                     {!!m.attachments?.length && (
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <div className="flex flex-col gap-2 text-xs text-muted-foreground">
                         {m.attachments.map(a => (
-                          <span key={a.id} className="inline-flex items-center gap-1 rounded-md border px-2 py-1"><Paperclip className="h-3 w-3" /> {a.name}</span>
+                          <div key={a.id} className="flex items-center justify-between gap-2 rounded-md border px-2 py-1">
+                            <span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" /> {a.name}</span>
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={async () => {
+                                if (a.url) { window.open(a.url, '_blank'); return; }
+                                if (a.storagePath) {
+                                  const { data } = await supabase.storage.from('channel-attachments').createSignedUrl(a.storagePath, 60);
+                                  if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                                }
+                              }}>Pré-visualizar</Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2" onClick={async () => {
+                                if (a.storagePath) {
+                                  const { data } = await supabase.storage.from('channel-attachments').createSignedUrl(a.storagePath, 60);
+                                  if (data?.signedUrl) {
+                                    const link = document.createElement('a');
+                                    link.href = data.signedUrl;
+                                    link.download = a.name;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }
+                                }
+                              }}>Baixar</Button>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
