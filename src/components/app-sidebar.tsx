@@ -7,6 +7,7 @@ import {
   Route,
   User,
   ListTodo,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ const navigationItems: NavItem[] = [
   { title: "Kanban", url: "/", icon: KanbanSquare, end: true },
   { title: "Agendamento", url: "/agendamento", icon: Route },
   { title: "Histórico", url: "/historico", icon: History },
+  { title: "Avisos", url: "/avisos", icon: Megaphone },
   { title: "Perfil", url: "/perfil", icon: User },
 ];
 

@@ -15,6 +15,7 @@ import Tarefas from "./pages/Tarefas";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import Avisos from "./pages/Avisos";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -60,6 +61,7 @@ const App = () => (
                   <Route path="/tarefas" element={<Tarefas />} />
                   <Route path="/agendamento" element={<Agendamento />} />
                   <Route path="/historico" element={<Historico />} />
+                  <Route path="/avisos" element={<Avisos />} />
                   <Route path="/dashboard/all" element={<Index />} />
                   <Route path="/dashboard/:company" element={<Index />} />
                   <Route path="/perfil" element={<Profile />} />
