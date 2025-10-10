@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { MentionableTextarea } from '@/components/ui/MentionableTextarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Paperclip, ArrowLeft, Trash2, ListTodo } from 'lucide-react';
@@ -743,10 +744,10 @@ export function CommentsList({
                         </div>
                         
                         <div className="relative">
-                          <Textarea
+                          <MentionableTextarea
                             value={replyContent}
                             onChange={(e) => setReplyContent(e.target.value)}
-                            placeholder="Digite sua resposta... Use @menções para colaboradores"
+                            placeholder="Digite sua resposta... Use @ para mencionar"
                             className="mb-3 min-h-[60px] text-sm resize-none pt-12 pl-20 [&::placeholder]:text-[#018942]"
                             style={{ color: '#018942' }}
                             onKeyDown={(e) => {
