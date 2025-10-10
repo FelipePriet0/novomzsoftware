@@ -156,7 +156,7 @@ function isOverdue(card: CardItem): boolean {
 // Clean initial data for CEO presentation
 const initialCards: CardItem[] = [];
 
-const RESPONSAVEIS = ["Ana", "Bruno", "Carla", "Diego", "Equipe"];
+const RESPONSAVEIS: string[] = [];
 
 type PrazoFiltro = "todos" | "hoje" | "atrasados";
 type ViewFilter = "all" | "mine" | "company";
@@ -431,7 +431,6 @@ export default function KanbanBoard() {
   // Derived lists
   const responsaveisOptions = useMemo(() => {
     const set = new Set(cards.map((c) => c.responsavel).filter(Boolean) as string[]);
-    RESPONSAVEIS.forEach((r) => set.add(r));
     return Array.from(set);
   }, [cards]);
 
