@@ -76,9 +76,9 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      // 1) Cria applicant PJ
+      // 1) Cria applicant PJ (TESTE)
       const { data: applicant, error: aErr1 } = await supabase
-        .from('applicants')
+        .from('applicants_test')
         .insert({
           person_type: 'PJ',
           primary_name: values.corporate_name,
@@ -90,17 +90,21 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         .single();
       if (aErr1) throw aErr1;
 
-      // 2) Detalhes PJ mínimos
+      // 2) Detalhes PJ mínimos (TESTE)
       await supabase
-        .from('pj_fichas')
-        .insert({ applicant_id: applicant.id, trade_name: values.trade_name || null, contato_tecnico: values.contact_name });
+        .from('pj_fichas_test')
+        .insert({ 
+          applicant_id: applicant.id, 
+          nome_fantasia: values.trade_name || null, 
+          contato_tecnico: values.contact_name 
+        });
 
       // 3) Card no Kanban (Comercial/entrada)
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')
         .insert({
-          applicant_id: applicant.id,
+          applicant_id: null, // não vincular ao applicants (prod) durante testes
           person_type: 'PJ',
           area: 'comercial',
           stage: 'entrada',
@@ -124,7 +128,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         phone: createdCard.phone ?? undefined,
         email: createdCard.email ?? undefined,
         received_at: createdCard.received_at ?? undefined,
-        applicant_id: applicant.id,
+        applicant_id: undefined as any,
       });
       onClose();
     } catch (e: any) {

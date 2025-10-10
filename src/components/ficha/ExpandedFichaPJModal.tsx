@@ -635,65 +635,70 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
           }
           
-          // Salvar dados específicos da ficha PJ
-          const { data: card } = await supabase
-            .from('kanban_cards')
-            .select('applicant_id')
-            .eq('id', applicationId)
-            .single();
-            
-          if (card?.applicant_id) {
-            // Atualizar ou criar registro na tabela pj_fichas
-            const pjData = {
-              applicant_id: card.applicant_id,
-              trade_name: formData.empresa?.fantasia || '',
-              opening_date: formData.empresa?.abertura || '',
-              facade: formData.empresa?.fachada || '',
-              area: formData.empresa?.area || '',
-              address: formData.endereco?.end || '',
-              address_number: formData.endereco?.n || '',
-              address_complement: formData.endereco?.compl || '',
-              property_type: formData.endereco?.tipo || '',
-              property_type_obs: formData.endereco?.obsTipo || '',
-              cep: formData.endereco?.cep || '',
-              neighborhood: formData.endereco?.bairro || '',
-              time_at_address: formData.endereco?.tempo || '',
-              establishment_type: formData.endereco?.estab || '',
-              establishment_type_obs: formData.endereco?.obsEstab || '',
-              personal_address: formData.endereco?.endPs || '',
-              phone: formData.contatos?.tel || '',
-              whatsapp: formData.contatos?.whats || '',
-              other_phones: formData.contatos?.fonesOs || '',
-              email: formData.contatos?.email || '',
-              proof_status: formData.docs?.comprovante || '',
-              proof_type: formData.docs?.tipo || '',
-              proof_in_name_of: formData.docs?.emNomeDe || '',
-              has_internet: formData.docs?.possuiInternet || '',
-              internet_provider: formData.docs?.operadora || '',
-              internet_plan: formData.docs?.plano || '',
-              internet_value: formData.docs?.valor || '',
-              has_contract: formData.docs?.contratoSocial || '',
-              contract_obs: formData.docs?.obsContrato || '',
-              partners: formData.socios || [],
-              request_source: formData.solicitacao?.quem || '',
-              request_method: formData.solicitacao?.meio || '',
-              request_phone: formData.solicitacao?.tel || '',
-              plan_access: formData.solicitacao?.planoAcesso || '',
-              sva_individual: formData.solicitacao?.svaAvulso || '',
-              due_date: formData.solicitacao?.venc || '',
-              relevant_info: formData.info?.relevantes || '',
-              spc_status: formData.info?.spc || '',
-              other_people: formData.info?.outrasPs || '',
-              market_info: formData.info?.mk || '',
-              analysis_opinion: formData.info?.parecerAnalise || '',
-            };
-            
-            // Upsert (insert or update) na tabela pj_fichas
-            const { error } = await supabase
-              .from('pj_fichas')
-              .upsert(pjData, { onConflict: 'applicant_id' });
-              
-            if (error) throw error;
+          // Salvar dados específicos da ficha PJ na TABELA DE TESTE
+          // 1) Buscar/garantir applicant_test (por CNPJ)
+          let targetApplicantId: string | null = null;
+          try {
+            const { data: existing } = await supabase
+              .from('applicants_test')
+              .select('id')
+              .eq('cpf_cnpj', formData.empresa?.cnpj || '')
+              .eq('person_type', 'PJ')
+              .maybeSingle();
+            if (existing?.id) {
+              targetApplicantId = existing.id;
+            } else {
+              const { data: created } = await supabase
+                .from('applicants_test')
+                .insert({
+                  person_type: 'PJ',
+                  primary_name: formData.empresa?.razao || '',
+                  cpf_cnpj: formData.empresa?.cnpj || '',
+                  phone: formData.contatos?.tel || '',
+                  email: formData.contatos?.email || '',
+                })
+                .select('id')
+                .single();
+              targetApplicantId = created?.id || null;
+            }
+          } catch (_) {}
+
+          if (targetApplicantId) {
+            const pjDataTest = {
+              applicant_id: targetApplicantId,
+              razao_social: formData.empresa?.razao || '',
+              cnpj: formData.empresa?.cnpj || '',
+              data_abertura: formData.empresa?.abertura || '',
+              nome_fantasia: formData.empresa?.fantasia || '',
+              nome_fachada: formData.empresa?.fachada || '',
+              area_atuacao: formData.empresa?.area || '',
+              tipo_imovel: formData.endereco?.tipo || '',
+              obs_tipo_imovel: formData.endereco?.obsTipo || '',
+              tempo_endereco: formData.endereco?.tempo || '',
+              tipo_estabelecimento: formData.endereco?.estab || '',
+              obs_estabelecimento: formData.endereco?.obsEstab || '',
+              endereco_pessoal: formData.endereco?.endPs || '',
+              fones_os: formData.contatos?.fonesOs || '',
+              comprovante_status: formData.docs?.comprovante || '',
+              tipo_comprovante: formData.docs?.tipo || '',
+              em_nome_de: formData.docs?.emNomeDe || '',
+              possui_internet: formData.docs?.possuiInternet || '',
+              operadora_internet: formData.docs?.operadora || '',
+              plano_internet: formData.docs?.plano || '',
+              valor_internet: formData.docs?.valor || '',
+              contrato_social: formData.docs?.contratoSocial || '',
+              obs_contrato: formData.docs?.obsContrato || '',
+              socios: formData.socios || [],
+              protocolo_mk: formData.solicitacao?.protocolo || '',
+              informacoes_relevantes: formData.info?.relevantes || '',
+              outras_pessoas: formData.info?.outrasPs || '',
+              parecer_analise: formData.info?.parecerAnalise || '',
+            } as any;
+
+            const { error: upErr } = await supabase
+              .from('pj_fichas_test')
+              .upsert(pjDataTest, { onConflict: 'applicant_id' });
+            if (upErr) throw upErr;
           }
           
           toast({

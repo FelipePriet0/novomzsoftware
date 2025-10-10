@@ -1406,9 +1406,9 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
-        // 1) Cria applicant PF
-        const { data: applicant, error: aErr } = await (supabase as any)
-          .from('applicants')
+        // 1) Cria applicant PF em tabela de TESTE
+        const { data: applicantTest, error: aErr } = await (supabase as any)
+          .from('applicants_test')
           .insert({
             person_type: 'PF',
             primary_name: data.nome,
@@ -1427,7 +1427,7 @@ useEffect(() => {
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
           .insert({
-            applicant_id: applicant.id,
+            applicant_id: null, // nas fichas de teste não vinculamos ao applicants (prod)
             person_type: 'PF',
             area: 'comercial',
             stage: 'entrada',
@@ -1461,7 +1461,7 @@ useEffect(() => {
                 email: created.email || undefined,
                 naturalidade: data.naturalidade,
                 uf: data.uf,
-                applicantId: applicant.id,
+                applicantId: undefined,
                 parecer: '',
                 columnId: 'recebido',
                 createdAt: new Date().toISOString(),
