@@ -10,6 +10,8 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useDraftForm } from "@/hooks/useDraftForm";
+import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
+import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,6 +70,10 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
   const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
+  // Dev-safe CRUD state (test tables)
+  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
+  const { ensureApplicantExists } = useApplicantsTestConnection();
+  const { saveCompanyData } = usePjFichasTestConnection();
 
   const ensureCommercialEntrada = async (appId?: string) => {
     if (!appId) return;
@@ -591,6 +597,26 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       try {
         await ensureCommercialEntrada(applicationId);
         await saveDraft(draftPayload, applicationId, 'pj', false);
+        // Dev-safe: mirror into pj_fichas_test (debounced)
+        try {
+          let testId = applicantTestId;
+          if (!testId) {
+            testId = await ensureApplicantExists({
+              id: applicationId,
+              person_type: 'PJ',
+              cnpj: data?.empresa?.cnpj,
+              razao: data?.empresa?.razao,
+              telefone: data?.contatos?.tel,
+              email: data?.contatos?.email,
+            });
+            if (testId && testId !== applicantTestId) setApplicantTestId(testId);
+          }
+          if (testId) {
+            await saveCompanyData(testId, data as any);
+          }
+        } catch (_) {
+          // non-blocking for development-safe persistence
+        }
       } catch (_) {
         // ignore
       }

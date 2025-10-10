@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useDraftForm } from '@/hooks/useDraftForm';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, SaveIcon, CheckIcon, X } from 'lucide-react';
+import { useApplicantsTestConnection } from '@/hooks/useApplicantsTestConnection';
+import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +65,10 @@ export function ExpandedFichaModal({
   const [loadedDraftData, setLoadedDraftData] = useState<any>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [lastFormSnapshot, setLastFormSnapshot] = useState<ComercialFormValues | null>(null);
+  // Dev-safe CRUD state (test tables)
+  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
+  const { savePersonalData } = usePfFichasTestConnection();
+  const { ensureApplicantExists } = useApplicantsTestConnection();
 
   const ensureCommercialEntrada = async (appId?: string) => {
     if (!appId) return;
@@ -167,6 +173,30 @@ export function ExpandedFichaModal({
       if (applicationId) {
         await ensureCommercialEntrada(applicationId);
         await saveDraft(draftData, applicationId, 'full', false);
+
+        // Dev-safe: mirror into pf_fichas_test (debounced)
+        try {
+          // Ensure applicants_test record exists and cache its id
+          let testId = applicantTestId;
+          if (!testId) {
+            testId = await ensureApplicantExists({
+              id: applicationId,
+              person_type: 'PF',
+              cpf_cnpj: formData?.cliente?.cpf,
+              nome: formData?.cliente?.nome,
+              telefone: formData?.cliente?.tel,
+              email: formData?.cliente?.email,
+            });
+            if (testId && testId !== applicantTestId) {
+              setApplicantTestId(testId);
+            }
+          }
+          if (testId) {
+            await savePersonalData(testId, formData);
+          }
+        } catch (_) {
+          // non-blocking for development-safe persistence
+        }
       }
     }, 700); // Save after 700ms of inactivity (optimized debounce)
 
