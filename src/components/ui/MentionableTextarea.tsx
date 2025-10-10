@@ -17,6 +17,7 @@ export function MentionableTextarea({ value, onChange, className, ...rest }: Men
   const [query, setQuery] = useState('');
   const [mentionStart, setMentionStart] = useState<number | null>(null);
   const [cursor, setCursor] = useState(0);
+  const [anchor, setAnchor] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +35,48 @@ export function MentionableTextarea({ value, onChange, className, ...rest }: Men
     if (!q) return profiles.slice(0, 8);
     return profiles.filter(p => (p.full_name || '').toLowerCase().includes(q)).slice(0, 8);
   }, [profiles, query]);
+
+  const computeAnchor = (startIndex: number) => {
+    const el = taRef.current;
+    if (!el) return { top: 0, left: 0 };
+    // Create a hidden mirror div to measure caret position
+    const div = document.createElement('div');
+    const style = window.getComputedStyle(el);
+    const props = [
+      'boxSizing','width','height','overflowY','overflowX','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','paddingTop','paddingRight','paddingBottom','paddingLeft','fontStyle','fontVariant','fontWeight','fontStretch','fontSize','lineHeight','fontFamily','textAlign','whiteSpace','wordWrap'
+    ] as const;
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    // copy important styles
+    props.forEach((p) => { (div.style as any)[p] = (style as any)[p]; });
+    div.style.width = style.width;
+    div.style.left = '0px';
+    div.style.top = '0px';
+    const valueUntil = value.slice(0, startIndex);
+    const caretSpan = document.createElement('span');
+    caretSpan.textContent = '\u200b'; // zero-width space as marker
+    const restText = value.slice(startIndex);
+    // Build content
+    const escape = (s: string) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br/>')
+      .replace(/\s/g, '&nbsp;');
+    div.innerHTML = escape(valueUntil);
+    div.appendChild(caretSpan);
+    const rest = document.createElement('span');
+    rest.innerHTML = escape(restText);
+    div.appendChild(rest);
+    el.parentElement?.appendChild(div);
+    const rect = caretSpan.getBoundingClientRect();
+    const hostRect = el.getBoundingClientRect();
+    const top = rect.top - hostRect.top + el.scrollTop;
+    const left = rect.left - hostRect.left + el.scrollLeft;
+    el.parentElement?.removeChild(div);
+    return { top, left };
+  };
 
   const updateMentionState = (nextValue: string, selEnd: number) => {
     // Identify last '@' before cursor that starts a word
@@ -67,6 +110,9 @@ export function MentionableTextarea({ value, onChange, className, ...rest }: Men
     setQuery(fragment);
     setOpen(true);
     setCursor(selEnd);
+    // Position menu near the '@'
+    const pos = computeAnchor(at);
+    setAnchor({ top: pos.top, left: pos.left });
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -102,6 +148,24 @@ export function MentionableTextarea({ value, onChange, className, ...rest }: Men
     });
   };
 
+  const handleScroll = () => {
+    if (mentionStart !== null) {
+      const pos = computeAnchor(mentionStart);
+      setAnchor({ top: pos.top, left: pos.left });
+    }
+  };
+
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [mentionStart]);
+
   return (
     <div className="relative">
       <Textarea
@@ -113,21 +177,31 @@ export function MentionableTextarea({ value, onChange, className, ...rest }: Men
         {...rest}
       />
       {open && filtered.length > 0 && (
-        <div className="absolute z-50 mt-1 w-64 max-h-56 overflow-auto rounded-md border bg-white shadow">
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => insertMention(p.full_name || 'Usuário')}
-              className="w-full text-left px-3 py-2 hover:bg-[#018942]/10 text-sm"
-            >
-              @{p.full_name || 'Usuário'}
-            </button>
-          ))}
+        <div
+          className="absolute z-50 w-72 max-h-64 overflow-auto rounded-[12px] border border-[#018942]/30 bg-white shadow-lg"
+          style={{ top: anchor.top + 20, left: Math.min(anchor.left, (taRef.current?.clientWidth || 300) - 288) }}
+        >
+          <div className="px-3 py-2 text-[12px] text-[#018942] font-medium border-b border-[#018942]/20">
+            Mencionar colaborador
+          </div>
+          <div className="py-1">
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertMention(p.full_name || 'Usuário')}
+                className="w-full text-left px-3 py-2 hover:bg-[#018942]/10 text-sm flex items-center gap-2"
+              >
+                <div className="w-6 h-6 rounded-full bg-[#018942]/10 flex items-center justify-center text-[#018942] text-xs">
+                  {(p.full_name || 'U').slice(0,1).toUpperCase()}
+                </div>
+                <span className="text-gray-900">@{p.full_name || 'Usuário'}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
-
