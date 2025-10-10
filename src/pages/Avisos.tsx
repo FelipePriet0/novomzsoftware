@@ -129,11 +129,32 @@ export default function AvisosPage() {
                     <CardTitle>Publicar novo aviso</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <Input placeholder="Título (ex.: 🆕 Atualização do Processo de Instalação)" value={title} onChange={(e) => setTitle(e.target.value)} />
-                    <Textarea rows={4} placeholder="Descrição clara e objetiva" value={body} onChange={(e) => setBody(e.target.value)} />
+                    <Input
+                      placeholder="Título (ex.: 🆕 Atualização do Processo de Instalação)"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="placeholder:text-[#018942]"
+                    />
+                    <Textarea
+                      rows={4}
+                      placeholder="Descrição clara e objetiva"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      className="placeholder:text-[#018942]"
+                    />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <Input placeholder="Rótulo do link (opcional)" value={linkLabel} onChange={(e)=> setLinkLabel(e.target.value)} />
-                      <Input placeholder="https://link-opcional" value={linkHref} onChange={(e)=> setLinkHref(e.target.value)} />
+                      <Input
+                        placeholder="Rótulo do link (opcional)"
+                        value={linkLabel}
+                        onChange={(e)=> setLinkLabel(e.target.value)}
+                        className="placeholder:text-[#018942]"
+                      />
+                      <Input
+                        placeholder="https://link-opcional"
+                        value={linkHref}
+                        onChange={(e)=> setLinkHref(e.target.value)}
+                        className="placeholder:text-[#018942]"
+                      />
                     </div>
                     <div className="flex items-center justify-between">
                       <Button
