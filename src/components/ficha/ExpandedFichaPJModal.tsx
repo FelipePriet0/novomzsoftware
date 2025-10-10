@@ -795,8 +795,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                   <h3 className="text-base font-semibold">Pareceres da Análise</h3>
                   <Button
                     type="button"
-                    size="sm"
-                    className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
+                    size="default"
+                    className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
                     onClick={() => setShowNewParecerEditor(true)}
                   >
                     + Adicionar Parecer
@@ -809,7 +809,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                     <Textarea rows={3} value={newParecerText} onChange={(e) => setNewParecerText(e.target.value)} className="text-sm text-[#018942]" placeholder="Escreva um novo parecer..." />
                     <div className="flex justify-end gap-2 mt-2">
                       <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
-                      <Button size="sm" type="button" onClick={appendParecer} className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar Parecer</Button>
+                      <Button
+                        size="default"
+                        type="button"
+                        onClick={appendParecer}
+                        className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
+                      >
+                        Salvar Parecer
+                      </Button>
                     </div>
                   </div>
                 )}
