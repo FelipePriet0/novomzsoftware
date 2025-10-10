@@ -3,6 +3,7 @@ import { FichaPJForm, PJFormValues } from "@/components/ficha/FichaPJForm";
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreVertical, X, Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -933,11 +934,11 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                       Respondendo a {p.author_name} ({p.author_role})
                                     </span>
                                   </div>
-                                  <Textarea 
+                                  <MentionableTextarea 
                                     rows={3} 
                                     value={replyText} 
                                     onChange={(e) => setReplyText(e.target.value)}
-                                    placeholder="Digite sua resposta como Gestor..."
+                                    placeholder="Digite sua resposta... Use @ para mencionar"
                                     className="text-sm resize-none [&::placeholder]:text-[#018942]"
                                     style={{ color: '#018942' }}
                                   />

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Trash2, MoreVertical, ArrowLeft } from "lucide-react";
 import InputMask from "react-input-mask";
@@ -1807,11 +1808,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                                   Respondendo a {p.author_name} ({p.author_role})
                                 </span>
                               </div>
-                              <Textarea 
+                              <MentionableTextarea 
                                 rows={3} 
                                 value={replyText} 
                                 onChange={(e) => setReplyText(e.target.value)}
-                                placeholder="Digite sua resposta como Gestor..."
+                                placeholder="Digite sua resposta... Use @ para mencionar"
                                 className="text-sm resize-none [&::placeholder]:text-[#018942]"
                                 style={{ color: '#018942' }}
                               />
