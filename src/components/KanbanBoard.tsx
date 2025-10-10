@@ -1235,8 +1235,8 @@ useEffect(() => {
                 className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942]"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="min-w-24">Área</Label>
+            <div className="flex items-center gap-1">
+              <Label>Área</Label>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
                 <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
                   <SelectValue placeholder="Área" />
@@ -1263,8 +1263,8 @@ useEffect(() => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="min-w-24">Prazo</Label>
+            <div className="flex items-center gap-1">
+              <Label>Prazo</Label>
               <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => setPrazoFiltro(v)}>
                 <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
                   <SelectValue placeholder="Prazo" />
