@@ -3,6 +3,7 @@ import { useInbox } from '@/hooks/useInbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Check, Filter, X, Bell, AlertTriangle, Clock, ClipboardList, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 type FilterTab = 'all' | 'tasks' | 'conversations' | 'fichas' | 'overdue';
 type SortKey = 'recent' | 'priority' | 'unread';
@@ -11,6 +12,7 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
   const { items, loading, markAllRead, markRead, remove } = useInbox();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [sort, setSort] = useState<SortKey>('recent');
+  const navigate = useNavigate();
 
   const unreadCount = items.filter(i => !i.read_at).length;
 
@@ -93,6 +95,9 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    {(item as any).meta?.cardId && (
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { navigate(`/?openCardId=${(item as any).meta.cardId}`); onClose(); }}>Abrir Card</Button>
+                    )}
                     {!item.read_at && (
                       <Button size="sm" variant="outline" className="h-7 px-2" onClick={()=>markRead(item.id)}><Check className="h-4 w-4" /> Lida</Button>
                     )}
@@ -115,4 +120,3 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
     </div>
   );
 }
-

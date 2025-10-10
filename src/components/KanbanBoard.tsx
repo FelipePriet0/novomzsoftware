@@ -69,6 +69,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canChangeStatus, isPremium } from "@/lib/access";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { supabase } from "@/integrations/supabase/client";
+import { useLocation } from "react-router-dom";
 
 // Types
 export type ColumnId =
@@ -197,7 +198,7 @@ export default function KanbanBoard() {
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [basicInfoData, setBasicInfoData] = useState<BasicInfoData | null>(null);
   const [pendingApplicationId, setPendingApplicationId] = useState<string | null>(null);
-  
+  const location = useLocation();
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [cardToDelete, setCardToDelete] = useState<CardItem | null>(null);
@@ -316,6 +317,48 @@ export default function KanbanBoard() {
       console.error("[Kanban] Falha ao carregar aplicações", e);
     }
   };
+
+  // Abrir card por query param (?openCardId=...)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openId = params.get('openCardId');
+    if (!openId) return;
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('kanban_cards')
+          .select('id, title, cpf_cnpj, phone, email, received_at')
+          .eq('id', openId)
+          .maybeSingle();
+        if (!error && data) {
+          const nc: CardItem = {
+            id: data.id,
+            nome: data.title,
+            cpf: data.cpf_cnpj || '',
+            receivedAt: data.received_at || new Date().toISOString(),
+            deadline: data.received_at || new Date().toISOString(),
+            responsavel: undefined,
+            responsavelId: undefined,
+            telefone: data.phone || undefined,
+            email: data.email || undefined,
+            naturalidade: undefined,
+            uf: undefined,
+            applicantId: undefined,
+            parecer: '',
+            columnId: 'recebido',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastMovedAt: new Date().toISOString(),
+            labels: [],
+            area: 'analise',
+          } as any;
+          setMockCard(nc);
+          setAutoOpenExpandedNext(true);
+        }
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Função para atualizar o estado local em tempo real
   const handleStatusChange = (cardId: string, newStatus: string) => {
