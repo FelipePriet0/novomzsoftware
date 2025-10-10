@@ -145,7 +145,7 @@ export default function AvisosPage() {
 
               {messages.length === 0 && (
                 <Card>
-                  <CardContent className="py-8 text-sm text-muted-foreground">Nenhum aviso publicado ainda.</CardContent>
+                  <CardContent className="py-8 text-sm text-[#018942]">Nenhum aviso publicado ainda.</CardContent>
                 </Card>
               )}
 
@@ -193,7 +193,7 @@ export default function AvisosPage() {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   {allAttachments.length === 0 && (
-                    <div className="text-muted-foreground">Nenhum anexo publicado.</div>
+                    <div className="text-[#018942]">Nenhum anexo publicado.</div>
                   )}
                   {allAttachments.map(att => (
                     <div key={att.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
@@ -220,7 +220,7 @@ export default function AvisosPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {allAttachments.length === 0 && (
-                <div className="text-sm text-muted-foreground">Nenhum anexo publicado.</div>
+                <div className="text-sm text-[#018942]">Nenhum anexo publicado.</div>
               )}
               {allAttachments.map(att => (
                 <div key={att.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
@@ -241,4 +241,3 @@ export default function AvisosPage() {
     </div>
   );
 }
-
