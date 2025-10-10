@@ -76,19 +76,31 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
-      // 1) Cria applicant PJ (TESTE)
-      const { data: applicant, error: aErr1 } = await supabase
+      // 1) Garantir applicant PJ (TESTE) — find-or-create por CNPJ
+      let applicant: { id: string } | null = null;
+      const { data: existing } = await supabase
         .from('applicants_test')
-        .insert({
-          person_type: 'PJ',
-          primary_name: values.corporate_name,
-          cpf_cnpj: values.cnpj,
-          phone: values.phone,
-          email: values.email,
-        })
         .select('id')
-        .single();
-      if (aErr1) throw aErr1;
+        .eq('cpf_cnpj', values.cnpj)
+        .eq('person_type', 'PJ')
+        .maybeSingle();
+      if (existing?.id) {
+        applicant = existing as any;
+      } else {
+        const { data: created, error: aErr1 } = await supabase
+          .from('applicants_test')
+          .insert({
+            person_type: 'PJ',
+            primary_name: values.corporate_name,
+            cpf_cnpj: values.cnpj,
+            phone: values.phone,
+            email: values.email,
+          })
+          .select('id')
+          .single();
+        if (aErr1) throw aErr1;
+        applicant = created as any;
+      }
 
       // 2) Detalhes PJ mínimos (TESTE)
       await supabase

@@ -1406,21 +1406,34 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
-        // 1) Cria applicant PF em tabela de TESTE
-        const { data: applicantTest, error: aErr } = await (supabase as any)
+        // 1) Garantir applicant PF em tabela de TESTE (find-or-create)
+        const cpf = data.cpf.replace(/\D+/g, '');
+        let applicantTest: { id: string } | null = null;
+        const { data: existingTest } = await (supabase as any)
           .from('applicants_test')
-          .insert({
-            person_type: 'PF',
-            primary_name: data.nome,
-            cpf_cnpj: data.cpf.replace(/\D+/g, ''),
-            phone: data.telefone,
-            email: data.email || null,
-            city: data.naturalidade,
-            uf: data.uf,
-          })
           .select('id')
-          .single();
-        if (aErr) throw aErr;
+          .eq('cpf_cnpj', cpf)
+          .eq('person_type', 'PF')
+          .maybeSingle();
+        if (existingTest?.id) {
+          applicantTest = { id: existingTest.id };
+        } else {
+          const { data: createdTest, error: aErr } = await (supabase as any)
+            .from('applicants_test')
+            .insert({
+              person_type: 'PF',
+              primary_name: data.nome,
+              cpf_cnpj: cpf,
+              phone: data.telefone,
+              email: data.email || null,
+              city: data.naturalidade,
+              uf: data.uf,
+            })
+            .select('id')
+            .single();
+          if (aErr) throw aErr;
+          applicantTest = createdTest;
+        }
 
         // 2) Card no Kanban (Comercial/entrada)
         const now = new Date();
