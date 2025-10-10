@@ -793,7 +793,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               <section>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-base font-semibold">Pareceres da Análise</h3>
-                  <Button size="sm" className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90" onClick={() => setShowNewParecerEditor(true)}>+ Adicionar Parecer</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
+                    onClick={() => setShowNewParecerEditor(true)}
+                  >
+                    + Adicionar Parecer
+                  </Button>
                 </div>
                 
                 {/* Editor de novo parecer - agora aparece acima dos pareceres existentes */}
