@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useApplicantsTest } from './useApplicantsTest';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -20,38 +20,60 @@ interface AnaliseData {
 export function useApplicantsTestConnection(applicantId?: string) {
   const { applicant, updateSolicitacaoFields, updateAnaliseFields } = useApplicantsTest(applicantId);
   const [isSaving, setIsSaving] = useState(false);
+  const lastApplicantIdRef = useRef<string | null>(applicantId || null);
 
   // Salvar dados de solicitação na tabela applicants_test
   const saveSolicitacaoData = useCallback(async (data: SolicitacaoData): Promise<boolean> => {
-    if (!applicantId) return false;
+    // Prefer hook-bound applicantId; fallback to last ensured id
+    const targetId = applicantId || lastApplicantIdRef.current;
+    if (!targetId) return false;
 
     setIsSaving(true);
     try {
-      const success = await updateSolicitacaoFields(data);
-      return success;
+      // If hook is bound to this id, use hook updater for optimistic UI
+      if (applicant?.id === targetId && applicantId) {
+        const success = await updateSolicitacaoFields(data);
+        return success;
+      }
+      // Direct update as fallback
+      const { error } = await supabase
+        .from('applicants_test')
+        .update(data)
+        .eq('id', targetId);
+      if (error) throw error;
+      return true;
     } catch (error) {
       console.error('❌ [useApplicantsTestConnection] Erro ao salvar dados de solicitação:', error);
       return false;
     } finally {
       setIsSaving(false);
     }
-  }, [applicantId, updateSolicitacaoFields]);
+  }, [applicantId, applicant, updateSolicitacaoFields]);
 
   // Salvar dados de análise na tabela applicants_test
   const saveAnaliseData = useCallback(async (data: AnaliseData): Promise<boolean> => {
-    if (!applicantId) return false;
+    const targetId = applicantId || lastApplicantIdRef.current;
+    if (!targetId) return false;
 
     setIsSaving(true);
     try {
-      const success = await updateAnaliseFields(data);
-      return success;
+      if (applicant?.id === targetId && applicantId) {
+        const success = await updateAnaliseFields(data);
+        return success;
+      }
+      const { error } = await supabase
+        .from('applicants_test')
+        .update(data)
+        .eq('id', targetId);
+      if (error) throw error;
+      return true;
     } catch (error) {
       console.error('❌ [useApplicantsTestConnection] Erro ao salvar dados de análise:', error);
       return false;
     } finally {
       setIsSaving(false);
     }
-  }, [applicantId, updateAnaliseFields]);
+  }, [applicantId, applicant, updateAnaliseFields]);
 
   // Buscar ou criar applicant na tabela teste baseado no card/application
   const ensureApplicantExists = useCallback(async (cardData: any): Promise<string | null> => {
@@ -67,6 +89,7 @@ export function useApplicantsTestConnection(applicantId?: string) {
         .maybeSingle();
 
       if (existingApplicant) {
+        lastApplicantIdRef.current = existingApplicant.id;
         return existingApplicant.id;
       }
 
@@ -87,10 +110,48 @@ export function useApplicantsTestConnection(applicantId?: string) {
 
       if (error) throw error;
 
+      lastApplicantIdRef.current = newApplicant.id;
       return newApplicant.id;
     } catch (error) {
       console.error('❌ [useApplicantsTestConnection] Erro ao criar/verificar applicant:', error);
       return null;
+    }
+  }, []);
+
+  // Direct helpers with explicit id
+  const saveSolicitacaoDataFor = useCallback(async (targetId: string, data: SolicitacaoData): Promise<boolean> => {
+    if (!targetId) return false;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('applicants_test')
+        .update(data)
+        .eq('id', targetId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('❌ [useApplicantsTestConnection] Erro (for) ao salvar solicitação:', error);
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
+
+  const saveAnaliseDataFor = useCallback(async (targetId: string, data: AnaliseData): Promise<boolean> => {
+    if (!targetId) return false;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('applicants_test')
+        .update(data)
+        .eq('id', targetId);
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('❌ [useApplicantsTestConnection] Erro (for) ao salvar análise:', error);
+      return false;
+    } finally {
+      setIsSaving(false);
     }
   }, []);
 
@@ -100,5 +161,7 @@ export function useApplicantsTestConnection(applicantId?: string) {
     saveSolicitacaoData,
     saveAnaliseData,
     ensureApplicantExists,
+    saveSolicitacaoDataFor,
+    saveAnaliseDataFor,
   };
 }

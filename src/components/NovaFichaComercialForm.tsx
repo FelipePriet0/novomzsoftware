@@ -196,7 +196,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   const { profile } = useAuth();
   
   // Hook para conectar com a tabela applicants_test
-  const { saveSolicitacaoData, saveAnaliseData, ensureApplicantExists } = useApplicantsTestConnection();
+  const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
   // Hook para conectar com a tabela pf_fichas_test
   const { savePersonalData } = usePfFichasTestConnection();
   const [pareceres, setPareceres] = React.useState<Parecer[]>([]);
@@ -732,15 +732,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         });
 
         if (applicantTestId) {
-          // Salvar dados de solicitação
-          await saveSolicitacaoData({
+          // Salvar dados de solicitação (via id explícito)
+          await saveSolicitacaoDataFor(applicantTestId, {
             quem_solicitou: values.outras?.administrativas?.quemSolicitou,
             meio: values.outras?.administrativas?.meio,
             protocolo_mk: values.outras?.administrativas?.protocoloMk,
           });
 
-          // Salvar dados de análise
-          await saveAnaliseData({
+          // Salvar dados de análise (via id explícito)
+          await saveAnaliseDataFor(applicantTestId, {
             spc: values.spc,
             pesquisador: values.pesquisador,
             plano_acesso: values.outras?.planoEscolhido,

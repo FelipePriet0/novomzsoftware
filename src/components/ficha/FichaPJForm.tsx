@@ -62,7 +62,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
   const changeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Hook para conectar com a tabela applicants_test
-  const { saveSolicitacaoData, saveAnaliseData, ensureApplicantExists } = useApplicantsTestConnection();
+  const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
   // Hook para conectar com a tabela pj_fichas_test
   const { saveCompanyData } = usePjFichasTestConnection();
 
@@ -110,15 +110,15 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         });
 
         if (applicantTestId) {
-          // Salvar dados de solicitação
-          await saveSolicitacaoData({
+          // Salvar dados de solicitação (via id explícito)
+          await saveSolicitacaoDataFor(applicantTestId, {
             quem_solicitou: values.solicitacao?.quem,
             meio: values.solicitacao?.meio,
             protocolo_mk: values.solicitacao?.protocolo,
           });
 
-          // Salvar dados de análise
-          await saveAnaliseData({
+          // Salvar dados de análise (via id explícito)
+          await saveAnaliseDataFor(applicantTestId, {
             spc: values.info?.spc,
             pesquisador: values.info?.mk, // Usar mk como pesquisador
             plano_acesso: values.solicitacao?.planoAcesso,
@@ -197,13 +197,13 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="empresa.fantasia" render={({ field }) => (
-              <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="empresa.fachada" render={({ field }) => (
-              <FormItem><FormLabel>Nome na Fachada</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Nome na Fachada</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="empresa.area" render={({ field }) => (
-              <FormItem className="md:col-span-3"><FormLabel>Área de Atuação</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem className="md:col-span-3"><FormLabel>Área de Atuação</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
           </div>
         </section>
@@ -213,13 +213,13 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           <h3 className="text-base font-semibold mb-3">Endereço</h3>
           <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
             <FormField control={form.control} name="endereco.end" render={({ field }) => (
-              <FormItem className="md:col-span-2"><FormLabel>End</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem className="md:col-span-2"><FormLabel>End</FormLabel><FormControl><Input {...field} placeholder="Ex: Rua das Flores" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.n" render={({ field }) => (
-              <FormItem><FormLabel>Nº</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Nº</FormLabel><FormControl><Input {...field} placeholder="123" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.compl" render={({ field }) => (
-              <FormItem><FormLabel>Compl</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Compl</FormLabel><FormControl><Input {...field} placeholder="Ex: Apt. 301" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.tipo" render={({ field }) => (
               <FormItem className="md:col-span-2">
@@ -235,17 +235,17 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.obsTipo" render={({ field }) => (
-              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.cep" render={({ field }) => (
-              <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="Ex: 12345-678" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.bairro" render={({ field }) => (
-              <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} placeholder="Bairro" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.tempo" render={({ field }) => (
-              <FormItem><FormLabel>Tempo</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Tempo</FormLabel><FormControl><Input {...field} placeholder="Ex: 2 anos" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.estab" render={({ field }) => (
@@ -263,11 +263,16 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.obsEstab" render={({ field }) => (
-              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.endPs" render={({ field }) => (
-              <FormItem className="md:col-span-3"><FormLabel>End no PS</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
+              <FormItem className="md:col-span-3">
+                <FormLabel>End no PS</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Ex: Rua das Flores, 123 - Apt 301" className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                </FormControl>
+              </FormItem>
             )} />
           </div>
         </section>
@@ -318,7 +323,18 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                 </FormControl>
               </FormItem>
             )} />
-            <FormField control={form.control} name="contatos.fonesOs" render={({ field }) => (<FormItem><FormLabel>Fones no OS</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="contatos.fonesOs" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fones no PS</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Ex: (11) 99999-0000"
+                    className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
+              </FormItem>
+            )} />
             <FormField control={form.control} name="contatos.email" render={({ field }) => (
               <FormItem className="md:col-span-3">
                 <FormLabel>E-mail</FormLabel>
@@ -339,14 +355,14 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="docs.tipo" render={({ field }) => (
               <FormItem><FormLabel>Tipo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Energia">Energia</SelectItem><SelectItem value="Agua">Água</SelectItem><SelectItem value="Internet">Internet</SelectItem><SelectItem value="Outro">Outro</SelectItem><SelectItem value="XXX">XXX</SelectItem></SelectContent></Select></FormItem>
             )} />
-            <FormField control={form.control} name="docs.emNomeDe" render={({ field }) => (<FormItem><FormLabel>Em nome de</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.emNomeDe" render={({ field }) => (<FormItem><FormLabel>Em nome de</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
 
             <FormField control={form.control} name="docs.possuiInternet" render={({ field }) => (
               <FormItem><FormLabel>Possui Internet</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select></FormItem>
             )} />
-            <FormField control={form.control} name="docs.operadora" render={({ field }) => (<FormItem><FormLabel>Operadora</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="docs.plano" render={({ field }) => (<FormItem><FormLabel>Plano</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="docs.valor" render={({ field }) => (<FormItem><FormLabel>Valor</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.operadora" render={({ field }) => (<FormItem><FormLabel>Operadora</FormLabel><FormControl><Input {...field} placeholder="Ex: Vivo" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.plano" render={({ field }) => (<FormItem><FormLabel>Plano</FormLabel><FormControl><Input {...field} placeholder="Ex: 300MB" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.valor" render={({ field }) => (<FormItem><FormLabel>Valor</FormLabel><FormControl><Input {...field} placeholder="Ex: R$ 99,90" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
 
             <FormField control={form.control} name="docs.contratoSocial" render={({ field }) => (
               <FormItem className="md:col-span-2"><FormLabel>Contrato Social</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select></FormItem>
@@ -360,7 +376,12 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           <h3 className="text-base font-semibold mb-3">Sócios</h3>
           {[0,1,2].map((idx) => (
             <div key={idx} className="grid gap-3 grid-cols-1 md:grid-cols-3 mb-2">
-              <FormField control={form.control} name={`socios.${idx}.nome` as const} render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+              <FormField control={form.control} name={`socios.${idx}.nome` as const} render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome Completo</FormLabel>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+                </FormItem>
+              )} />
               <FormField control={form.control} name={`socios.${idx}.cpf` as const} render={({ field }) => (
                 <FormItem>
                   <FormLabel>CPF</FormLabel>
@@ -382,7 +403,12 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                   </FormControl>
                 </FormItem>
               )} />
-              <FormField control={form.control} name={`socios.${idx}.tel` as const} render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+              <FormField control={form.control} name={`socios.${idx}.tel` as const} render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tel</FormLabel>
+                  <FormControl><Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+                </FormItem>
+              )} />
             </div>
           ))}
         </section>
@@ -391,9 +417,9 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         <section>
           <h3 className="text-base font-semibold mb-3">Solicitação</h3>
           <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (<FormItem><FormLabel>Quem solicitou</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (<FormItem><FormLabel>Meio</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="solicitacao.tel" render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (<FormItem><FormLabel>Quem solicitou</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (<FormItem><FormLabel>Meio</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="solicitacao.tel" render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
             <FormField control={form.control} name="solicitacao.planoAcesso" render={({ field }) => (
               <FormItem><FormLabel>Plano de Acesso</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="A definir" /></SelectTrigger></FormControl><SelectContent><SelectItem value="A definir">A definir</SelectItem></SelectContent></Select></FormItem>
             )} />
@@ -409,19 +435,41 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         {/* Text Areas equivalentes PF */}
         <section>
           <h3 className="text-base font-semibold mb-3">Informações relevantes da solicitação</h3>
-          <FormField control={form.control} name="info.relevantes" render={({ field }) => (<FormItem><FormControl><Textarea rows={4} {...field} /></FormControl></FormItem>)} />
+          <FormField control={form.control} name="info.relevantes" render={({ field }) => (
+            <FormItem>
+              <FormControl><Textarea rows={4} {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+            </FormItem>
+          )} />
         </section>
         <section>
           <h3 className="text-base font-semibold mb-3">Consulta SPC/Serasa</h3>
-          <FormField control={form.control} name="info.spc" render={({ field }) => (<FormItem><FormControl><Textarea rows={4} {...field} /></FormControl></FormItem>)} />
+          <FormField control={form.control} name="info.spc" render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+              </FormControl>
+            </FormItem>
+          )} />
         </section>
         <section>
           <h3 className="text-base font-semibold mb-3">Outras informações relevantes do PS</h3>
-          <FormField control={form.control} name="info.outrasPs" render={({ field }) => (<FormItem><FormControl><Textarea rows={4} {...field} /></FormControl></FormItem>)} />
+          <FormField control={form.control} name="info.outrasPs" render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+              </FormControl>
+            </FormItem>
+          )} />
         </section>
         <section>
           <h3 className="text-base font-semibold mb-3">Informações relevantes do MK</h3>
-          <FormField control={form.control} name="info.mk" render={({ field }) => (<FormItem><FormControl><Textarea rows={4} {...field} /></FormControl></FormItem>)} />
+          <FormField control={form.control} name="info.mk" render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+              </FormControl>
+            </FormItem>
+          )} />
         </section>
 
         {/* NOVOS CAMPOS EXPERIMENTAIS - APLICANTS_TEST */}
