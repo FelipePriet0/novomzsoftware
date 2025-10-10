@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -76,7 +76,7 @@ export function BasicInfoModal({ open, onClose, onSubmit, initialData, onBack }:
 
   // Resetar o formulário sempre que abrir sem dados iniciais
   // ou quando initialData mudar (evita valores "antigos" aparecerem)
-  React.useEffect(() => {
+  useEffect(() => {
     if (open) {
       const defaults = {
         nome: initialData?.nome || "",
