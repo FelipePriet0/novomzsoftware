@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { MentionableTextarea } from '@/components/ui/MentionableTextarea';
 import { Paperclip, ListTodo } from 'lucide-react';
 import { CommentsList } from '@/components/comments/CommentsList';
 import { useComments } from '@/hooks/useComments';
@@ -130,7 +131,7 @@ export function ObservationsWithComments({
     <div className="space-y-4">
       {/* Campo de Observações com CTA e mensagem integrados */}
       <div className="relative">
-        <Textarea
+        <MentionableTextarea
           name={name}
           value={value}
           onChange={onChange}

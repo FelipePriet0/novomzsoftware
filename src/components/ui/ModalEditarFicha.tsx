@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1157,11 +1158,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
             {/* Editor de novo parecer - agora aparece acima dos pareceres existentes */}
             {showNewParecerEditor && (
               <div className="mt-2">
-                <Textarea
+                <MentionableTextarea
                   rows={3}
                   value={newParecerText}
                   onChange={(e) => setNewParecerText(e.target.value)}
-                  placeholder="Escreva um novo parecer..."
+                  placeholder="Escreva um novo parecer... Use @ para mencionar"
                   className="rounded-[12px] text-[#018942] placeholder-[#018942]"
                 />
                 <div className="flex justify-end gap-2 mt-2">
@@ -1237,7 +1238,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                           
                           {editingParecerId === p.id ? (
                             <div>
-                              <Textarea rows={3} value={editingText} onChange={(e) => setEditingText(e.target.value)} className="text-sm text-[#018942]" />
+                              <MentionableTextarea rows={3} value={editingText} onChange={(e) => setEditingText(e.target.value)} className="text-sm text-[#018942]" placeholder="Edite... Use @ para mencionar" />
                               <div className="flex justify-end mt-2 gap-2">
                                 <Button size="sm" type="button" variant="secondary" onClick={cancelEditParecer} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
                                 <Button size="sm" type="button" onClick={saveEditParecer} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar</Button>
@@ -1256,11 +1257,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                                   Respondendo a {p.author_name} ({p.author_role})
                                 </span>
                               </div>
-                              <Textarea 
+                              <MentionableTextarea 
                                 rows={3} 
                                 value={replyText} 
                                 onChange={(e) => setReplyText(e.target.value)}
-                                placeholder="Digite sua resposta como Gestor..."
+                                placeholder="Digite sua resposta... Use @ para mencionar"
                                 className="text-sm resize-none [&::placeholder]:text-[#018942]"
                                 style={{ color: '#018942' }}
                               />
