@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { X, MoreVertical, Paperclip, ArrowLeft } from "lucide-react";
+import InputMask from "react-input-mask";
 import { ExpandedFichaModal } from "@/components/ficha/ExpandedFichaModal";
 import { ExpandedFichaPJModal } from "@/components/ficha/ExpandedFichaPJModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +47,14 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     agendamento: card?.deadline ? new Date(card.deadline).toISOString().slice(0, 10) : "",
     feito_em: card?.receivedAt ? new Date(card.receivedAt).toISOString().slice(0, 10) : "",
     observacoes: card?.observacoes ?? "",
+    // Novos campos PF
+    cpf: card?.cpf_cnpj ?? "",
+    whatsapp: card?.whatsapp ?? "",
+    endereco: card?.endereco ?? "",
+    numero: card?.numero ?? "",
+    complemento: card?.complemento ?? "",
+    cep: card?.cep ?? "",
+    bairro: card?.bairro ?? "",
   };
   
   const [form, setForm] = useState(initialForm);
@@ -85,6 +94,10 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleMaskChange = (name: string, value: string) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -244,12 +257,20 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   React.useEffect(() => {
     const timer = setTimeout(async () => {
       try {
-        // Update kanban_cards (title, phone, due_at)
+        // Update kanban_cards (title, phone, due_at, novos campos PF)
         const updates: any = {};
         if (form.nome !== initialForm.nome) updates.title = form.nome;
         if (form.telefone !== initialForm.telefone) updates.phone = form.telefone;
         if (form.agendamento) updates.due_at = new Date(form.agendamento).toISOString();
         if (form.observacoes !== initialForm.observacoes) updates.comments = form.observacoes;
+        // Novos campos PF
+        if (form.cpf !== initialForm.cpf) updates.cpf_cnpj = form.cpf;
+        if (form.whatsapp !== initialForm.whatsapp) updates.whatsapp = form.whatsapp;
+        if (form.endereco !== initialForm.endereco) updates.endereco = form.endereco;
+        if (form.numero !== initialForm.numero) updates.numero = form.numero;
+        if (form.complemento !== initialForm.complemento) updates.complemento = form.complemento;
+        if (form.cep !== initialForm.cep) updates.cep = form.cep;
+        if (form.bairro !== initialForm.bairro) updates.bairro = form.bairro;
         if (Object.keys(updates).length > 0) {
           await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
         }
@@ -267,7 +288,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [form.nome, form.telefone, form.agendamento, form.observacoes]);
+  }, [form.nome, form.telefone, form.agendamento, form.observacoes, form.cpf, form.whatsapp, form.endereco, form.numero, form.complemento, form.cep, form.bairro]);
 
   // Load pareceres (read-only) from backend for this ficha/card
   const loadPareceres = useCallback(async () => {
@@ -744,25 +765,149 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label>Nome do Cliente</Label>
-            <Input
-              name="nome"
-              value={form.nome}
-              onChange={handleChange}
-              className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <Label>Nome do Cliente</Label>
+                <Input
+                  name="nome"
+                  value={form.nome}
+                  onChange={handleChange}
+                  placeholder="Nome completo"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div>
+                <Label>{card?.personType === 'PJ' ? 'CNPJ' : 'CPF'}</Label>
+                <InputMask
+                  mask={card?.personType === 'PJ' ? "99.999.999/9999-99" : "999.999.999-99"}
+                  value={form.cpf || ""}
+                  onChange={(e) => handleMaskChange('cpf', e.target.value)}
+                  maskChar=" "
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      placeholder={card?.personType === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"}
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Telefone</Label>
-            <Input
-              name="telefone"
-              inputMode="tel"
-              type="tel"
-              value={form.telefone}
-              onChange={handleChange}
-              className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>Telefone</Label>
+                <InputMask
+                  mask="(99) 99999-9999"
+                  value={form.telefone || ""}
+                  onChange={(e) => handleMaskChange('telefone', e.target.value)}
+                  maskChar=" "
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      inputMode="tel"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+              <div>
+                <Label>WhatsApp</Label>
+                <InputMask
+                  mask="(99) 99999-9999"
+                  value={form.whatsapp || ""}
+                  onChange={(e) => handleMaskChange('whatsapp', e.target.value)}
+                  maskChar=" "
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      inputMode="tel"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+            </div>
+          </div>
+
+          {/* Novos campos de endereço PF */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <Label>Endereço</Label>
+                <Input
+                  name="endereco"
+                  value={form.endereco}
+                  onChange={handleChange}
+                  placeholder="Ex: Rua das Flores"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div>
+                <Label>Número</Label>
+                <Input
+                  name="numero"
+                  value={form.numero}
+                  onChange={handleChange}
+                  placeholder="123"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <Label>Complemento</Label>
+                <Input
+                  name="complemento"
+                  value={form.complemento}
+                  onChange={handleChange}
+                  placeholder="Apto 45"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div className="sm:col-span-2"></div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>CEP</Label>
+                <InputMask
+                  mask="99999-999"
+                  value={form.cep || ""}
+                  onChange={(e) => handleMaskChange('cep', e.target.value)}
+                  maskChar=" "
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      placeholder="12345-678"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+              <div>
+                <Label>Bairro</Label>
+                <Input
+                  name="bairro"
+                  value={form.bairro}
+                  onChange={handleChange}
+                  placeholder="Centro"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -773,7 +918,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                 type="date"
                 value={feitoEm}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
             <div className="space-y-2">
@@ -783,7 +928,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                 type="date"
                 value={form.agendamento}
                 onChange={handleChange}
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
           </div>
@@ -794,7 +939,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               <Input
                 value={vendedorNome || "—"}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
             <div className="space-y-1">
@@ -802,7 +947,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               <Input
                 value={analistaNome || "—"}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
           </div>
@@ -829,7 +974,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   value={newParecerText}
                   onChange={(e) => setNewParecerText(e.target.value)}
                   placeholder="Escreva um novo parecer..."
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
                 />
                 <div className="flex justify-end gap-2 mt-2">
                   <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
@@ -972,7 +1117,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               name="observacoes"
               value={form.observacoes}
               onChange={handleChange}
-              className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]/0.7]"
+              className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
               placeholder="Use @mencoes para colaboradores..."
               cardId={card?.id || ''}
               onAttachmentClick={handleAttachmentClick}

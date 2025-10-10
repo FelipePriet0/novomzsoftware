@@ -99,6 +99,7 @@ export interface CardItem {
   naturalidade?: string;
   uf?: string;
   applicantId?: string;
+  personType?: 'PF' | 'PJ'; // Tipo de pessoa (PF ou PJ)
   parecer: string;
   columnId: ColumnId;
   createdAt: string; // ISO
@@ -280,6 +281,7 @@ export default function KanbanBoard() {
           naturalidade: row.applicant?.city ?? undefined,
           uf: row.applicant?.uf ?? undefined,
           applicantId: row.applicant?.id ?? undefined,
+          personType: row.person_type ?? undefined,
           parecer: '',
           columnId: ((): ColumnId => {
             if (row.area === 'comercial') {

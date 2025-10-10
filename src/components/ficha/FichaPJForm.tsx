@@ -7,6 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { useApplicantsTestConnection } from '@/hooks/useApplicantsTestConnection';
+import { usePjFichasTestConnection } from '@/hooks/usePjFichasTestConnection';
+import InputMask from 'react-input-mask';
 
 const pjSchema = z.object({
   empresa: z.object({
@@ -36,6 +39,7 @@ const pjSchema = z.object({
   solicitacao: z.object({
     quem: z.string().optional(), meio: z.string().optional(), tel: z.string().optional(),
     planoAcesso: z.enum(['A definir']).optional(), svaAvulso: z.enum(['A definir']).optional(), venc: z.enum(['5','10','15','20','25']).optional(),
+    protocolo: z.string().optional(), // Novo campo experimental
   }),
   info: z.object({
     relevantes: z.string().optional(), spc: z.string().optional(), outrasPs: z.string().optional(), mk: z.string().optional(), parecerAnalise: z.string().optional(),
@@ -50,11 +54,17 @@ interface FichaPJFormProps {
   onCancel?: () => void;
   afterMkSlot?: React.ReactNode;
   onFormChange?: (values: PJFormValues) => void;
+  applicationId?: string;
 }
 
-export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, onFormChange }: FichaPJFormProps) {
+export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, onFormChange, applicationId }: FichaPJFormProps) {
   const form = useForm<PJFormValues>({ resolver: zodResolver(pjSchema), defaultValues });
   const changeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Hook para conectar com a tabela applicants_test
+  const { saveSolicitacaoData, saveAnaliseData, ensureApplicantExists } = useApplicantsTestConnection();
+  // Hook para conectar com a tabela pj_fichas_test
+  const { saveCompanyData } = usePjFichasTestConnection();
 
   // Subscribe to form changes once and debounce notifications to the parent
   useEffect(() => {
@@ -84,18 +94,92 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
     return out;
   };
 
+  // Função wrapper para salvar dados na tabela teste
+  const handleSubmit = async (values: PJFormValues) => {
+    // Salvar dados na tabela applicants_test (experimental)
+    if (applicationId) {
+      try {
+        // Buscar ou criar applicant na tabela teste
+        const applicantTestId = await ensureApplicantExists({
+          id: applicationId,
+          cpf_cnpj: values.empresa.cnpj,
+          person_type: 'PJ',
+          nome: values.empresa.razao,
+          telefone: values.contatos?.tel,
+          email: values.contatos?.email,
+        });
+
+        if (applicantTestId) {
+          // Salvar dados de solicitação
+          await saveSolicitacaoData({
+            quem_solicitou: values.solicitacao?.quem,
+            meio: values.solicitacao?.meio,
+            protocolo_mk: values.solicitacao?.protocolo,
+          });
+
+          // Salvar dados de análise
+          await saveAnaliseData({
+            spc: values.info?.spc,
+            pesquisador: values.info?.mk, // Usar mk como pesquisador
+            plano_acesso: values.solicitacao?.planoAcesso,
+            venc: values.solicitacao?.venc,
+            sva_avulso: values.solicitacao?.svaAvulso,
+          });
+
+          // Salvar dados da empresa na tabela pj_fichas_test
+          await saveCompanyData(applicantTestId, values as any);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao salvar dados experimentais PJ:', error);
+        // Não bloquear o submit principal por erro experimental
+      }
+    }
+
+    // Submeter formulário original
+    await onSubmit(values);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="pj-form space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="pj-form space-y-6 max-h-[70vh] overflow-y-auto pr-1">
         {/* Dados cadastrais básicos */}
         <section>
           <h3 className="text-base font-semibold mb-3">Dados cadastrais básicos</h3>
           <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
             <FormField control={form.control} name="empresa.razao" render={({ field }) => (
-              <FormItem className="md:col-span-2"><FormLabel>Razão Social</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem className="md:col-span-2">
+                <FormLabel>Razão Social</FormLabel>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Nome completo da empresa"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )} />
             <FormField control={form.control} name="empresa.cnpj" render={({ field }) => (
-              <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem>
+                <FormLabel>CNPJ</FormLabel>
+                <FormControl>
+                  <InputMask
+                    mask="99.999.999/9999-99"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="00.000.000/0000-00"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )} />
             <FormField control={form.control} name="empresa.abertura" render={({ field }) => (
               <FormItem>
@@ -192,10 +276,62 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         <section>
           <h3 className="text-base font-semibold mb-3">Contatos & Documentos</h3>
           <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
-            <FormField control={form.control} name="contatos.tel" render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="contatos.whats" render={({ field }) => (<FormItem><FormLabel>Whats</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="contatos.tel" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tel</FormLabel>
+                <FormControl>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="(11) 99999-9999"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="contatos.whats" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Whats</FormLabel>
+                <FormControl>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="(11) 99999-9999"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
+              </FormItem>
+            )} />
             <FormField control={form.control} name="contatos.fonesOs" render={({ field }) => (<FormItem><FormLabel>Fones no OS</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-            <FormField control={form.control} name="contatos.email" render={({ field }) => (<FormItem className="md:col-span-3"><FormLabel>E-mail</FormLabel><FormControl><Input type="email" {...field} /></FormControl></FormItem>)} />
+            <FormField control={form.control} name="contatos.email" render={({ field }) => (
+              <FormItem className="md:col-span-3">
+                <FormLabel>E-mail</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="email" 
+                    {...field} 
+                    placeholder="contato@empresa.com"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
+              </FormItem>
+            )} />
 
             <FormField control={form.control} name="docs.comprovante" render={({ field }) => (
               <FormItem><FormLabel>Comprovante</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Enviou">Enviou</SelectItem><SelectItem value="Não enviou">Não enviou</SelectItem></SelectContent></Select></FormItem>
@@ -225,7 +361,27 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           {[0,1,2].map((idx) => (
             <div key={idx} className="grid gap-3 grid-cols-1 md:grid-cols-3 mb-2">
               <FormField control={form.control} name={`socios.${idx}.nome` as const} render={({ field }) => (<FormItem><FormLabel>Nome Completo</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-              <FormField control={form.control} name={`socios.${idx}.cpf` as const} render={({ field }) => (<FormItem><FormLabel>CPF</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+              <FormField control={form.control} name={`socios.${idx}.cpf` as const} render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CPF</FormLabel>
+                  <FormControl>
+                    <InputMask
+                      mask="999.999.999-99"
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      maskChar=" "
+                    >
+                      {(inputProps) => (
+                        <Input
+                          {...inputProps}
+                          placeholder="000.000.000-00"
+                          className="placeholder:text-[#018942] placeholder:opacity-70"
+                        />
+                      )}
+                    </InputMask>
+                  </FormControl>
+                </FormItem>
+              )} />
               <FormField control={form.control} name={`socios.${idx}.tel` as const} render={({ field }) => (<FormItem><FormLabel>Tel</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
             </div>
           ))}
@@ -267,6 +423,45 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           <h3 className="text-base font-semibold mb-3">Informações relevantes do MK</h3>
           <FormField control={form.control} name="info.mk" render={({ field }) => (<FormItem><FormControl><Textarea rows={4} {...field} /></FormControl></FormItem>)} />
         </section>
+
+        {/* NOVOS CAMPOS EXPERIMENTAIS - APLICANTS_TEST */}
+        <section>
+          <h3 className="text-base font-semibold mb-3">Dados da Solicitação</h3>
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+            <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quem Solicitou</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Nome do colaborador" />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.protocolo" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Protocolo MK</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Número do protocolo" />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Meio</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Ligação">Ligação</SelectItem>
+                    <SelectItem value="Whatsapp">Whatsapp</SelectItem>
+                    <SelectItem value="Presencial">Presencial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
+          </div>
+        </section>
+
         {afterMkSlot}
 
         <div className="flex justify-end gap-2 pt-4">

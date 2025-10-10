@@ -10,12 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Trash2, MoreVertical, ArrowLeft } from "lucide-react";
+import InputMask from "react-input-mask";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { canEditReanalysis } from "@/lib/access";
 import { supabase } from "@/integrations/supabase/client";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
+import { usePfFichasTestConnection } from "@/hooks/usePfFichasTestConnection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,6 +86,8 @@ const schema = z.object({
     nomeComprovante: z.string().optional(),
     temInternetFixa: z.enum(["Sim", "Não"]).optional(),
     empresaInternet: z.string().optional(),
+    planoInternet: z.string().optional(),
+    valorInternet: z.string().optional(),
     observacoes: z.string().optional(),
   }).superRefine((val, ctx) => {
     if (val.temContrato === "Sim") {
@@ -96,8 +101,16 @@ const schema = z.object({
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nomeLocador"], message: "Obrigatório" });
       }
     }
-    if (val.temInternetFixa === "Sim" && !val.empresaInternet?.trim()) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["empresaInternet"], message: "Obrigatório" });
+    if (val.temInternetFixa === "Sim") {
+      if (!val.empresaInternet?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["empresaInternet"], message: "Obrigatório" });
+      }
+      if (!val.planoInternet?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["planoInternet"], message: "Obrigatório" });
+      }
+      if (!val.valorInternet?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["valorInternet"], message: "Obrigatório" });
+      }
     }
   }),
   empregoRenda: z.object({
@@ -181,6 +194,11 @@ interface NovaFichaComercialFormProps {
 export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, onRefetch }: NovaFichaComercialFormProps) {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
+  
+  // Hook para conectar com a tabela applicants_test
+  const { saveSolicitacaoData, saveAnaliseData, ensureApplicantExists } = useApplicantsTestConnection();
+  // Hook para conectar com a tabela pf_fichas_test
+  const { savePersonalData } = usePfFichasTestConnection();
   const [pareceres, setPareceres] = React.useState<Parecer[]>([]);
   const [newParecerText, setNewParecerText] = React.useState("");
   const [showNewParecerEditor, setShowNewParecerEditor] = React.useState(false);
@@ -670,13 +688,23 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   // Age < 45 -> show filiacao
   const nasc = form.watch("cliente.nasc");
   const showFiliacao = React.useMemo(() => {
-    if (!nasc) return false;
+    if (!nasc) {
+      console.log("🔍 [Filiação] Data de nascimento não preenchida");
+      return false;
+    }
     const parts = String(nasc).split('/');
-    if (parts.length !== 3) return false;
+    if (parts.length !== 3) {
+      console.log("🔍 [Filiação] Formato de data inválido:", nasc);
+      return false;
+    }
     const [dd, mm, yyyy] = parts;
     const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-    if (isNaN(d.getTime())) return false;
+    if (isNaN(d.getTime())) {
+      console.log("🔍 [Filiação] Data inválida:", nasc);
+      return false;
+    }
     const age = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    console.log("🔍 [Filiação] Idade calculada:", age, "anos - Mostrar filiação:", age < 45);
     return age < 45;
   }, [nasc]);
 
@@ -689,6 +717,46 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       infoMk: values.infoRelevantes?.infoMk || "",
       parecerAnalise: currentParecerAnalise, // Preserve pareceres instead of clearing
     };
+
+    // Salvar dados na tabela applicants_test (experimental)
+    if (applicationId) {
+      try {
+        // Buscar ou criar applicant na tabela teste
+        const applicantTestId = await ensureApplicantExists({
+          id: applicationId,
+          cpf_cnpj: values.cliente.cpf,
+          person_type: 'PF',
+          nome: values.cliente.nome,
+          telefone: values.cliente.tel,
+          email: values.cliente.email,
+        });
+
+        if (applicantTestId) {
+          // Salvar dados de solicitação
+          await saveSolicitacaoData({
+            quem_solicitou: values.outras?.administrativas?.quemSolicitou,
+            meio: values.outras?.administrativas?.meio,
+            protocolo_mk: values.outras?.administrativas?.protocoloMk,
+          });
+
+          // Salvar dados de análise
+          await saveAnaliseData({
+            spc: values.spc,
+            pesquisador: values.pesquisador,
+            plano_acesso: values.outras?.planoEscolhido,
+            venc: values.outras?.diaVencimento,
+            sva_avulso: values.outras?.svaAvulso,
+          });
+
+          // Salvar dados pessoais na tabela pf_fichas_test
+          await savePersonalData(applicantTestId, values);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao salvar dados experimentais:', error);
+        // Não bloquear o submit principal por erro experimental
+      }
+    }
+
     await onSubmit(values);
   }
 
@@ -712,20 +780,58 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="cliente.nome" render={({ field }) => (
               <FormItem className="md:col-span-3">
                 <FormLabel>Nome</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Nome completo"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="cliente.tel" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tel</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} /></FormControl>
+                <FormControl>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        inputMode="tel"
+                        placeholder="(11) 99999-9999"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="cliente.whats" render={({ field }) => (
               <FormItem>
                 <FormLabel>Whats</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} /></FormControl>
+                <FormControl>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        inputMode="tel"
+                        placeholder="(11) 99999-9999"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="cliente.doPs" render={({ field }) => (
@@ -737,7 +843,22 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="cliente.cpf" render={({ field }) => (
               <FormItem>
                 <FormLabel>CPF *</FormLabel>
-                <FormControl><Input {...field} placeholder="000.000.000-00" /></FormControl>
+                <FormControl>
+                  <InputMask
+                    mask="999.999.999-99"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="000.000.000-00"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -749,6 +870,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                     placeholder="dd/mm/aaaa"
                     maxLength={10}
                     value={field.value || ''}
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
                     onChange={(e) => {
                       const v = e.target.value.replace(/\D/g, '');
                       const p1 = v.slice(0,2);
@@ -791,13 +913,25 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.end" render={({ field }) => (
               <FormItem>
                 <FormLabel>Endereço (logradouro)</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Ex: Rua das Flores"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.n" render={({ field }) => (
               <FormItem>
                 <FormLabel>Nº</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="123"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.compl" render={({ field }) => (
@@ -809,13 +943,34 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.cep" render={({ field }) => (
               <FormItem>
                 <FormLabel>CEP</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <InputMask
+                    mask="99999-999"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="12345-678"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.bairro" render={({ field }) => (
               <FormItem>
                 <FormLabel>Bairro</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Bairro"
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.cond" render={({ field }) => (
@@ -1014,13 +1169,47 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               </FormItem>
             )} />
             {form.watch("relacoes.temInternetFixa") === "Sim" && (
-              <FormField control={form.control} name="relacoes.empresaInternet" render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Empresa</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              <>
+                <FormField control={form.control} name="relacoes.empresaInternet" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Empresa</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: Vivo"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="relacoes.planoInternet" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plano</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: 300MB"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="relacoes.valorInternet" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: R$ 99,90"
+                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </>
             )}
             <FormField control={form.control} name="relacoes.observacoes" render={({ field }) => (
               <FormItem className="md:col-span-3">
@@ -1160,9 +1349,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           )} />
         </section>
 
-        {/* 8. Filiação (< 45 anos) */}
-        {showFiliacao && (
-          <section>
+        {/* 8. Filiação */}
+        <section>
             <h3 className="text-lg font-semibold mb-3">8. Filiação</h3>
             <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
               <FormField control={form.control} name="filiacao.pai.nome" render={({ field }) => (
@@ -1203,7 +1391,6 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               )} />
             </div>
           </section>
-        )}
 
         {/* 9. Referências pessoais */}
         <section>
@@ -1321,6 +1508,41 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>
                     <SelectItem value="Não">Não</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
+          </div>
+
+          {/* NOVOS CAMPOS EXPERIMENTAIS - APLICANTS_TEST */}
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-3 mt-4">
+            <FormField control={form.control} name="outras.administrativas.quemSolicitou" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quem Solicitou</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Nome do colaborador" />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="outras.administrativas.protocoloMk" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Protocolo MK</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Número do protocolo" />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="outras.administrativas.meio" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Meio</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Ligação">Ligação</SelectItem>
+                    <SelectItem value="Whatsapp">Whatsapp</SelectItem>
+                    <SelectItem value="Presencial">Presencial</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>

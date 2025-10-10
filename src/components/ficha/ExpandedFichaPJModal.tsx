@@ -720,6 +720,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               onSubmit={handleSubmitWrapper}
               onCancel={handleClose}
               onFormChange={handleFormChange}
+              applicationId={applicationId}
               afterMkSlot={(
               <section>
                 <div className="flex items-center justify-between mb-2">
@@ -831,6 +832,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                   />
                                   <div className="flex justify-end gap-2 mt-2">
                                     <Button
+                                      type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={cancelReplyToParecer}
@@ -839,6 +841,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                       Cancelar
                                     </Button>
                                     <Button
+                                      type="button"
                                       size="sm"
                                       onClick={saveReplyToParecer}
                                       disabled={!replyText.trim()}
