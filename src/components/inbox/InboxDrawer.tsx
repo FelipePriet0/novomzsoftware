@@ -121,7 +121,7 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
         {/* Footer */}
         <div className="border-t px-4 py-2 flex items-center justify-between text-sm">
-          <Button variant="outline" onClick={markAllRead}><Check className="h-4 w-4 mr-1" /> Marcar todas como lidas</Button>
+          <Button onClick={markAllRead} className="bg-[#018942] text-white hover:bg-[#018942]/90"><Check className="h-4 w-4 mr-1" /> Marcar todas como lidas</Button>
           <Button variant="ghost" className="text-gray-600">Ver histórico</Button>
         </div>
       </div>
