@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentUser } from '@/hooks/use-current-user';
@@ -15,6 +14,8 @@ import { Megaphone, Paperclip, ThumbsUp, Eye, AlertCircle, Users, CheckCircle2 }
 
 type ReactionKey = 'like' | 'seen' | 'important';
 
+type ChannelAttachment = { id: string; name: string; url?: string; size?: number; type?: string };
+
 type ChannelMessage = {
   id: string;
   title: string;
@@ -22,7 +23,7 @@ type ChannelMessage = {
   createdAt: string; // ISO
   authorId: string;
   authorName: string;
-  attachments?: { id: string; name: string; url?: string }[];
+  attachments?: ChannelAttachment[];
   reactions: Record<ReactionKey, string[]>; // arrays de userId
   links?: { label: string; href: string }[];
 };
@@ -39,6 +40,8 @@ export default function AvisosPage() {
   const [body, setBody] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkHref, setLinkHref] = useState('');
+  const [composerAttachments, setComposerAttachments] = useState<ChannelAttachment[]>([]);
+  const [dragActive, setDragActive] = useState(false);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -71,7 +74,7 @@ export default function AvisosPage() {
       createdAt: new Date().toISOString(),
       authorId: profile?.id || 'user',
       authorName: currentUserName || profile?.full_name || 'Gestor',
-      attachments: [],
+      attachments: composerAttachments,
       reactions: { like: [], seen: [], important: [] },
       links: linkHref && linkLabel ? [{ label: linkLabel, href: linkHref }] : undefined,
     };
@@ -80,6 +83,7 @@ export default function AvisosPage() {
     setBody('');
     setLinkHref('');
     setLinkLabel('');
+    setComposerAttachments([]);
     toast({ title: 'Aviso publicado' });
   };
 
@@ -100,6 +104,33 @@ export default function AvisosPage() {
     messages.flatMap(m => (m.attachments || []).map(a => ({ ...a, messageId: m.id, messageTitle: m.title })))
   ), [messages]);
 
+  const handleFiles = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next: ChannelAttachment[] = [];
+    Array.from(files).forEach(f => {
+      const url = URL.createObjectURL(f);
+      next.push({ id: crypto.randomUUID(), name: f.name, url, size: f.size, type: f.type });
+    });
+    setComposerAttachments(prev => [...prev, ...next]);
+  }, []);
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
   return (
     <div className="p-4 md:p-6 lg:p-8">
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -114,13 +145,7 @@ export default function AvisosPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="feed" className="">
-        <TabsList className="mb-4">
-          <TabsTrigger value="feed">Feed de Avisos</TabsTrigger>
-          <TabsTrigger value="attachments">Anexos</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="feed">
+      <div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
               {isGestor && (
@@ -135,13 +160,46 @@ export default function AvisosPage() {
                       onChange={(e) => setTitle(e.target.value)}
                       className="placeholder:text-[#018942] text-[#018942]"
                     />
-                    <Textarea
-                      rows={4}
-                      placeholder="Descrição clara e objetiva"
-                      value={body}
-                      onChange={(e) => setBody(e.target.value)}
-                      className="placeholder:text-[#018942] text-[#018942]"
-                    />
+                    <div
+                      onDragOver={onDragOver}
+                      onDragLeave={onDragLeave}
+                      onDrop={onDrop}
+                      className={`rounded-md border ${dragActive ? 'border-[#018942] bg-[#018942]/5' : 'border-input'} transition-colors`}
+                    >
+                      <Textarea
+                        rows={4}
+                        placeholder="Descrição clara e objetiva — arraste anexos aqui"
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                        className="placeholder:text-[#018942] text-[#018942] border-0 focus-visible:ring-0"
+                      />
+                      {composerAttachments.length > 0 && (
+                        <div className="px-3 pb-3">
+                          <div className="text-xs text-muted-foreground mb-1">Anexos:</div>
+                          <div className="flex flex-col gap-2">
+                            {composerAttachments.map(att => (
+                              <div key={att.id} className="flex items-center justify-between gap-3 rounded-md border px-2 py-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm">{att.name}</div>
+                                    <div className="truncate text-xs text-muted-foreground">{att.size ? (Math.round(att.size/1024))+' KB' : ''}</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {att.url && (
+                                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => window.open(att.url, '_blank')}>Pré-visualizar</Button>
+                                  )}
+                                  {att.url && (
+                                    <a href={att.url} download className="text-sm px-2 py-1 rounded-md hover:underline">Baixar</a>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       <Input
                         placeholder="Rótulo do link (opcional)"
@@ -156,14 +214,7 @@ export default function AvisosPage() {
                         className="placeholder:text-[#018942] text-[#018942]"
                       />
                     </div>
-                    <div className="flex items-center justify-between">
-                      <Button
-                        variant="secondary"
-                        className="gap-2 bg-gray-200 text-gray-700 hover:bg-gray-200 border-gray-300"
-                        type="button"
-                      >
-                        <Paperclip className="h-4 w-4" /> Anexar (em breve)
-                      </Button>
+                    <div className="flex items-center justify-end">
                       <Button onClick={publish} className="bg-[#018942] text-white hover:bg-[#018942]/90">Publicar aviso</Button>
                     </div>
                   </CardContent>
@@ -238,33 +289,7 @@ export default function AvisosPage() {
               </Card>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="attachments">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Todos os Anexos</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {allAttachments.length === 0 && (
-                <div className="text-sm text-[#018942]">Nenhum anexo publicado.</div>
-              )}
-              {allAttachments.map(att => (
-                <div key={att.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Paperclip className="h-4 w-4 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <div className="truncate">{att.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">em: {att.messageTitle}</div>
-                    </div>
-                  </div>
-                  <Button size="sm" variant="ghost" className="h-7 px-2" disabled>Baixar</Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }
