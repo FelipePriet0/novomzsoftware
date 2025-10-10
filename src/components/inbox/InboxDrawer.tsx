@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useInbox } from '@/hooks/useInbox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Check, Filter, X, Bell, AlertTriangle, Clock, ClipboardList, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -58,11 +59,18 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
         {/* Filters */}
         <div className="flex items-center justify-between px-4 py-2 border-b gap-2 text-sm">
           <div className="flex items-center gap-2">
-            {(['all','tasks','conversations','fichas','overdue'] as FilterTab[]).map(t => (
-              <Button key={t} size="sm" variant={filter===t? 'default':'outline'} className={filter===t? 'bg-[#018942] text-white':''} onClick={()=>setFilter(t)}>
-                {t==='all'?'Tudo':t==='tasks'?'Tarefas':t==='conversations'?'Conversas':t==='fichas'?'Fichas':'Atrasos'}
-              </Button>
-            ))}
+            <Select value={filter} onValueChange={(v)=>setFilter(v as FilterTab)}>
+              <SelectTrigger className="w-40 bg-white text-[#018942] border-[#018942]">
+                <SelectValue placeholder="Filtro" />
+              </SelectTrigger>
+              <SelectContent className="z-50">
+                <SelectItem value="all">Tudo</SelectItem>
+                <SelectItem value="tasks">Tarefas</SelectItem>
+                <SelectItem value="conversations">Conversas</SelectItem>
+                <SelectItem value="fichas">Fichas</SelectItem>
+                <SelectItem value="overdue">Atrasos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-1">
             <Filter className="h-4 w-4 text-gray-500" />
