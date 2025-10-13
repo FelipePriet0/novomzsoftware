@@ -4,6 +4,25 @@ import { useAuth } from '@/context/AuthContext';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { useToast } from '@/hooks/use-toast';
 
+// Função standalone para download (escopo de módulo)
+export const getDownloadUrlStandalone = async (filePath: string): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('card_attachments')
+      .createSignedUrl(filePath, 60);
+
+    if (error) {
+      console.error('Erro creating signed URL:', error);
+      return null;
+    }
+
+    return data?.signedUrl || null;
+  } catch (error) {
+    console.error('Erro creating signed URL:', error);
+    return null;
+  }
+};
+
 export interface CardAttachment {
   id: string;
   card_id: string;
@@ -338,24 +357,7 @@ export const useAttachments = (cardId: string) => {
     }
   };
 
-  // Função standalone para download (exportada)
-  export const getDownloadUrlStandalone = async (filePath: string): Promise<string | null> => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('card_attachments')
-        .createSignedUrl(filePath, 60);
-
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        return null;
-      }
-
-      return data?.signedUrl || null;
-    } catch (error) {
-      console.error('Error creating signed URL:', error);
-      return null;
-    }
-  };
+  
 
   // Função para formatar tamanho de arquivo
   const formatFileSize = (bytes: number): string => {
@@ -466,3 +468,4 @@ export const useAttachments = (cardId: string) => {
     listAllFiles
   };
 };
+
