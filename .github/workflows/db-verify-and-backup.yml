@@ -1,0 +1,44 @@
+name: DB Verify and Backup
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verify-and-backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: List migrations (remote vs local)
+        run: |
+          supabase migration list \
+            --db-url "${{ secrets.SUPABASE_DB_URL }}" \
+            --workdir ./supabase | tee migration_status.txt
+          {
+            echo "# Migration Status";
+            echo "";
+            echo '\`\`\`';
+            cat migration_status.txt;
+            echo '\`\`\`';
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dump database (full)
+        run: |
+          mkdir -p backups
+          supabase db dump \
+            --db-url "${{ secrets.SUPABASE_DB_URL }}" \
+            --file backups/${{ github.run_id }}_full.sql
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-artifacts-${{ github.run_id }}
+          path: |
+            migration_status.txt
+            backups/*.sql
