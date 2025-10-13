@@ -389,7 +389,35 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           .eq('id', applicationId);
         if (error) throw error;
         console.log('✅ [NovaFicha] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
-        
+        // 🔔 Notificações de menções: procurar @nome e inserir na inbox de mencionados
+        try {
+          const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+          const unique = Array.from(new Set(matches));
+          if (unique.length > 0) {
+            for (const mention of unique) {
+              const { data: profiles } = await (supabase as any)
+                .from('profiles')
+                .select('id, full_name')
+                .ilike('full_name', `${mention}%`)
+                .limit(5);
+              const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+              for (const userId of targets) {
+                if (userId === (profile?.id || '')) continue;
+                await (supabase as any)
+                  .from('inbox_notifications')
+                  .insert({
+                    user_id: userId,
+                    type: 'mention',
+                    priority: 'low',
+                    title: 'Você foi mencionado',
+                    body: `Você foi mencionado em um parecer (@${mention}).`,
+                    meta: { cardId: applicationId, parecerId: newParecer.id },
+                    transient: false,
+                  });
+              }
+            }
+          }
+        } catch (_) { /* silencioso */ }
         // Chamar onRefetch para atualizar outros componentes
         if (onRefetch) {
           onRefetch();
@@ -605,6 +633,35 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         .eq('id', applicationId);
       
       if (error) throw error;
+      // 🔔 Notificações de menções na resposta
+      try {
+        const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+        const unique = Array.from(new Set(matches));
+        if (unique.length > 0) {
+          for (const mention of unique) {
+            const { data: profiles } = await (supabase as any)
+              .from('profiles')
+              .select('id, full_name')
+              .ilike('full_name', `${mention}%`)
+              .limit(5);
+            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            for (const userId of targets) {
+              if (userId === (profile?.id || '')) continue;
+              await (supabase as any)
+                .from('inbox_notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'mention',
+                  priority: 'low',
+                  title: 'Você foi mencionado',
+                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
+                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
+                  transient: false,
+                });
+            }
+          }
+        }
+      } catch (_) { /* silencioso */ }
       
       // Chamar onRefetch para atualizar outros componentes
       if (onRefetch) {
@@ -1750,6 +1807,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                                 {/* Botão de Resposta (seta de retorno) - sempre visível para Gestor */}
                                 {canReplyToParecer(p) && (
                                   <Button
+                                    type="button"
                                     variant="ghost"
                                     size="sm"
                                     onClick={(e) => {
@@ -1767,7 +1825,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                                 {canEditParecer(p) && (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
+                                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
                                         <MoreVertical className="h-3 w-3" />
                                       </Button>
                                     </DropdownMenuTrigger>

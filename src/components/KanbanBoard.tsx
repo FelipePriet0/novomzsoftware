@@ -80,6 +80,7 @@ export type ColumnId =
   | "aprovado"
   | "negado"
   | "finalizado"
+  | "canceladas"
   // Comercial
   | "com_entrada"
   | "com_feitas"
@@ -108,6 +109,10 @@ export interface CardItem {
   updatedAt: string; // ISO
   lastMovedAt: string; // ISO
   labels: string[];
+  // Responsáveis
+  vendedorNome?: string; // Criador da ficha (comercial)
+  analystName?: string;  // Nome do assignee (analista)
+  createdById?: string;  // ID do criador
   // Comercial stage persisted in DB
   commercialStage?: 'entrada' | 'feitas' | 'aguardando' | 'canceladas' | 'concluidas';
   // Área atual do card (comercial ou analise)
@@ -121,6 +126,7 @@ const COLUMNS: { id: ColumnId; title: string }[] = [
   { id: "reanalise", title: "Reanálise" },
   { id: "aprovado", title: "Aprovado" },
   { id: "negado", title: "Negado" },
+  { id: "canceladas", title: "Canceladas" },
   { id: "finalizado", title: "Finalizado" },
 ];
 
@@ -161,6 +167,7 @@ const RESPONSAVEIS: string[] = [];
 
 type PrazoFiltro = "todos" | "hoje" | "amanha" | "atrasados" | "data";
 type ViewFilter = "all" | "mine" | "company";
+type AtribuidasFilter = 'none' | 'mentions' | 'tasks';
 type KanbanArea = "analise" | "comercial";
 type CommercialStage = Extract<ColumnId, `com_${string}`>;
 type CommercialStageDB = 'entrada' | 'feitas' | 'aguardando' | 'canceladas' | 'concluidas';
@@ -172,6 +179,8 @@ export default function KanbanBoard() {
   const [prazoFiltro, setPrazoFiltro] = useState<PrazoFiltro>("todos");
   const [prazoData, setPrazoData] = useState<Date | null>(null);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
+  const [atribuidasFiltro, setAtribuidasFiltro] = useState<AtribuidasFilter>('none');
+  const [atribuidasCardIds, setAtribuidasCardIds] = useState<Set<string>>(new Set());
   // Foco inicial no setor comercial (habilitado para DnD)
   const [kanbanArea, setKanbanArea] = useState<KanbanArea>("comercial");
   // Old state - kept for compatibility
@@ -218,6 +227,59 @@ export default function KanbanBoard() {
   const [overId, setOverId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<ColumnId | null>(null);
   const [draggedCard, setDraggedCard] = useState<CardItem | null>(null);
+  // Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelCardId, setCancelCardId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<ColumnId | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
+  // ===== FALLBACK QUEUE (quando RPC falhar) =====
+  const FALLBACK_MOVES_KEY = 'kanban_fallback_moves';
+
+  function enqueueFallbackMove(move: { cardId: string; toArea: 'comercial' | 'analise'; toStage: string; comment?: string; at: string; }) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(FALLBACK_MOVES_KEY) || '[]');
+      arr.push(move);
+      localStorage.setItem(FALLBACK_MOVES_KEY, JSON.stringify(arr));
+    } catch {}
+  }
+
+  async function processFallbackMoves() {
+    try {
+      const arr: Array<{ cardId: string; toArea: 'comercial' | 'analise'; toStage: string; comment?: string; at: string; }> = JSON.parse(localStorage.getItem(FALLBACK_MOVES_KEY) || '[]');
+      if (!Array.isArray(arr) || arr.length === 0) return;
+      const remaining: typeof arr = [];
+      for (const mv of arr) {
+        try {
+          const { error } = await (supabase as any).rpc('change_stage', {
+            p_card_id: mv.cardId,
+            p_to_area: mv.toArea,
+            p_to_stage: mv.toStage,
+            p_comment: mv.comment || null,
+          });
+          if (error) {
+            remaining.push(mv); // manter na fila
+          }
+        } catch {
+          remaining.push(mv);
+        }
+      }
+      localStorage.setItem(FALLBACK_MOVES_KEY, JSON.stringify(remaining));
+      if (remaining.length === 0) {
+        // Sincronizado com sucesso
+        setTimeout(() => loadApplications(), 100);
+      }
+    } catch {}
+  }
+
+  // Tenta processar fila de fallbacks ao montar e ao focar a janela
+  useEffect(() => {
+    processFallbackMoves();
+    const onFocus = () => processFallbackMoves();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isScrolling, setIsScrolling] = useState(false);
   
   // Estados para sistema de anexos
@@ -254,6 +316,7 @@ export default function KanbanBoard() {
           stage,
           person_type,
           assignee_id,
+          created_by,
           title,
           cpf_cnpj,
           phone,
@@ -262,7 +325,8 @@ export default function KanbanBoard() {
           due_at,
           source,
           applicant:applicant_id ( id, primary_name, city, uf, email ),
-          assignee:assignee_id ( id, full_name )
+          assignee:assignee_id ( id, full_name ),
+          creator:created_by ( id, full_name )
         `)
         .is('deleted_at', null)
         .order("created_at", { ascending: false });
@@ -288,6 +352,9 @@ export default function KanbanBoard() {
           applicantId: row.applicant?.id ?? undefined,
           personType: row.person_type ?? undefined,
           parecer: '',
+          vendedorNome: row.creator?.full_name ?? undefined,
+          analystName: row.assignee?.full_name ?? undefined,
+          createdById: row.created_by ?? undefined,
           columnId: ((): ColumnId => {
             if (row.area === 'comercial') {
               const stageMap: Record<string, ColumnId> = {
@@ -438,6 +505,96 @@ export default function KanbanBoard() {
     return Array.from(set);
   }, [cards]);
 
+  // Resolve o ID do responsável selecionado a partir do nome
+  const resolvedResponsavelId = useMemo(() => {
+    if (!responsavelFiltro || responsavelFiltro === 'todos') return null;
+    // Primeiro tenta mapear pelos cards carregados
+    for (const c of cards) {
+      if ((c.responsavel || '') === responsavelFiltro && c.responsavelId) {
+        return c.responsavelId;
+      }
+    }
+    return null;
+  }, [responsavelFiltro, cards]);
+
+  // Carrega ids de cards com tarefas atribuídas ou menções ao responsável selecionado
+  useEffect(() => {
+    (async () => {
+      try {
+        // Reset quando não aplicável
+        if (atribuidasFiltro === 'none' || !resolvedResponsavelId) {
+          setAtribuidasCardIds(new Set());
+          return;
+        }
+        const visibleIds = cards.map(c => c.id);
+        if (visibleIds.length === 0) {
+          setAtribuidasCardIds(new Set());
+          return;
+        }
+        if (atribuidasFiltro === 'tasks') {
+          const { data, error } = await (supabase as any)
+            .from('card_tasks')
+            .select('card_id')
+            .is('deleted_at', null)
+            .eq('assigned_to', resolvedResponsavelId)
+            .in('card_id', visibleIds);
+          if (error) throw error;
+          setAtribuidasCardIds(new Set((data || []).map((r: any) => r.card_id)));
+        } else if (atribuidasFiltro === 'mentions') {
+          // Extrai um token simples do nome para procurar por @Token
+          const token = (responsavelFiltro || '').split(' ')[0];
+          if (!token) { setAtribuidasCardIds(new Set()); return; }
+          // 1) Comentários/threads (card_comments)
+          const { data: cData, error: cErr } = await (supabase as any)
+            .from('card_comments')
+            .select('card_id')
+            .is('deleted_at', null)
+            .in('card_id', visibleIds)
+            .ilike('content', `%@${token}%`);
+          if (cErr) throw cErr;
+          const commentIds = new Set((cData || []).map((r: any) => r.card_id));
+          // 2) Pareceres (reanalysis_notes em kanban_cards)
+          let parecerIds = new Set<string>();
+          try {
+            // Tentar filtrar no servidor
+            const { data: rnData, error: rnErr } = await (supabase as any)
+              .from('kanban_cards')
+              .select('id, reanalysis_notes')
+              .in('id', visibleIds)
+              .ilike('reanalysis_notes', `%@${token}%`);
+            if (!rnErr) {
+              parecerIds = new Set((rnData || []).map((r: any) => r.id));
+            } else {
+              // Fallback: carregar e filtrar no cliente
+              const { data: rnAll, error: rnAllErr } = await (supabase as any)
+                .from('kanban_cards')
+                .select('id, reanalysis_notes')
+                .in('id', visibleIds);
+              if (!rnAllErr) {
+                const matched = (rnAll || []).filter((row: any) => {
+                  const raw = row.reanalysis_notes;
+                  let arr: any[] = [];
+                  if (Array.isArray(raw)) arr = raw as any[];
+                  else if (typeof raw === 'string') { try { arr = JSON.parse(raw) || []; } catch {}
+                  }
+                  return (arr || []).some((p: any) => !p?.deleted && typeof p?.text === 'string' && p.text.includes(`@${token}`));
+                }).map((row: any) => row.id);
+                parecerIds = new Set(matched);
+              }
+            }
+          } catch (_) {
+            // Ignorar erros e seguir somente com comentários
+          }
+          // União dos conjuntos
+          const union = new Set<string>([...commentIds, ...parecerIds]);
+          setAtribuidasCardIds(union);
+        }
+      } catch (_) {
+        setAtribuidasCardIds(new Set());
+      }
+    })();
+  }, [atribuidasFiltro, resolvedResponsavelId, responsavelFiltro, cards]);
+
   const getCommercialStage = (card: CardItem): CommercialStage => {
     const map: Record<CommercialStageDB, CommercialStage> = {
       entrada: 'com_entrada',
@@ -531,6 +688,21 @@ export default function KanbanBoard() {
     
     const cardId = active.id as string;
     const targetColumn = over.id as ColumnId;
+
+    // Bloquear movimentação para "Entrada" (somente e-fichas via backend)
+    if (targetColumn === 'com_entrada') {
+      toast({ title: 'Movimento não permitido', description: 'Entrada é automática via e‑fichas', variant: 'destructive' });
+      return;
+    }
+
+    // Abrir modal de cancelamento para "Canceladas"
+    if (targetColumn === 'com_canceladas' || targetColumn === 'canceladas') {
+      setCancelCardId(cardId);
+      setCancelTarget(targetColumn);
+      setCancelReason("");
+      setShowCancelModal(true);
+      return;
+    }
     
     // Verificar se o card está sendo movido para a mesma coluna
     const currentCard = cards.find(c => c.id === cardId);
@@ -541,6 +713,41 @@ export default function KanbanBoard() {
     
     console.log('Moving card:', cardId, 'to column:', targetColumn);
     moveTo(cardId, targetColumn);
+  }
+
+  async function confirmCancel() {
+    if (!cancelCardId || !cancelReason.trim()) {
+      toast({ title: 'Motivo obrigatório', description: 'Informe o motivo do cancelamento.', variant: 'destructive' });
+      return;
+    }
+    try {
+      const isCommercial = cancelTarget === 'com_canceladas';
+      // Atualiza no banco com a regra do backend (trigger exige motivo)
+      const { error } = await (supabase as any)
+        .from('kanban_cards')
+        .update({ area: isCommercial ? 'comercial' : 'analise', stage: 'canceladas', cancel_reason: cancelReason.trim() })
+        .eq('id', cancelCardId);
+      if (error) throw error;
+
+      // Atualização otimista na UI
+      setCards(prev => prev.map(c => c.id === cancelCardId ? {
+        ...c,
+        columnId: cancelTarget || 'com_canceladas',
+        area: isCommercial ? 'comercial' : 'analise',
+        commercialStage: isCommercial ? 'canceladas' : c.commercialStage,
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+
+      setShowCancelModal(false);
+      setCancelCardId(null);
+      setCancelTarget(null);
+      setCancelReason("");
+      // Recarregar para garantir sincronismo
+      setTimeout(() => loadApplications(), 100);
+    } catch (e) {
+      console.error('Erro ao cancelar ficha:', e);
+      toast({ title: 'Erro ao cancelar', variant: 'destructive' });
+    }
   }
 
   const filteredCards = useMemo(() => {
@@ -576,9 +783,13 @@ export default function KanbanBoard() {
       const matchesView = viewFilter === "all" || 
                          (viewFilter === "mine" && c.responsavelId === profile?.id);
 
-      return matchesQuery && matchesResp && matchesPrazo && matchesView;
+      // Filtro "Atribuídas" exige responsável selecionado
+      const matchesAtribuidas = atribuidasFiltro === 'none'
+        || (responsavelFiltro !== 'todos' && atribuidasCardIds.has(c.id));
+
+      return matchesQuery && matchesResp && matchesPrazo && matchesView && matchesAtribuidas;
     });
-  }, [cards, query, responsavelFiltro, prazoFiltro, prazoData, viewFilter, profile]);
+  }, [cards, query, responsavelFiltro, prazoFiltro, prazoData, viewFilter, profile, atribuidasFiltro, atribuidasCardIds]);
 
   // Avoid repeated filter computations per column during render
   const analysisByColumn = useMemo(() => {
@@ -831,6 +1042,12 @@ useEffect(() => {
             );
             localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
             console.log('Card position saved to localStorage');
+            // Enfileirar movimento para re-tentativa
+            enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
+            toast({
+              title: 'Conexão instável – usando fallback',
+              description: 'Movimento aplicado localmente e será sincronizado assim que possível.',
+            });
           } catch (localError) {
             console.error('localStorage save failed:', localError);
           }
@@ -860,6 +1077,11 @@ useEffect(() => {
           );
           localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
           console.log('Card position saved to localStorage');
+          enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
+          toast({
+            title: 'Conexão instável – usando fallback',
+            description: 'Movimento aplicado localmente e será sincronizado assim que possível.',
+          });
         } catch (localError) {
           console.error('localStorage save failed:', localError);
           // Rollback da UI apenas se localStorage também falhar
@@ -993,6 +1215,8 @@ useEffect(() => {
 
   async function openEdit(card: CardItem) {
     console.log('🔍 Abrindo card:', card.id);
+    // Garantir que abriremos somente o modal de "Editar Ficha" (não o expandido)
+    setAutoOpenExpandedNext(false);
     
     try {
       // Buscar dados frescos do banco SEMPRE que abrir o modal
@@ -1026,6 +1250,7 @@ useEffect(() => {
     } catch (error) {
       console.error('❌ Erro ao abrir card:', error);
       // Fallback para dados do cache
+      setAutoOpenExpandedNext(false);
       setMockCard(card);
     }
   }
@@ -1308,20 +1533,24 @@ useEffect(() => {
                 )}
               </div>
             </div>
-            {(profile?.role === "analista" || profile?.role === "gestor") && (
+            <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <Label className="min-w-24">Visualização</Label>
-                <Select value={viewFilter} onValueChange={(v: ViewFilter) => setViewFilter(v)}>
+                <Label className="min-w-24">Atribuídas</Label>
+                <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
                   <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                    <SelectValue placeholder="Visualização" />
+                    <SelectValue placeholder="Escolha" />
                   </SelectTrigger>
                   <SelectContent className="z-50">
-                    <SelectItem value="all">Todas (empresa)</SelectItem>
-                    <SelectItem value="mine">Minhas tarefas</SelectItem>
+                    <SelectItem value="none">—</SelectItem>
+                    <SelectItem value="mentions">@Menções</SelectItem>
+                    <SelectItem value="tasks">Tarefas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
+              {atribuidasFiltro !== 'none' && responsavelFiltro === 'todos' && (
+                <div className="mt-1 text-xs text-gray-500">Selecione um responsável para aplicar este filtro.</div>
+              )}
+            </div>
           </div>
 
           <div className="mt-4 flex items-center justify-between">
@@ -1361,8 +1590,12 @@ useEffect(() => {
                       ...c,
                       nome: form.nome ?? c.nome,
                       telefone: form.telefone || undefined,
-                      // Atualiza apenas a data de instalação agendada
-                      deadline: form.agendamento ? new Date(Date.UTC(new Date(form.agendamento).getFullYear(), new Date(form.agendamento).getMonth(), new Date(form.agendamento).getDate(), 12, 0, 0)).toISOString() : c.deadline,
+                      // Atualiza apenas a data de instalação agendada (meia-noite UTC para evitar deriva de fuso)
+                      deadline: form.agendamento ? (() => {
+                        const parts = String(form.agendamento).split('-').map((x) => parseInt(x, 10));
+                        const y = parts[0], m = parts[1], d = parts[2];
+                        return new Date(Date.UTC(y, (m - 1), d, 0, 0, 0)).toISOString();
+                      })() : c.deadline,
                       // "Feito em" é imutável (data de criação/recebimento)
                       updatedAt: new Date().toISOString(),
                     }
@@ -1452,6 +1685,35 @@ useEffect(() => {
       </DndContext>
 
       {/* New secure creation flow modals */}
+  {/* Modal de motivo de cancelamento */}
+  <AlertDialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Cancelar ficha</AlertDialogTitle>
+        <AlertDialogDescription>
+          Informe o motivo do cancelamento. Esta ação será registrada para análise.
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <div className="space-y-2">
+        <Label>Motivo</Label>
+        <Input
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          placeholder="Ex: Cliente desistiu / Dados inconsistentes"
+          className="placeholder:text-[#018942] text-[#018942]"
+        />
+      </div>
+      <AlertDialogFooter>
+        <AlertDialogCancel
+          onClick={() => { setShowCancelModal(false); setCancelCardId(null); }}
+          className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
+        >
+          Cancelar
+        </AlertDialogCancel>
+        <AlertDialogAction onClick={confirmCancel} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942]">Confirmar</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
   <ConfirmCreateModal
     open={showConfirmCreate}
     onClose={() => setShowConfirmCreate(false)}
@@ -1530,7 +1792,7 @@ useEffect(() => {
             });
         }
 
-        // 2) Card no Kanban (Comercial/entrada)
+        // 2) Card no Kanban (Comercial/feitas)
         const now = new Date();
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
@@ -1538,7 +1800,8 @@ useEffect(() => {
             applicant_id: applicantProd!.id, // FK não-nulo exige apontar para applicants (prod)
             person_type: 'PF',
             area: 'comercial',
-            stage: 'entrada',
+            stage: 'feitas',
+            created_by: profile?.id || null,
             title: data.nome,
             cpf_cnpj: data.cpf.replace(/\D+/g, ''),
             phone: data.telefone,
@@ -1571,12 +1834,12 @@ useEffect(() => {
                 uf: data.uf,
                 applicantId: applicantProd!.id,
                 parecer: '',
-                columnId: 'recebido',
+                columnId: 'com_feitas',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 lastMovedAt: new Date().toISOString(),
                 labels: [],
-                analystName: currentUserName,
+                vendedorNome: currentUserName,
               } as any : null);
         if (nc) setMockCard(nc as any);
       } catch (e: any) {
@@ -1614,12 +1877,12 @@ useEffect(() => {
         uf: undefined,
         applicantId: created.applicant_id,
         parecer: '',
-        columnId: 'recebido',
+        columnId: 'com_feitas',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastMovedAt: new Date().toISOString(),
         labels: [],
-        analystName: currentUserName,
+        vendedorNome: currentUserName,
       } as any;
       setMockCard(newCard);
     }}
@@ -1906,7 +2169,12 @@ function KanbanCard({
         {card.columnId === "em_analise" && allowDecide && (
           <>
             <div className="pt-2 flex gap-2">
-              <Button size="sm" onClick={() => onMove(card.id, "aprovado")} data-ignore-card-click>
+              <Button
+                size="sm"
+                onClick={() => onMove(card.id, "aprovado")}
+                data-ignore-card-click
+                className="text-[#018942]"
+              >
                 Aprovar
               </Button>
               <Button size="sm" variant="destructive" onClick={() => onMove(card.id, "negado")} data-ignore-card-click>
@@ -1955,6 +2223,7 @@ function KanbanCard({
                   onMove(card.id, "aprovado", "Aprovado");
                 }}
                 data-ignore-card-click
+                className="text-[#018942]"
               >
                 Aprovar
               </Button>

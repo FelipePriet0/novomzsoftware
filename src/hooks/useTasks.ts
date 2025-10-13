@@ -154,6 +154,25 @@ export function useTasks(userId?: string, cardId?: string) {
       };
 
       setTasks(prev => [newTask, ...prev]);
+
+      // 🔔 Notificar usuário atribuído (inbox) — tipo: task_assigned
+      try {
+        if (newTask.assigned_to && newTask.assigned_to !== profile.id) {
+          await (supabase as any)
+            .from('inbox_notifications')
+            .insert({
+              user_id: newTask.assigned_to,
+              type: 'task_assigned',
+              priority: 'medium',
+              title: 'Nova tarefa atribuída',
+              body: (newTask.description || 'Tarefa atribuída a você').slice(0, 140),
+              meta: { cardId: newTask.card_id, taskId: newTask.id },
+              transient: false,
+            });
+        }
+      } catch (_) {
+        // silencioso
+      }
       return newTask;
     } catch (err: any) {
       console.error('Error creating task:', err);
@@ -424,4 +443,3 @@ export function useTasks(userId?: string, cardId?: string) {
     deleteTask,
   };
 }
-

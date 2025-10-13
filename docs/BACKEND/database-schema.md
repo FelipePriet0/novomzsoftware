@@ -27,6 +27,7 @@
   - **area:** enum (analise|comercial)
   - **stage:** text (recebido|em_analise|reanalise|aprovado|negado|...)
   - **assignee_id:** uuid, FK → profiles(id) (nullable)
+  - **created_by:** uuid, FK → profiles(id) (nullable)
   - **title/cpf_cnpj/phone/email:** text
   - **received_at/due_at:** timestamptz
   - **priority:** enum priority_level (default 'medium')
@@ -37,9 +38,15 @@
 - **Columns added for Pareceres (2025-01, active):
   - **reanalysis_notes:** jsonb NOT NULL DEFAULT '[]'::jsonb (list of parecer objects)
   - **comments:** text (mirror of last parecer for quick display)
+- **Soft delete columns (active):**
+  - **deleted_at:** timestamptz (nullable)
+  - **deleted_by:** uuid, FK → profiles(id) (nullable)
+  - **deletion_reason:** text (nullable)
 - **Indexes/Triggers:**
   - `idx_kanban_cards_reanalysis_notes_gin` (GIN on jsonb)
   - `idx_kanban_cards_stage` (stage), `idx_kanban_cards_applicant` (applicant_id)
+  - `idx_kanban_cards_created_by` (created_by)
+  - `idx_kanban_cards_deleted_at` (partial index for deleted_at)
   - `set_timestamp_kanban_cards` trigger → updates `updated_at` on UPDATE
 - **Parecer object shape (jsonb array items):**
   - `id` (uuid), `author_id`, `author_name`, `author_role`, `created_at` (ISO), `text`

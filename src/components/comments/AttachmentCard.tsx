@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
@@ -20,6 +20,7 @@ import {
 import { FileText, Download, Eye, ArrowUpRight, Lock, MoreVertical, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { getDownloadUrlStandalone as getDownloadUrl } from '@/hooks/useAttachments';
 import { useAuth } from '@/context/AuthContext';
 import { canDownloadAttachment, canDeleteAttachment } from '@/lib/access';
 import { useToast } from '@/hooks/use-toast';
@@ -103,16 +104,13 @@ export function AttachmentCard({ attachment, onDownload, onPreview, onDelete }: 
   // Debug: verificar dados do attachment e permissÃµes
   // Logs removidos para performance
 
-  // FunÃ§Ã£o para buscar URL do PDF usando o mesmo sistema de download que funciona
+  // Função para buscar URL do PDF usando o mesmo sistema de download que funciona
   const getPdfUrl = async (filePath: string) => {
     try {
       setIsLoadingPdf(true);
       console.log('Getting PDF URL for preview:', filePath);
 
-      // Usar a funÃ§Ã£o standalone exportada
-      const { data, error } = await supabase.storage.from('card_attachments').createSignedUrl(filePath, 60);
-      
-      // Usar a mesma funÃ§Ã£o que funciona para download
+      // Gerar URL assinada e reutilizar lógica de download
       const url = await getDownloadUrl(filePath);
       
       if (url) {
@@ -136,6 +134,15 @@ export function AttachmentCard({ attachment, onDownload, onPreview, onDelete }: 
       getPdfUrl(attachment.file_path).then(setPdfUrl);
     }
   }, [showPreview, attachment.file_path, attachment.file_extension, pdfUrl]);
+
+  // Revogar blob URL quando for um object URL
+  useEffect(() => {
+    return () => {
+      if (pdfUrl && pdfUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(pdfUrl);
+      }
+    };
+  }, [pdfUrl]);
 
   const handlePreview = () => {
     if (onPreview) {
@@ -307,15 +314,15 @@ export function AttachmentCard({ attachment, onDownload, onPreview, onDelete }: 
                     </div>
                   </div>
                 ) : pdfUrl ? (
-                  <iframe
-                    src={pdfUrl}
+                  <object
+                    data={pdfUrl}
+                    type="application/pdf"
                     className="w-full h-full rounded-lg"
-                    title={`Preview of ${attachment.file_name}`}
-                    onError={() => {
-                      console.error('Error loading PDF in iframe');
-                      setPdfUrl(null);
-                    }}
-                  />
+                  >
+                    <div className="p-4 text-center text-gray-500">
+                      Não foi possível embutir o PDF. Use o botão Baixar.
+                    </div>
+                  </object>
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-gray-500 dark:text-gray-400">
@@ -346,7 +353,11 @@ export function AttachmentCard({ attachment, onDownload, onPreview, onDelete }: 
           </div>
           
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={handleClosePreview}>
+            <Button 
+              variant="outline" 
+              onClick={handleClosePreview}
+              className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
+            >
               Fechar
             </Button>
             {canDownload ? (

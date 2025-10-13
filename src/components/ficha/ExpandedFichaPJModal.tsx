@@ -76,12 +76,12 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const { ensureApplicantExists } = useApplicantsTestConnection();
   const { saveCompanyData } = usePjFichasTestConnection();
 
-  const ensureCommercialEntrada = async (appId?: string) => {
+  const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
     try {
       await supabase
         .from('kanban_cards')
-        .update({ area: 'comercial', stage: 'entrada' })
+        .update({ area: 'comercial', stage: 'feitas' })
         .eq('id', appId);
     } catch (_) {
       // ignore
@@ -280,7 +280,35 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       const { error } = await supabase.from('kanban_cards').update({ reanalysis_notes: serialized }).eq('id', applicationId);
       if (error) throw error;
       console.log('✅ [ExpandedPJ] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
-      
+      // 🔔 Notificações de menções no parecer
+      try {
+        const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+        const unique = Array.from(new Set(matches));
+        if (unique.length > 0) {
+          for (const mention of unique) {
+            const { data: profiles } = await (supabase as any)
+              .from('profiles')
+              .select('id, full_name')
+              .ilike('full_name', `${mention}%`)
+              .limit(5);
+            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            for (const userId of targets) {
+              if (userId === (profile?.id || '')) continue;
+              await (supabase as any)
+                .from('inbox_notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'mention',
+                  priority: 'low',
+                  title: 'Você foi mencionado',
+                  body: `Você foi mencionado em um parecer (@${mention}).`,
+                  meta: { cardId: applicationId, parecerId: newP.id },
+                  transient: false,
+                });
+            }
+          }
+        }
+      } catch (_) { /* silencioso */ }
       // Chamar onRefetch para atualizar outros componentes
       if (onRefetch) {
         onRefetch();
@@ -413,6 +441,35 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         .eq('id', applicationId);
         
       if (error) throw error;
+      // 🔔 Notificações de menções na resposta de parecer
+      try {
+        const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+        const unique = Array.from(new Set(matches));
+        if (unique.length > 0) {
+          for (const mention of unique) {
+            const { data: profiles } = await (supabase as any)
+              .from('profiles')
+              .select('id, full_name')
+              .ilike('full_name', `${mention}%`)
+              .limit(5);
+            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            for (const userId of targets) {
+              if (userId === (profile?.id || '')) continue;
+              await (supabase as any)
+                .from('inbox_notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'mention',
+                  priority: 'low',
+                  title: 'Você foi mencionado',
+                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
+                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
+                  transient: false,
+                });
+            }
+          }
+        }
+      } catch (_) { /* silencioso */ }
       
       // Chamar onRefetch para atualizar outros componentes
       if (onRefetch) {
@@ -596,8 +653,22 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         other_data: { pj: data },
       } as any;
       try {
-        await ensureCommercialEntrada(applicationId);
+        await ensureCommercialFeitas(applicationId);
         await saveDraft(draftPayload, applicationId, 'pj', false);
+        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
+        try {
+          const updates: any = {};
+          if (data?.empresa?.razao) updates.title = data.empresa.razao;
+          if (data?.empresa?.cnpj) updates.cpf_cnpj = data.empresa.cnpj;
+          if (data?.contatos?.tel) updates.phone = data.contatos.tel;
+          if (data?.contatos?.email) updates.email = data.contatos.email;
+          if (Object.keys(updates).length > 0) {
+            const { error } = await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+            if (error) console.warn('[PJ Autosave] Update kanban_cards error:', error);
+          }
+        } catch (e) {
+          console.warn('[PJ Autosave] Mirror error:', e);
+        }
         // Dev-safe: mirror into pj_fichas_test (debounced)
         try {
           let testId = applicantTestId;
@@ -621,7 +692,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       } catch (_) {
         // ignore
       }
-    }, 700);
+    }, 300);
     setAutoSaveTimer(timer);
   };
 
@@ -648,7 +719,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         try {
           // Salvar rascunho final
           try {
-            await ensureCommercialEntrada(applicationId);
+            await ensureCommercialFeitas(applicationId);
             await saveDraft({ other_data: { pj: formData } } as any, applicationId, 'pj', false);
           } catch (_) {}
           // Atualizar kanban_cards com os dados básicos
@@ -725,10 +796,24 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               parecer_analise: formData.info?.parecerAnalise || '',
             } as any;
 
-            const { error: upErr } = await supabase
+            // Upsert sem on_conflict (tabela não possui unique em applicant_id)
+            const { data: existingFicha } = await supabase
               .from('pj_fichas_test')
-              .upsert(pjDataTest, { onConflict: 'applicant_id' });
-            if (upErr) throw upErr;
+              .select('applicant_id')
+              .eq('applicant_id', targetApplicantId)
+              .maybeSingle();
+            if (existingFicha?.applicant_id) {
+              const { error: upErr } = await supabase
+                .from('pj_fichas_test')
+                .update(pjDataTest)
+                .eq('applicant_id', targetApplicantId);
+              if (upErr) throw upErr;
+            } else {
+              const { error: insErr } = await supabase
+                .from('pj_fichas_test')
+                .insert(pjDataTest);
+              if (insErr) throw insErr;
+            }
           }
           
           toast({
@@ -773,7 +858,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   };
   return (
     <>
-    <Dialog open={open} onOpenChange={() => handleClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <DialogContent className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -802,7 +887,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;
             try {
-              await ensureCommercialEntrada(applicationId);
+              // Garantir que permaneça em Comercial/Feitas ao editar/fechar
+              await ensureCommercialFeitas(applicationId);
               await saveDraft({ other_data: { pj: lastFormSnapshot } } as any, applicationId, 'pj', false);
             } catch (_) {}
           }}
@@ -882,6 +968,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                     {/* Botão de Resposta (seta de retorno) - sempre visível para Gestor */}
                                     {canReplyToParecer(p) && (
                                       <Button
+                                        type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => startReplyToParecer(p.id)}
@@ -895,7 +982,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                     {canEdit(p) && (
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
+                                          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
                                             <MoreVertical className="h-3 w-3" />
                                           </Button>
                                         </DropdownMenuTrigger>

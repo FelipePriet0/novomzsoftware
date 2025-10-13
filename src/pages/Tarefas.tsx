@@ -87,13 +87,15 @@ export default function Tarefas() {
           stage,
           person_type,
           assignee_id,
+          created_by,
           title,
           cpf_cnpj,
           phone,
           email,
           received_at,
           due_at,
-          applicant:applicant_id ( id, primary_name, city, uf, email )
+          applicant:applicant_id ( id, primary_name, city, uf, email ),
+          creator:created_by ( id, full_name )
         `)
         .eq('id', cardId)
         .single();
@@ -135,6 +137,7 @@ export default function Tarefas() {
         columnId: toColumnId,
         parecer: (freshCard as any).reanalysis_notes || (freshCard as any).comments || (freshCard as any).comments_short || '',
         applicantId: freshCard.applicant?.id,
+        vendedorNome: (freshCard as any)?.creator?.full_name || undefined,
       } as any;
 
       setSelectedCardData(mappedCard);

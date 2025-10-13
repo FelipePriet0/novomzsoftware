@@ -138,7 +138,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           });
       }
 
-      // 3) Card no Kanban (Comercial/entrada) com applicant_id de PRODUÇÃO
+      // 3) Card no Kanban (Comercial/feitas) com applicant_id de PRODUÇÃO
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')
@@ -146,7 +146,8 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           applicant_id: applicantProd!.id,
           person_type: 'PJ',
           area: 'comercial',
-          stage: 'entrada',
+          stage: 'feitas',
+          created_by: profile?.id || null,
           assignee_id: null,
           title: values.corporate_name,
           cpf_cnpj: values.cnpj,

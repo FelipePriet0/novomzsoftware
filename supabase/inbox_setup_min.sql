@@ -6,6 +6,7 @@ do $$ begin
       'task_assigned',
       'task_due',
       'task_critical',
+      'task_completed',
       'mention',
       'thread_reply',
       'card_linked',
@@ -13,6 +14,15 @@ do $$ begin
       'ficha_dispute',
       'ficha_overdue'
     );
+  end if;
+  -- Garantir que o valor 'task_completed' exista mesmo se o tipo já existir
+  if exists (select 1 from pg_type where typname = 'inbox_notification_type') then
+    begin
+      execute $$alter type public.inbox_notification_type add value if not exists 'task_completed'$$;
+    exception when others then
+      -- ignora se não puder alterar (ambiente antigo)
+      null;
+    end;
   end if;
   if not exists (select 1 from pg_type where typname = 'inbox_priority') then
     create type public.inbox_priority as enum ('high','medium','low');
@@ -37,6 +47,31 @@ create table if not exists public.inbox_notifications (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Habilitar RLS e políticas mínimas (idempotentes)
+alter table public.inbox_notifications enable row level security;
+do $$ begin
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'inbox_notifications' and policyname = 'inbox_select_owner'
+  ) then
+    create policy inbox_select_owner on public.inbox_notifications for select using (user_id = auth.uid());
+  end if;
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'inbox_notifications' and policyname = 'inbox_insert_any_authenticated'
+  ) then
+    create policy inbox_insert_any_authenticated on public.inbox_notifications for insert with check (auth.uid() is not null);
+  end if;
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'inbox_notifications' and policyname = 'inbox_update_owner'
+  ) then
+    create policy inbox_update_owner on public.inbox_notifications for update using (user_id = auth.uid());
+  end if;
+  if not exists (
+    select 1 from pg_policies where schemaname = 'public' and tablename = 'inbox_notifications' and policyname = 'inbox_delete_owner'
+  ) then
+    create policy inbox_delete_owner on public.inbox_notifications for delete using (user_id = auth.uid());
+  end if;
+end $$;
 
 create index if not exists idx_inbox_user_unread on public.inbox_notifications(user_id, read_at, priority desc, created_at desc);
 create index if not exists idx_inbox_user_created on public.inbox_notifications(user_id, created_at desc);
@@ -82,4 +117,3 @@ begin
   ) returning id into v_id;
   return v_id;
 end $$;
-

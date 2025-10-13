@@ -70,12 +70,12 @@ export function ExpandedFichaModal({
   const { savePersonalData } = usePfFichasTestConnection();
   const { ensureApplicantExists } = useApplicantsTestConnection();
 
-  const ensureCommercialEntrada = async (appId?: string) => {
+  const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
     try {
       await supabase
         .from('kanban_cards')
-        .update({ area: 'comercial', stage: 'entrada' })
+        .update({ area: 'comercial', stage: 'feitas' })
         .eq('id', appId);
     } catch (_) {
       // ignore
@@ -171,7 +171,7 @@ export function ExpandedFichaModal({
       };
       
       if (applicationId) {
-        await ensureCommercialEntrada(applicationId);
+        await ensureCommercialFeitas(applicationId);
         await saveDraft(draftData, applicationId, 'full', false);
 
         // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
@@ -182,20 +182,7 @@ export function ExpandedFichaModal({
           if (formData?.cliente?.email) updates.email = formData.cliente.email;
           if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
           // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
-          if (formData?.endereco) {
-            if (formData.endereco.end) updates.endereco = formData.endereco.end;
-            if (formData.endereco.n) updates.numero = formData.endereco.n;
-            if (formData.endereco.compl) updates.complemento = formData.endereco.compl;
-            if (formData.endereco.cep) updates.cep = formData.endereco.cep;
-            if (formData.endereco.bairro) updates.bairro = formData.endereco.bairro;
-          }
-          if (formData?.outras) {
-            if (formData.outras.planoEscolhido) updates.plano_acesso = formData.outras.planoEscolhido;
-            if (formData.outras.diaVencimento) updates.venc = Number(formData.outras.diaVencimento);
-            if (typeof formData.outras.carneImpresso !== 'undefined') {
-              updates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
-            }
-          }
+          // Evitar 400: campos não existentes no schema atual
           if (Object.keys(updates).length > 0) {
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
           }
@@ -225,36 +212,21 @@ export function ExpandedFichaModal({
           // non-blocking for development-safe persistence
         }
       }
-    }, 700); // Save after 700ms of inactivity (optimized debounce)
+    }, 300); // Save after 300ms of inactivity (faster debounce)
 
     setAutoSaveTimer(timer);
   };
 
   const handleClose = async () => {
-    // Salva silenciosamente o último snapshot antes de fechar (UX mais liso)
-    try {
-      if (applicationId && lastFormSnapshot) {
-        const formData = lastFormSnapshot;
-        const draftData = {
-          customer_data: { ...basicInfo, ...formData.cliente },
-          address_data: formData.endereco,
-          employment_data: formData.empregoRenda,
-          household_data: formData.relacoes,
-          spouse_data: formData.conjuge,
-          references_data: formData.referencias,
-          other_data: {
-            spc: formData.spc,
-            pesquisador: formData.pesquisador,
-            filiacao: formData.filiacao,
-            outras: formData.outras,
-            infoRelevantes: formData.infoRelevantes,
-          },
-        };
-        await ensureCommercialEntrada(applicationId);
-        await saveDraft(draftData, applicationId, 'full', false);
-      }
-    } catch {}
-    onClose();
+    // Se não há alterações, pode fechar direto
+    if (!hasChanges) {
+      onClose();
+      return;
+    }
+
+    // Há alterações: abrir fluxo de confirmação em duas etapas
+    setPendingAction('close');
+    setShowFirstConfirmDialog(true);
   };
 
   const handleFirstConfirm = () => {
@@ -284,7 +256,7 @@ export function ExpandedFichaModal({
                 infoRelevantes: formData.infoRelevantes,
               },
             };
-            await ensureCommercialEntrada(applicationId);
+            await ensureCommercialFeitas(applicationId);
             await saveDraft(draftData, applicationId, 'full', false);
           // Atualiza campos do card (espelho com Editar Ficha)
           const updates: any = {};
@@ -621,7 +593,7 @@ export function ExpandedFichaModal({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={() => handleClose()}>
+      <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
         <DialogContent 
           className="max-w-[1200px] max-h-[95vh] overflow-hidden"
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
@@ -667,7 +639,7 @@ export function ExpandedFichaModal({
                 },
               };
               try {
-                await ensureCommercialEntrada(applicationId);
+                await ensureCommercialFeitas(applicationId);
                 await saveDraft(draftData, applicationId, 'full', false);
               } catch {}
             }}
