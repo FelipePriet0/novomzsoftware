@@ -95,9 +95,11 @@ export function OptimizedKanbanCard({
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
+      // Formatar em UTC para evitar "voltar 1 dia" em fusos negativos
       return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
+        timeZone: 'UTC',
       });
     } catch {
       return '';
@@ -262,13 +264,15 @@ export function OptimizedKanbanCard({
           </div>
         )}
 
-        {/* Schedule Info */}
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            <span>Prazo: {formatDate(card.deadline)}</span>
+        {/* Schedule Info: mostra apenas se houver "Instalação agendada" (due_at) */}
+        {card.hasDueAt && (
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span>Prazo: {formatDate(card.deadline)}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Company & Vendor */}
         <div className="flex items-center justify-between">

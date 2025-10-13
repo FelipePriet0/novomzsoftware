@@ -40,7 +40,7 @@ const pjSchema = z.object({
   solicitacao: z.object({
     quem: z.string().optional(), meio: z.string().optional(), tel: z.string().optional(),
     // Permitir qualquer string para comportar a nova lista de planos
-    planoAcesso: z.string().optional(), svaAvulso: z.enum(['A definir']).optional(), venc: z.enum(['5','10','15','20','25']).optional(),
+    planoAcesso: z.string().optional(), svaAvulso: z.string().optional(), venc: z.enum(['5','10','15','20','25']).optional(),
     protocolo: z.string().optional(), // Novo campo experimental
   }),
   info: z.object({
@@ -549,7 +549,29 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="solicitacao.svaAvulso" render={({ field }) => (
-              <FormItem><FormLabel>SVA Avulso</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="A definir" /></SelectTrigger></FormControl><SelectContent><SelectItem value="A definir">A definir</SelectItem></SelectContent></Select></FormItem>
+              <FormItem>
+                <FormLabel>SVA Avulso</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="A definir" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="A definir">A definir</SelectItem>
+                    <SelectItem value="MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)">MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)</SelectItem>
+                    <SelectItem value="DEZZER: R$15,00">DEZZER: R$15,00</SelectItem>
+                    <SelectItem value="MZ CINE-PLAY: R$19,90">MZ CINE-PLAY: R$19,90</SelectItem>
+                    <SelectItem value="SETUP BOX MZNET: R$100,00">SETUP BOX MZNET: R$100,00</SelectItem>
+                    <SelectItem value="01 WI-FI EXTEND (SEM FIO): R$25,90">01 WI-FI EXTEND (SEM FIO): R$25,90</SelectItem>
+                    <SelectItem value="02 WI-FI EXTEND (SEM FIO): R$49,90">02 WI-FI EXTEND (SEM FIO): R$49,90</SelectItem>
+                    <SelectItem value="03 WI-FI EXTEND (SEM FIO): R$74,90">03 WI-FI EXTEND (SEM FIO): R$74,90</SelectItem>
+                    <SelectItem value="01 WI-FI EXTEND (CABEADO): R$35,90">01 WI-FI EXTEND (CABEADO): R$35,90</SelectItem>
+                    <SelectItem value="02 WI-FI EXTEND (CABEADO): R$69,90">02 WI-FI EXTEND (CABEADO): R$69,90</SelectItem>
+                    <SelectItem value="03 WI-FI EXTEND (CABEADO): R$100,00">03 WI-FI EXTEND (CABEADO): R$100,00</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormItem>
             )} />
             <FormField control={form.control} name="solicitacao.venc" render={({ field }) => (
               <FormItem>

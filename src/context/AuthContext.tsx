@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -36,10 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (import.meta?.env?.DEV) console.log("[Auth] onAuthStateChange:", event, !!sess?.user);
       setSession(sess);
       setUser(sess?.user ?? null);
-      if (sess?.user) {
-        // Defer fetching to avoid deadlocks; do NOT toggle global loading during refreshes
-        setTimeout(() => void fetchProfile(sess.user.id, { setLoading: false }), 0);
-      } else {
+      // Evitar chamadas redundantes durante TOKEN_REFRESH/RECOVERY
+      const shouldFetch = event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION';
+      if (sess?.user && shouldFetch) {
+        // Defer para evitar race com refresh
+        setTimeout(() => void fetchProfile(sess.user!.id, { setLoading: false }), 0);
+      } else if (!sess?.user) {
         setProfile(null);
       }
     });
@@ -79,18 +81,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // TENTATIVA 1: Usar RPC (mais seguro)
       const { data: rpcData, error: rpcError } = await supabase.rpc('current_profile');
+      // Supabase retorna array quando a função é TABLE/SETOF
+      const row: any = Array.isArray(rpcData) ? rpcData[0] : rpcData;
       
-      if (!rpcError && rpcData && (rpcData as any).id) {
+      if (!rpcError && row && row.id) {
         // RPC funcionou E retornou dados válidos
         profileData = {
-          id: (rpcData as any).id,
-          full_name: (rpcData as any).full_name ?? null,
-          role: (rpcData as any).role as Profile["role"],
+          id: row.id,
+          full_name: row.full_name ?? null,
+          role: row.role as Profile["role"],
         };
         if (import.meta?.env?.DEV) console.log("✅ [Auth] Profile carregado via RPC:", profileData);
       } else {
         // FALLBACK: Buscar diretamente da tabela profiles
-        console.warn("⚠️ [Auth] RPC falhou ou retornou dados inválidos, usando fallback direto");
+        if (import.meta?.env?.DEV) console.warn("⚠️ [Auth] RPC falhou ou retornou dados inválidos, usando fallback direto", { rpcError, rpcData });
         const { data: directData, error: directError } = await supabase
           .from('profiles')
           .select('id, full_name, role')
@@ -119,14 +123,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setProfile(profileData);
       
-      // 🔍 DEBUG ESPECÍFICO PARA PARECERES
-      console.log("🔍 [Auth] Profile FINAL sendo setado:", {
-        id: profileData?.id,
-        role: profileData?.role,
-        full_name: profileData?.full_name,
-        isGestor: profileData?.role === 'gestor',
-        isValid: !!(profileData?.id && profileData?.role)
-      });
+      if (import.meta?.env?.DEV) {
+        console.log("🔍 [Auth] Profile FINAL sendo setado:", {
+          id: profileData?.id,
+          role: profileData?.role,
+          full_name: profileData?.full_name,
+          isGestor: profileData?.role === 'gestor',
+          isValid: !!(profileData?.id && profileData?.role)
+        });
+      }
     } catch (e) {
       console.error("❌ [Auth] ERRO TOTAL ao carregar profile:", e);
       setProfile(null);

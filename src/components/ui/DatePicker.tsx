@@ -16,6 +16,7 @@ type DatePickerProps = {
   showIcon?: boolean; // show calendar icon button to open picker
   preferNativeFallback?: boolean; // when flatpickr unavailable, use native date input instead of mask
   forceFlatpickr?: boolean; // never use fallback paths; only enhance with flatpickr
+  autoOpen?: boolean; // auto open calendar on mount/change
 };
 
 function injectOnce(tagId: string, el: HTMLElement) {
@@ -93,7 +94,7 @@ function formatDateToISO(date: Date | undefined): string {
   return `${y}-${m}-${d}`;
 }
 
-export function DatePicker({ value, onChange, placeholder, className, disabled, name, id, min, max, allowTyping = true, showIcon = false, preferNativeFallback = false, forceFlatpickr = false }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder, className, disabled, name, id, min, max, allowTyping = true, showIcon = false, preferNativeFallback = false, forceFlatpickr = false, autoOpen = false }: DatePickerProps) {
   const fpInputRef = React.useRef<HTMLInputElement | null>(null);
   const nativeInputRef = React.useRef<HTMLInputElement | null>(null);
   const fpInstance = React.useRef<any>(null);
@@ -157,7 +158,13 @@ export function DatePicker({ value, onChange, placeholder, className, disabled, 
         return;
       }
       setUseFlatpickr(true);
-      requestAnimationFrame(() => initFlatpickr());
+      requestAnimationFrame(() => {
+        initFlatpickr();
+        // Auto open after init if requested
+        if (autoOpen) {
+          try { fpInstance.current?.open(); } catch {}
+        }
+      });
     });
     return () => {
       mounted = false;
@@ -166,7 +173,7 @@ export function DatePicker({ value, onChange, placeholder, className, disabled, 
         fpInstance.current = null;
       }
     };
-  }, [disabled, initFlatpickr]);
+  }, [disabled, initFlatpickr, autoOpen]);
 
   // Keep instance in sync when value changes externally
   React.useEffect(() => {
@@ -319,6 +326,11 @@ export function DatePicker({ value, onChange, placeholder, className, disabled, 
       }
     } catch {}
   };
+  // Also open on autoOpen changes when already initialized
+  React.useEffect(() => {
+    if (!autoOpen) return;
+    try { fpInstance.current?.open(); } catch {}
+  }, [autoOpen]);
   return (
     <div className="relative">
       <Input

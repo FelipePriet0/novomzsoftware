@@ -859,7 +859,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
-      <DialogContent className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent aria-describedby={undefined} className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

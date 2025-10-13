@@ -79,7 +79,7 @@ export function AgendamentoModal({
   
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent aria-describedby={undefined} className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarIcon className="h-5 w-5" />
@@ -165,6 +165,9 @@ export function AgendamentoModal({
                 value={formData.data || ""}
                 className="text-[#018942]"
                 onChange={(v) => setFormData(prev => ({ ...prev, data: v }))}
+                allowTyping={false}
+                showIcon={true}
+                forceFlatpickr={true}
                 required
               />
             </div>

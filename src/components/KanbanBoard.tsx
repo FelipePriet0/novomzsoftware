@@ -39,16 +39,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
+import DatePicker from "@/components/ui/DatePicker";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Calendar as CalendarIcon, UserPlus, Search, Edit, User } from "lucide-react";
+import { Calendar as CalendarIcon, UserPlus, Search, Edit, User, ChevronDown } from "lucide-react";
 import ModalEditarFicha from "@/components/ui/ModalEditarFicha";
 import NovaFichaComercialForm, { ComercialFormValues } from "@/components/NovaFichaComercialForm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 
 // New secure ficha creation components
 import { ConfirmCreateModal } from "@/components/ficha/ConfirmCreateModal";
@@ -175,8 +176,9 @@ type CommercialStageDB = 'entrada' | 'feitas' | 'aguardando' | 'canceladas' | 'c
 export default function KanbanBoard() {
   const [cards, setCards] = useState<CardItem[]>(initialCards);
   const [query, setQuery] = useState("");
-  const [responsavelFiltro, setResponsavelFiltro] = useState<string>("todos");
+  const [responsavelFiltro, setResponsavelFiltro] = useState<string[]>([]);
   const [prazoFiltro, setPrazoFiltro] = useState<PrazoFiltro>("todos");
+  const [prazoOpenTick, setPrazoOpenTick] = useState(0);
   const [prazoData, setPrazoData] = useState<Date | null>(null);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [atribuidasFiltro, setAtribuidasFiltro] = useState<AtribuidasFilter>('none');
@@ -501,28 +503,40 @@ export default function KanbanBoard() {
 
   // Derived lists
   const responsaveisOptions = useMemo(() => {
-    const set = new Set(cards.map((c) => c.responsavel).filter(Boolean) as string[]);
+    const set = new Set<string>();
+    for (const c of cards) {
+      if (c.responsavel) set.add(c.responsavel);
+      if (c.vendedorNome) set.add(c.vendedorNome);
+    }
     return Array.from(set);
   }, [cards]);
 
   // Resolve o ID do responsável selecionado a partir do nome
   const resolvedResponsavelId = useMemo(() => {
-    if (!responsavelFiltro || responsavelFiltro === 'todos') return null;
-    // Primeiro tenta mapear pelos cards carregados
+    if (!Array.isArray(responsavelFiltro) || responsavelFiltro.length !== 1) return null;
+    const selected = responsavelFiltro[0];
+    // Tenta resolver pelo analista (assignee)
     for (const c of cards) {
-      if ((c.responsavel || '') === responsavelFiltro && c.responsavelId) {
+      if ((c.responsavel || '') === selected && c.responsavelId) {
         return c.responsavelId;
+      }
+    }
+    // Tenta resolver pelo vendedor (criador da ficha)
+    for (const c of cards) {
+      if ((c.vendedorNome || '') === selected && c.createdById) {
+        return c.createdById;
       }
     }
     return null;
   }, [responsavelFiltro, cards]);
 
-  // Carrega ids de cards com tarefas atribuídas ou menções ao responsável selecionado
+  // Carrega ids de cards com tarefas atribuídas ou menções (desvinculado do filtro Responsável; usa o selecionado OU o usuário atual)
   useEffect(() => {
     (async () => {
       try {
         // Reset quando não aplicável
-        if (atribuidasFiltro === 'none' || !resolvedResponsavelId) {
+        const targetUserId = resolvedResponsavelId || profile?.id || null;
+        if (atribuidasFiltro === 'none' || !targetUserId) {
           setAtribuidasCardIds(new Set());
           return;
         }
@@ -536,15 +550,17 @@ export default function KanbanBoard() {
             .from('card_tasks')
             .select('card_id')
             .is('deleted_at', null)
-            .eq('assigned_to', resolvedResponsavelId)
+            .eq('assigned_to', targetUserId)
             .in('card_id', visibleIds);
           if (error) throw error;
           setAtribuidasCardIds(new Set((data || []).map((r: any) => r.card_id)));
         } else if (atribuidasFiltro === 'mentions') {
-          // Extrai um token simples do nome para procurar por @Token
-          const token = (responsavelFiltro || '').split(' ')[0];
+          // Extrai um token simples do nome (selecionado ou do usuário atual) para procurar por @Token
+          const fallbackName = profile?.full_name || '';
+          const selectedName = Array.isArray(responsavelFiltro) && responsavelFiltro.length === 1 ? responsavelFiltro[0] : fallbackName;
+          const token = (selectedName || '').split(' ')[0];
           if (!token) { setAtribuidasCardIds(new Set()); return; }
-          // 1) Comentários/threads (card_comments)
+          // 1) Comentários/threads (card_comments) - servidor
           const { data: cData, error: cErr } = await (supabase as any)
             .from('card_comments')
             .select('card_id')
@@ -553,37 +569,22 @@ export default function KanbanBoard() {
             .ilike('content', `%@${token}%`);
           if (cErr) throw cErr;
           const commentIds = new Set((cData || []).map((r: any) => r.card_id));
-          // 2) Pareceres (reanalysis_notes em kanban_cards)
+          // 2) Pareceres (reanalysis_notes em kanban_cards) - evitar 404: filtrar no cliente
           let parecerIds = new Set<string>();
-          try {
-            // Tentar filtrar no servidor
-            const { data: rnData, error: rnErr } = await (supabase as any)
-              .from('kanban_cards')
-              .select('id, reanalysis_notes')
-              .in('id', visibleIds)
-              .ilike('reanalysis_notes', `%@${token}%`);
-            if (!rnErr) {
-              parecerIds = new Set((rnData || []).map((r: any) => r.id));
-            } else {
-              // Fallback: carregar e filtrar no cliente
-              const { data: rnAll, error: rnAllErr } = await (supabase as any)
-                .from('kanban_cards')
-                .select('id, reanalysis_notes')
-                .in('id', visibleIds);
-              if (!rnAllErr) {
-                const matched = (rnAll || []).filter((row: any) => {
-                  const raw = row.reanalysis_notes;
-                  let arr: any[] = [];
-                  if (Array.isArray(raw)) arr = raw as any[];
-                  else if (typeof raw === 'string') { try { arr = JSON.parse(raw) || []; } catch {}
-                  }
-                  return (arr || []).some((p: any) => !p?.deleted && typeof p?.text === 'string' && p.text.includes(`@${token}`));
-                }).map((row: any) => row.id);
-                parecerIds = new Set(matched);
+          const { data: rnAll, error: rnAllErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, reanalysis_notes')
+            .in('id', visibleIds);
+          if (!rnAllErr) {
+            const matched = (rnAll || []).filter((row: any) => {
+              const raw = row.reanalysis_notes;
+              let arr: any[] = [];
+              if (Array.isArray(raw)) arr = raw as any[];
+              else if (typeof raw === 'string') { try { arr = JSON.parse(raw) || []; } catch {}
               }
-            }
-          } catch (_) {
-            // Ignorar erros e seguir somente com comentários
+              return (arr || []).some((p: any) => !p?.deleted && typeof p?.text === 'string' && p.text.includes(`@${token}`));
+            }).map((row: any) => row.id);
+            parecerIds = new Set(matched);
           }
           // União dos conjuntos
           const union = new Set<string>([...commentIds, ...parecerIds]);
@@ -752,25 +753,40 @@ export default function KanbanBoard() {
 
   const filteredCards = useMemo(() => {
     return cards.filter((c) => {
-      const matchesQuery = `${c.nome} ${c.responsavel ?? ""} ${c.parecer}`
+      // Busca global: somente pelo nome do titular (nome da ficha)
+      const matchesQuery = (c.nome || '')
         .toLowerCase()
         .includes(query.toLowerCase());
 
       const matchesResp =
-        responsavelFiltro === "todos" || (c.responsavel ?? "") === responsavelFiltro;
+        (responsavelFiltro.length === 0)
+        || responsavelFiltro.includes(c.responsavel ?? "")
+        || responsavelFiltro.includes(c.vendedorNome ?? "");
 
       // Filtragem de prazo deve seguir "Instalação agendada para" (due_at)
+      // Comparações em UTC para evitar atraso de 1 dia por fuso
       if (prazoFiltro !== 'todos' && !c.hasDueAt) return false;
       const deadlineDate = new Date(c.deadline);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const deadlineMid = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
-      const isHoje = deadlineMid.getTime() === today.getTime();
-      const amanha = new Date(today);
-      amanha.setDate(amanha.getDate() + 1);
-      const isAmanha = deadlineMid.getTime() === amanha.getTime();
-      const isAtrasado = deadlineDate < new Date();
-      const matchesData = prazoData ? (deadlineMid.getTime() === new Date(prazoData.getFullYear(), prazoData.getMonth(), prazoData.getDate()).getTime()) : false;
+      const deadlineUTC = Date.UTC(
+        deadlineDate.getUTCFullYear(),
+        deadlineDate.getUTCMonth(),
+        deadlineDate.getUTCDate(),
+        0, 0, 0, 0
+      );
+      const now = new Date();
+      const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
+      const tomorrowUTC = todayUTC + 24 * 60 * 60 * 1000;
+      const isHoje = deadlineUTC === todayUTC;
+      const isAmanha = deadlineUTC === tomorrowUTC;
+      const isAtrasado = todayUTC > deadlineUTC; // atraso por data, não por horário
+      const matchesData = prazoData
+        ? (deadlineUTC === Date.UTC(
+            prazoData.getUTCFullYear(),
+            prazoData.getUTCMonth(),
+            prazoData.getUTCDate(),
+            0, 0, 0, 0
+          ))
+        : false;
 
       const matchesPrazo =
         prazoFiltro === "todos"
@@ -784,8 +800,7 @@ export default function KanbanBoard() {
                          (viewFilter === "mine" && c.responsavelId === profile?.id);
 
       // Filtro "Atribuídas" exige responsável selecionado
-      const matchesAtribuidas = atribuidasFiltro === 'none'
-        || (responsavelFiltro !== 'todos' && atribuidasCardIds.has(c.id));
+      const matchesAtribuidas = atribuidasFiltro === 'none' || atribuidasCardIds.has(c.id);
 
       return matchesQuery && matchesResp && matchesPrazo && matchesView && matchesAtribuidas;
     });
@@ -1464,19 +1479,19 @@ useEffect(() => {
         <CardHeader />
         <CardContent>
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-[#018942]" />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#018942]" />
               <Input
-                placeholder="Busca global (nome, parecer, responsável)"
+                placeholder="Buscar titular (nome da ficha)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942]"
+                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942] w-full"
               />
             </div>
-            <div className="flex items-center gap-1">
-              <Label>Área</Label>
+            <div className="flex items-center gap-2">
+              <Label className="whitespace-nowrap">Área</Label>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
+                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[130px]">
                   <SelectValue placeholder="Área" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -1486,26 +1501,46 @@ useEffect(() => {
               </Select>
             </div>
             <div className="flex items-center gap-2">
-              <Label className="min-w-24">Responsável</Label>
-              <Select value={responsavelFiltro} onValueChange={setResponsavelFiltro}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                  <SelectValue placeholder="Filtrar" />
-                </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="todos">Todos</SelectItem>
+              <Label className="whitespace-nowrap">Responsável</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[180px] max-w-[260px] justify-between">
+                    <span className="truncate">{responsavelFiltro.length === 0 ? 'Todos' : responsavelFiltro.join(', ')}</span>
+                    <ChevronDown className="ml-2 h-4 w-4 opacity-70 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[260px] max-w-[90vw]">
+                  <DropdownMenuItem className="pl-8" onClick={() => setResponsavelFiltro([])}>Todos</DropdownMenuItem>
                   {responsaveisOptions.map((r) => (
-                    <SelectItem key={r} value={r}>
+                    <DropdownMenuCheckboxItem
+                      key={r}
+                      className="truncate"
+                      checked={responsavelFiltro.includes(r)}
+                      onCheckedChange={(checked) => {
+                        setResponsavelFiltro((prev) => {
+                          const set = new Set(prev);
+                          if (checked) set.add(r); else set.delete(r);
+                          return Array.from(set);
+                        });
+                      }}
+                    >
                       {r}
-                    </SelectItem>
+                    </DropdownMenuCheckboxItem>
                   ))}
-                </SelectContent>
-              </Select>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div className="flex items-center gap-1">
               <Label>Prazo</Label>
               <div className="flex items-center gap-2">
-                <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { setPrazoFiltro(v); }}>
-                  <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
+                <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
+                  setPrazoFiltro(v);
+                  if (v === 'data') {
+                    // dispara abertura automática do calendário
+                    setTimeout(() => setPrazoOpenTick((t) => t + 1), 0);
+                  }
+                }}>
+                  <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[170px]">
                     <SelectValue placeholder="Prazo" />
                   </SelectTrigger>
                   <SelectContent className="z-50">
@@ -1517,17 +1552,29 @@ useEffect(() => {
                   </SelectContent>
                 </Select>
                 {prazoFiltro === 'data' && (
-                  <div className="rounded-md border border-[#018942]/40 p-1 bg-white">
-                    <Calendar
-                      mode="single"
-                      selected={prazoData ?? undefined}
-                      onSelect={(d) => { setPrazoData(d ?? null); }}
-                      classNames={{
-                        day: "h-9 w-9 p-0 font-normal text-[#018942] aria-selected:opacity-100",
-                        head_cell: "text-[#018942] rounded-md w-9 font-normal text-[0.8rem]",
-                        nav_button: "h-7 w-7 p-0 border border-[#018942] text-[#018942] bg-transparent hover:bg-[#018942]/10",
+                  <div className="rounded-md border border-[#018942]/40 p-2 bg-white min-w-[220px]">
+                    <DatePicker
+                      key={prazoOpenTick}
+                      value={(() => {
+                        if (!prazoData) return '';
+                        const y = prazoData.getUTCFullYear();
+                        const m = String(prazoData.getUTCMonth() + 1).padStart(2, '0');
+                        const d = String(prazoData.getUTCDate()).padStart(2, '0');
+                        return `${y}-${m}-${d}`;
+                      })()}
+                      onChange={(iso) => {
+                        if (!iso) { setPrazoData(null); return; }
+                        const [yy, mm, dd] = iso.split('-').map((s) => parseInt(s, 10));
+                        if (!yy || !mm || !dd) { setPrazoData(null); return; }
+                        // Armazenar como data em UTC para evitar deslocamentos
+                        const dt = new Date(Date.UTC(yy, mm - 1, dd, 0, 0, 0, 0));
+                        setPrazoData(dt);
                       }}
-                      initialFocus
+                      showIcon={true}
+                      allowTyping={false}
+                      forceFlatpickr={true}
+                      autoOpen={true}
+                      className="w-full"
                     />
                   </div>
                 )}
@@ -1542,14 +1589,12 @@ useEffect(() => {
                   </SelectTrigger>
                   <SelectContent className="z-50">
                     <SelectItem value="none">—</SelectItem>
-                    <SelectItem value="mentions">@Menções</SelectItem>
-                    <SelectItem value="tasks">Tarefas</SelectItem>
+                    <SelectItem value="mentions">Minhas menções</SelectItem>
+                    <SelectItem value="tasks">Minhas tarefas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {atribuidasFiltro !== 'none' && responsavelFiltro === 'todos' && (
-                <div className="mt-1 text-xs text-gray-500">Selecione um responsável para aplicar este filtro.</div>
-              )}
+              {/* Atribuídas agora é independente do filtro Responsável */}
             </div>
           </div>
 
@@ -1591,6 +1636,7 @@ useEffect(() => {
                       nome: form.nome ?? c.nome,
                       telefone: form.telefone || undefined,
                       // Atualiza apenas a data de instalação agendada (meia-noite UTC para evitar deriva de fuso)
+                      hasDueAt: Boolean(form.agendamento),
                       deadline: form.agendamento ? (() => {
                         const parts = String(form.agendamento).split('-').map((x) => parseInt(x, 10));
                         const y = parts[0], m = parts[1], d = parts[2];

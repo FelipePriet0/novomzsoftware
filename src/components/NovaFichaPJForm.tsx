@@ -178,7 +178,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[720px]">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-[720px]">
         <DialogHeader>
           <DialogTitle>Dados Cadastrais Básicos</DialogTitle>
         </DialogHeader>

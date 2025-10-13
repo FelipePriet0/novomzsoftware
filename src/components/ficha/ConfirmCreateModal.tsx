@@ -18,7 +18,7 @@ interface ConfirmCreateModalProps {
 export function ConfirmCreateModal({ open, onClose, onConfirm }: ConfirmCreateModalProps) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent aria-describedby={undefined} className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-primary/10">

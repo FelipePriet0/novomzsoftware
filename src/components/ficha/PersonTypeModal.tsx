@@ -23,7 +23,7 @@ export function PersonTypeModal({ open, onClose, onSelect }: PersonTypeModalProp
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[720px] p-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-[720px] p-0 overflow-hidden">
         {/* Banner com gradiente */}
         <div className="px-6 py-4" style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}>
           <DialogHeader>

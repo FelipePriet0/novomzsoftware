@@ -237,7 +237,7 @@ export function AttachmentUploadModal({
   return (
     <>
       <Dialog open={open} onOpenChange={handleCloseRequest}>
-        <DialogContent className="max-w-md">
+        <DialogContent aria-describedby={undefined} className="max-w-md">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">

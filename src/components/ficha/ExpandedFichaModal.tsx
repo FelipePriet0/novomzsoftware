@@ -595,6 +595,7 @@ export function ExpandedFichaModal({
     <>
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
         <DialogContent 
+          aria-describedby={undefined}
           className="max-w-[1200px] max-h-[95vh] overflow-hidden"
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
         >

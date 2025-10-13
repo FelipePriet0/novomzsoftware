@@ -146,6 +146,13 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* Global placeholder opacity to 60% across the app */
+  input::placeholder,
+  textarea::placeholder,
+  [contenteditable="true"]:empty:before {
+    opacity: 0.6 !important;
+  }
+  /* Keep PJ form color but apply 60% opacity as requested */
   /* PF modal: highlight specific fields in red (10% bg + red border) */
   .mz-form input[name$="doPs"],
   .mz-form textarea[name="spc"],
@@ -170,7 +177,7 @@ All colors MUST be HSL.
   .pj-form input::placeholder,
   .pj-form textarea::placeholder {
     color: hsl(var(--brand)) !important;
-    opacity: 0.7;
+    opacity: 0.6 !important;
   }
   .pj-form [role="combobox"] {
     color: hsl(var(--brand)) !important;
