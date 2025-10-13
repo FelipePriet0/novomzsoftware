@@ -22,6 +22,24 @@ jobs:
           echo "Add it in Settings → Secrets and variables → Actions." >&2
           exit 1
 
+      - name: Resolve IPv4 for DB host and build IPv4 URL
+        run: |
+          set -euo pipefail
+          HOST="db.juxpvvpogpolspxnecsf.supabase.co"
+          IPV4=$(getent ahostsv4 "$HOST" | awk '{print $1; exit}')
+          if [ -z "${IPV4:-}" ]; then
+            echo "Failed to resolve IPv4 for $HOST" >&2
+            exit 1
+          fi
+          echo "Resolved IPv4: $IPV4"
+          echo "DB_HOST_IPV4=$IPV4" >> $GITHUB_ENV
+          if echo "$SUPABASE_DB_URL" | grep -q '?'; then
+            DB_URL_IPV4="$SUPABASE_DB_URL&hostaddr=$IPV4"
+          else
+            DB_URL_IPV4="$SUPABASE_DB_URL?hostaddr=$IPV4"
+          fi
+          echo "DB_URL_IPV4=$DB_URL_IPV4" >> $GITHUB_ENV
+
       - name: Install PostgreSQL client (pg_dump/psql)
         run: |
           sudo apt-get update
@@ -29,7 +47,7 @@ jobs:
 
       - name: Check DB connectivity
         run: |
-          psql "$SUPABASE_DB_URL" -c "select current_user, now();"
+          psql "$DB_URL_IPV4" -c "select current_user, now();"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -40,7 +58,7 @@ jobs:
         if: env.SUPABASE_DB_URL != ''
         run: |
           supabase migration list \
-            --db-url "$SUPABASE_DB_URL" \
+            --db-url "$DB_URL_IPV4" \
             --workdir ./supabase | tee migration_status.txt
           {
             echo "# Migration Status";
@@ -57,7 +75,7 @@ jobs:
         run: |
           mkdir -p backups
           # Dump em formato SQL plano para fácil restauração com psql
-          pg_dump "$SUPABASE_DB_URL" \
+          pg_dump "$DB_URL_IPV4" \
             --no-owner --no-privileges --verbose \
             --file backups/${{ github.run_id }}_full.sql
 
