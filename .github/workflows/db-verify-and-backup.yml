@@ -1,0 +1,117 @@
+name: DB Verify and Backup
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - test/kanban-validation
+
+jobs:
+  verify-and-backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required secrets
+        if: env.SUPABASE_DB_URL == ''
+        run: |
+          echo "Missing required secret SUPABASE_DB_URL." >&2
+          echo "Add it in Settings → Secrets and variables → Actions." >&2
+          exit 1
+
+      - name: Resolve IPv4 for DB host and build IPv4 URL
+        run: |
+          set -euo pipefail
+          HOST="db.juxpvvpogpolspxnecsf.supabase.co"
+          echo "Resolving IPv4 for $HOST..."
+          IPV4=""
+          # Try system resolver (IPv4)
+          if command -v getent >/dev/null 2>&1; then
+            IPV4=$(getent hosts "$HOST" | awk '/^[0-9]+\./{print $1; exit}') || true
+          fi
+          # Try DoH (Cloudflare) if not resolved
+          if [ -z "$IPV4" ]; then
+            echo "Fallback to DoH (Cloudflare)"
+            PY=$(cat <<'PY'
+import json, sys, urllib.request
+host = 'db.juxpvvpogpolspxnecsf.supabase.co'
+url = f'https://1.1.1.1/dns-query?name={host}&type=A'
+req = urllib.request.Request(url, headers={'accept': 'application/dns-json'})
+with urllib.request.urlopen(req, timeout=10) as r:
+    j = json.load(r)
+ans = [a.get('data') for a in j.get('Answer', []) if a.get('type') == 1]
+print(ans[0] if ans else(''))
+PY
+)
+            IPV4=$(python3 - <<"PY"
+$PY
+PY
+) || true
+          fi
+          if [ -z "$IPV4" ]; then
+            echo "Failed to resolve IPv4 for $HOST" >&2
+            exit 1
+          fi
+          echo "Resolved IPv4: $IPV4"
+          if echo "$SUPABASE_DB_URL" | grep -q '?' ; then
+            DB_URL_IPV4="$SUPABASE_DB_URL&hostaddr=$IPV4"
+          else
+            DB_URL_IPV4="$SUPABASE_DB_URL?hostaddr=$IPV4"
+          fi
+          echo "DB_HOST_IPV4=$IPV4" >> "$GITHUB_ENV"
+          echo "DB_URL_IPV4=$DB_URL_IPV4" >> "$GITHUB_ENV"
+
+      - name: Install PostgreSQL client (pg_dump/psql)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Check DB connectivity
+        run: |
+          psql "$DB_URL_IPV4" -c "select current_user, now();"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: List migrations (remote vs local)
+        if: env.SUPABASE_DB_URL != ''
+        run: |
+          supabase migration list \
+            --db-url "$DB_URL_IPV4" \
+            --workdir ./supabase | tee migration_status.txt
+          {
+            echo "# Migration Status";
+            echo "";
+            echo '\`\`\`';
+            cat migration_status.txt;
+            echo '\`\`\`';
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Dump database via pg_dump (full SQL)
+        if: env.SUPABASE_DB_URL != ''
+        env:
+          PGCONNECT_TIMEOUT: "20"
+        run: |
+          mkdir -p backups
+          # Dump em formato SQL plano para fácil restauração com psql
+          pg_dump "$DB_URL_IPV4" \
+            --no-owner --no-privileges --verbose \
+            --file backups/${{ github.run_id }}_full.sql
+
+      - name: Compress backup
+        if: env.SUPABASE_DB_URL != ''
+        run: |
+          gzip -9 backups/${{ github.run_id }}_full.sql
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-artifacts-${{ github.run_id }}
+          path: |
+            migration_status.txt
+            backups/*.sql.gz

@@ -58,19 +58,6 @@ export function CommentContentRenderer({
     });
   }
 
-  // VERIFICAÇÃO: Se é comentário de anexo mas não tem anexos no banco, não renderizar
-  // Isso significa que o anexo foi soft deleted
-  const isAttachmentComment = content.includes('📎') && (
-    content.includes('Anexo adicionado:') || 
-    content.includes('Arquivo anexado:') ||
-    content.includes('📎 **Anexo adicionado**')
-  );
-  
-  if (isAttachmentComment && attachments.length === 0) {
-    console.log('🚫 Comentário de anexo deletado - não renderizando');
-    return null; // Não renderizar nada
-  }
-  
   // Verificar se é um comentário de TAREFA primeiro
   const taskMatch = content.match(TASK_COMMENT_REGEX);
   
@@ -162,6 +149,19 @@ export function CommentContentRenderer({
       isCompleted
     };
   }, [tasks, taskMatch, commentId, cardId]); // ← DEPENDÊNCIAS CRÍTICAS!
+  
+  // VERIFICAÇÃO: Se é comentário de anexo mas não tem anexos no banco, não renderizar
+  // Isso significa que o anexo foi soft deleted
+  const isAttachmentComment = content.includes('📎') && (
+    content.includes('Anexo adicionado:') || 
+    content.includes('Arquivo anexado:') ||
+    content.includes('📎 **Anexo adicionado**')
+  );
+  
+  if (isAttachmentComment && attachments.length === 0) {
+    console.log('🚫 Comentário de anexo deletado - não renderizando');
+    return null; // Não renderizar nada
+  }
   
   if (taskData) {
     const { relatedTask, assignedTo, assignedToFromComment, description, descriptionFromComment, deadline, isCompleted } = taskData;

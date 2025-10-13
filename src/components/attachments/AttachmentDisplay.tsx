@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { CardAttachment } from '@/hooks/useAttachments';
 import { Button } from '@/components/ui/button';
 import { 

@@ -22,7 +22,8 @@
 *.scss    text eol=lf
 *.less    text eol=lf
 *.svg     text eol=lf
-*.txt     text eol=lf     # <-- cobre public/robots.txt
+# cobre também arquivos como public/robots.txt
+*.txt     text eol=lf
 
 # SQL (LF)
 *.sql     text eol=lf

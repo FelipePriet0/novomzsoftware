@@ -3,12 +3,16 @@ import { FichaPJForm, PJFormValues } from "@/components/ficha/FichaPJForm";
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreVertical, X, Loader2, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useDraftForm } from "@/hooks/useDraftForm";
+import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
+import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +68,25 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [pendingAction, setPendingAction] = useState<'close' | 'save' | null>(null);
   const [initialValues, setInitialValues] = useState<Partial<PJFormValues> | null>(null);
   const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
+  const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
+  // Dev-safe CRUD state (test tables)
+  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
+  const { ensureApplicantExists } = useApplicantsTestConnection();
+  const { saveCompanyData } = usePjFichasTestConnection();
+
+  const ensureCommercialFeitas = async (appId?: string) => {
+    if (!appId) return;
+    try {
+      await supabase
+        .from('kanban_cards')
+        .update({ area: 'comercial', stage: 'feitas' })
+        .eq('id', appId);
+    } catch (_) {
+      // ignore
+    }
+  };
 
   // Load notes from kanban_cards
   const loadPareceres = useCallback(async () => {
@@ -171,7 +194,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         }
 
         if (!mounted) return;
-        const defaults: Partial<PJFormValues> = {
+        let defaults: Partial<PJFormValues> = {
           empresa: {
             razao: (card as any)?.title || '',
             cnpj: (card as any)?.cpf_cnpj || '',
@@ -183,6 +206,20 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             email: (card as any)?.email || '',
           },
         } as any;
+        // Tentar carregar rascunho salvo para esta aplicação e usuário
+        try {
+          const { data: draft } = await supabase
+            .from('applications_drafts')
+            .select('other_data, application_id, user_id')
+            .eq('application_id', applicationId)
+            .maybeSingle();
+          const pjDraft = (draft as any)?.other_data?.pj as Partial<PJFormValues> | undefined;
+          if (pjDraft && typeof pjDraft === 'object') {
+            defaults = { ...defaults, ...pjDraft } as Partial<PJFormValues>;
+          }
+        } catch (_) {
+          // ignore
+        }
         setInitialValues(defaults);
         if (import.meta?.env?.DEV) console.log('[PJ] Initial defaults ready');
         setIsInitialized(false);
@@ -243,7 +280,35 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       const { error } = await supabase.from('kanban_cards').update({ reanalysis_notes: serialized }).eq('id', applicationId);
       if (error) throw error;
       console.log('✅ [ExpandedPJ] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
-      
+      // 🔔 Notificações de menções no parecer
+      try {
+        const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+        const unique = Array.from(new Set(matches));
+        if (unique.length > 0) {
+          for (const mention of unique) {
+            const { data: profiles } = await (supabase as any)
+              .from('profiles')
+              .select('id, full_name')
+              .ilike('full_name', `${mention}%`)
+              .limit(5);
+            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            for (const userId of targets) {
+              if (userId === (profile?.id || '')) continue;
+              await (supabase as any)
+                .from('inbox_notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'mention',
+                  priority: 'low',
+                  title: 'Você foi mencionado',
+                  body: `Você foi mencionado em um parecer (@${mention}).`,
+                  meta: { cardId: applicationId, parecerId: newP.id },
+                  transient: false,
+                });
+            }
+          }
+        }
+      } catch (_) { /* silencioso */ }
       // Chamar onRefetch para atualizar outros componentes
       if (onRefetch) {
         onRefetch();
@@ -376,6 +441,35 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         .eq('id', applicationId);
         
       if (error) throw error;
+      // 🔔 Notificações de menções na resposta de parecer
+      try {
+        const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
+        const unique = Array.from(new Set(matches));
+        if (unique.length > 0) {
+          for (const mention of unique) {
+            const { data: profiles } = await (supabase as any)
+              .from('profiles')
+              .select('id, full_name')
+              .ilike('full_name', `${mention}%`)
+              .limit(5);
+            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            for (const userId of targets) {
+              if (userId === (profile?.id || '')) continue;
+              await (supabase as any)
+                .from('inbox_notifications')
+                .insert({
+                  user_id: userId,
+                  type: 'mention',
+                  priority: 'low',
+                  title: 'Você foi mencionado',
+                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
+                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
+                  transient: false,
+                });
+            }
+          }
+        }
+      } catch (_) { /* silencioso */ }
       
       // Chamar onRefetch para atualizar outros componentes
       if (onRefetch) {
@@ -533,6 +627,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   // Track form changes similar to PF flow
   const handleFormChange = (data: PJFormValues) => {
     setFormData(data);
+    setLastFormSnapshot(data);
     if (!isInitialized) {
       setIsInitialized(true);
       setHasChanges(false);
@@ -548,6 +643,57 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
     } else {
       setHasChanges(true);
     }
+
+    // Debounced auto-save to drafts
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    const timer = setTimeout(async () => {
+      if (!applicationId) return;
+      const draftPayload = {
+        // Guardar toda a ficha PJ em other_data.pj para restauração fiel
+        other_data: { pj: data },
+      } as any;
+      try {
+        await ensureCommercialFeitas(applicationId);
+        await saveDraft(draftPayload, applicationId, 'pj', false);
+        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
+        try {
+          const updates: any = {};
+          if (data?.empresa?.razao) updates.title = data.empresa.razao;
+          if (data?.empresa?.cnpj) updates.cpf_cnpj = data.empresa.cnpj;
+          if (data?.contatos?.tel) updates.phone = data.contatos.tel;
+          if (data?.contatos?.email) updates.email = data.contatos.email;
+          if (Object.keys(updates).length > 0) {
+            const { error } = await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+            if (error) console.warn('[PJ Autosave] Update kanban_cards error:', error);
+          }
+        } catch (e) {
+          console.warn('[PJ Autosave] Mirror error:', e);
+        }
+        // Dev-safe: mirror into pj_fichas_test (debounced)
+        try {
+          let testId = applicantTestId;
+          if (!testId) {
+            testId = await ensureApplicantExists({
+              id: applicationId,
+              person_type: 'PJ',
+              cnpj: data?.empresa?.cnpj,
+              razao: data?.empresa?.razao,
+              telefone: data?.contatos?.tel,
+              email: data?.contatos?.email,
+            });
+            if (testId && testId !== applicantTestId) setApplicantTestId(testId);
+          }
+          if (testId) {
+            await saveCompanyData(testId, data as any);
+          }
+        } catch (_) {
+          // non-blocking for development-safe persistence
+        }
+      } catch (_) {
+        // ignore
+      }
+    }, 300);
+    setAutoSaveTimer(timer);
   };
 
   const handleClose = () => {
@@ -571,76 +717,103 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       if (formData && applicationId) {
         // Salvar os dados da ficha PJ no banco
         try {
+          // Salvar rascunho final
+          try {
+            await ensureCommercialFeitas(applicationId);
+            await saveDraft({ other_data: { pj: formData } } as any, applicationId, 'pj', false);
+          } catch (_) {}
           // Atualizar kanban_cards com os dados básicos
           const updates: any = {};
           if (formData.empresa?.razao) updates.title = formData.empresa.razao;
           if (formData.empresa?.cnpj) updates.cpf_cnpj = formData.empresa.cnpj;
           if (formData.contatos?.tel) updates.phone = formData.contatos.tel;
           if (formData.contatos?.email) updates.email = formData.contatos.email;
+          // Plano/Venc da PJ
+          if (formData.solicitacao?.planoAcesso) updates.plano_acesso = formData.solicitacao.planoAcesso;
+          if (formData.solicitacao?.venc) updates.venc = Number(formData.solicitacao.venc);
           
           if (Object.keys(updates).length > 0) {
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
           }
           
-          // Salvar dados específicos da ficha PJ
-          const { data: card } = await supabase
-            .from('kanban_cards')
-            .select('applicant_id')
-            .eq('id', applicationId)
-            .single();
-            
-          if (card?.applicant_id) {
-            // Atualizar ou criar registro na tabela pj_fichas
-            const pjData = {
-              applicant_id: card.applicant_id,
-              trade_name: formData.empresa?.fantasia || '',
-              opening_date: formData.empresa?.abertura || '',
-              facade: formData.empresa?.fachada || '',
-              area: formData.empresa?.area || '',
-              address: formData.endereco?.end || '',
-              address_number: formData.endereco?.n || '',
-              address_complement: formData.endereco?.compl || '',
-              property_type: formData.endereco?.tipo || '',
-              property_type_obs: formData.endereco?.obsTipo || '',
-              cep: formData.endereco?.cep || '',
-              neighborhood: formData.endereco?.bairro || '',
-              time_at_address: formData.endereco?.tempo || '',
-              establishment_type: formData.endereco?.estab || '',
-              establishment_type_obs: formData.endereco?.obsEstab || '',
-              personal_address: formData.endereco?.endPs || '',
-              phone: formData.contatos?.tel || '',
-              whatsapp: formData.contatos?.whats || '',
-              other_phones: formData.contatos?.fonesOs || '',
-              email: formData.contatos?.email || '',
-              proof_status: formData.docs?.comprovante || '',
-              proof_type: formData.docs?.tipo || '',
-              proof_in_name_of: formData.docs?.emNomeDe || '',
-              has_internet: formData.docs?.possuiInternet || '',
-              internet_provider: formData.docs?.operadora || '',
-              internet_plan: formData.docs?.plano || '',
-              internet_value: formData.docs?.valor || '',
-              has_contract: formData.docs?.contratoSocial || '',
-              contract_obs: formData.docs?.obsContrato || '',
-              partners: formData.socios || [],
-              request_source: formData.solicitacao?.quem || '',
-              request_method: formData.solicitacao?.meio || '',
-              request_phone: formData.solicitacao?.tel || '',
-              plan_access: formData.solicitacao?.planoAcesso || '',
-              sva_individual: formData.solicitacao?.svaAvulso || '',
-              due_date: formData.solicitacao?.venc || '',
-              relevant_info: formData.info?.relevantes || '',
-              spc_status: formData.info?.spc || '',
-              other_people: formData.info?.outrasPs || '',
-              market_info: formData.info?.mk || '',
-              analysis_opinion: formData.info?.parecerAnalise || '',
-            };
-            
-            // Upsert (insert or update) na tabela pj_fichas
-            const { error } = await supabase
-              .from('pj_fichas')
-              .upsert(pjData, { onConflict: 'applicant_id' });
-              
-            if (error) throw error;
+          // Salvar dados específicos da ficha PJ na TABELA DE TESTE
+          // 1) Buscar/garantir applicant_test (por CNPJ)
+          let targetApplicantId: string | null = null;
+          try {
+            const { data: existing } = await supabase
+              .from('applicants_test')
+              .select('id')
+              .eq('cpf_cnpj', formData.empresa?.cnpj || '')
+              .eq('person_type', 'PJ')
+              .maybeSingle();
+            if (existing?.id) {
+              targetApplicantId = existing.id;
+            } else {
+              const { data: created } = await supabase
+                .from('applicants_test')
+                .insert({
+                  person_type: 'PJ',
+                  primary_name: formData.empresa?.razao || '',
+                  cpf_cnpj: formData.empresa?.cnpj || '',
+                  phone: formData.contatos?.tel || '',
+                  email: formData.contatos?.email || '',
+                })
+                .select('id')
+                .single();
+              targetApplicantId = created?.id || null;
+            }
+          } catch (_) {}
+
+          if (targetApplicantId) {
+            const pjDataTest = {
+              applicant_id: targetApplicantId,
+              razao_social: formData.empresa?.razao || '',
+              cnpj: formData.empresa?.cnpj || '',
+              data_abertura: formData.empresa?.abertura || '',
+              nome_fantasia: formData.empresa?.fantasia || '',
+              nome_fachada: formData.empresa?.fachada || '',
+              area_atuacao: formData.empresa?.area || '',
+              tipo_imovel: formData.endereco?.tipo || '',
+              obs_tipo_imovel: formData.endereco?.obsTipo || '',
+              tempo_endereco: formData.endereco?.tempo || '',
+              tipo_estabelecimento: formData.endereco?.estab || '',
+              obs_estabelecimento: formData.endereco?.obsEstab || '',
+              endereco_pessoal: formData.endereco?.endPs || '',
+              fones_os: formData.contatos?.fonesOs || '',
+              comprovante_status: formData.docs?.comprovante || '',
+              tipo_comprovante: formData.docs?.tipo || '',
+              em_nome_de: formData.docs?.emNomeDe || '',
+              possui_internet: formData.docs?.possuiInternet || '',
+              operadora_internet: formData.docs?.operadora || '',
+              plano_internet: formData.docs?.plano || '',
+              valor_internet: formData.docs?.valor || '',
+              contrato_social: formData.docs?.contratoSocial || '',
+              obs_contrato: formData.docs?.obsContrato || '',
+              socios: formData.socios || [],
+              protocolo_mk: formData.solicitacao?.protocolo || '',
+              informacoes_relevantes: formData.info?.relevantes || '',
+              outras_pessoas: formData.info?.outrasPs || '',
+              parecer_analise: formData.info?.parecerAnalise || '',
+            } as any;
+
+            // Upsert sem on_conflict (tabela não possui unique em applicant_id)
+            const { data: existingFicha } = await supabase
+              .from('pj_fichas_test')
+              .select('applicant_id')
+              .eq('applicant_id', targetApplicantId)
+              .maybeSingle();
+            if (existingFicha?.applicant_id) {
+              const { error: upErr } = await supabase
+                .from('pj_fichas_test')
+                .update(pjDataTest)
+                .eq('applicant_id', targetApplicantId);
+              if (upErr) throw upErr;
+            } else {
+              const { error: insErr } = await supabase
+                .from('pj_fichas_test')
+                .insert(pjDataTest);
+              if (insErr) throw insErr;
+            }
           }
           
           toast({
@@ -660,6 +833,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           });
         }
       }
+      try { await clearEditingSession(); } catch {}
       onClose();
     }
     
@@ -684,7 +858,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   };
   return (
     <>
-    <Dialog open={open} onOpenChange={() => handleClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <DialogContent className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -708,7 +882,17 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             </Button>
           </div>
         </DialogHeader>
-        <div className="flex-1 overflow-hidden space-y-6">
+        <div
+          className="flex-1 overflow-hidden space-y-6"
+          onBlurCapture={async () => {
+            if (!applicationId || !lastFormSnapshot) return;
+            try {
+              // Garantir que permaneça em Comercial/Feitas ao editar/fechar
+              await ensureCommercialFeitas(applicationId);
+              await saveDraft({ other_data: { pj: lastFormSnapshot } } as any, applicationId, 'pj', false);
+            } catch (_) {}
+          }}
+        >
           {isLoadingInitial && (
             <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando dados básicos...
@@ -720,11 +904,19 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               onSubmit={handleSubmitWrapper}
               onCancel={handleClose}
               onFormChange={handleFormChange}
+              applicationId={applicationId}
               afterMkSlot={(
               <section>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-base font-semibold">Pareceres da Análise</h3>
-                  <Button size="sm" className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90" onClick={() => setShowNewParecerEditor(true)}>+ Adicionar Parecer</Button>
+                  <Button
+                    type="button"
+                    size="default"
+                    className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
+                    onClick={() => setShowNewParecerEditor(true)}
+                  >
+                    + Adicionar Parecer
+                  </Button>
                 </div>
                 
                 {/* Editor de novo parecer - agora aparece acima dos pareceres existentes */}
@@ -733,7 +925,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                     <Textarea rows={3} value={newParecerText} onChange={(e) => setNewParecerText(e.target.value)} className="text-sm text-[#018942]" placeholder="Escreva um novo parecer..." />
                     <div className="flex justify-end gap-2 mt-2">
                       <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
-                      <Button size="sm" type="button" onClick={appendParecer} className="h-8 px-3 text-xs bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar Parecer</Button>
+                      <Button
+                        size="default"
+                        type="button"
+                        onClick={appendParecer}
+                        className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
+                      >
+                        Salvar Parecer
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -769,6 +968,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                     {/* Botão de Resposta (seta de retorno) - sempre visível para Gestor */}
                                     {canReplyToParecer(p) && (
                                       <Button
+                                        type="button"
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => startReplyToParecer(p.id)}
@@ -782,7 +982,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                     {canEdit(p) && (
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
+                                          <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-[#018942] hover:bg-[#018942]/10">
                                             <MoreVertical className="h-3 w-3" />
                                           </Button>
                                         </DropdownMenuTrigger>
@@ -821,16 +1021,17 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                       Respondendo a {p.author_name} ({p.author_role})
                                     </span>
                                   </div>
-                                  <Textarea 
+                                  <MentionableTextarea 
                                     rows={3} 
                                     value={replyText} 
                                     onChange={(e) => setReplyText(e.target.value)}
-                                    placeholder="Digite sua resposta como Gestor..."
+                                    placeholder="Digite sua resposta... Use @ para mencionar"
                                     className="text-sm resize-none [&::placeholder]:text-[#018942]"
                                     style={{ color: '#018942' }}
                                   />
                                   <div className="flex justify-end gap-2 mt-2">
                                     <Button
+                                      type="button"
                                       variant="outline"
                                       size="sm"
                                       onClick={cancelReplyToParecer}
@@ -839,6 +1040,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                                       Cancelar
                                     </Button>
                                     <Button
+                                      type="button"
                                       size="sm"
                                       onClick={saveReplyToParecer}
                                       disabled={!replyText.trim()}

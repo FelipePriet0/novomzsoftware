@@ -4,6 +4,7 @@ import { isPremium } from "@/lib/access";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -185,18 +186,16 @@ const Historico = () => {
                 </SelectContent>
               </Select>
 
-              <Input
-                type="date"
+              <DatePicker
                 placeholder="Data inicial"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(v) => setStartDate(v)}
               />
 
-              <Input
-                type="date"
+              <DatePicker
                 placeholder="Data final"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={(v) => setEndDate(v)}
               />
 
               <div className="flex gap-2">

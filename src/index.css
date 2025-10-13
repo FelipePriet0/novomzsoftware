@@ -146,6 +146,21 @@ All colors MUST be HSL.
 }
 
 @layer utilities {
+  /* PF modal: highlight specific fields in red (10% bg + red border) */
+  .mz-form input[name$="doPs"],
+  .mz-form textarea[name="spc"],
+  .mz-form textarea[name="pesquisador"],
+  .mz-form textarea[name="infoRelevantes.infoMk"] {
+    background-color: rgba(239, 68, 68, 0.10) !important; /* Tailwind red-500 @ 10% */
+    border-color: rgb(239, 68, 68) !important;           /* Tailwind red-500 */
+  }
+  .mz-form input[name$="doPs"]:focus,
+  .mz-form textarea[name="spc"]:focus,
+  .mz-form textarea[name="pesquisador"]:focus,
+  .mz-form textarea[name="infoRelevantes.infoMk"]:focus {
+    border-color: rgb(239, 68, 68) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.20) !important; /* subtle red ring */
+  }
   /* PJ form: force input text/placeholder to primary green */
   .pj-form input,
   .pj-form textarea {

@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
 import { X, MoreVertical, Paperclip, ArrowLeft } from "lucide-react";
+import InputMask from "react-input-mask";
 import { ExpandedFichaModal } from "@/components/ficha/ExpandedFichaModal";
 import { ExpandedFichaPJModal } from "@/components/ficha/ExpandedFichaPJModal";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +30,7 @@ import { ObservationsWithComments } from "@/components/ui/ObservationsWithCommen
 import { AttachmentUploadModal } from "@/components/attachments/AttachmentUploadModal";
 import { AttachmentList } from "@/components/attachments/AttachmentDisplay";
 import { useAttachments } from "@/hooks/useAttachments";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 interface ModalEditarFichaProps {
   card: any;
@@ -40,15 +43,61 @@ interface ModalEditarFichaProps {
 }
 
 export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar, responsaveis = [], onRefetch, autoOpenExpanded = false }: ModalEditarFichaProps) {
+  const toDateInput = (iso?: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    // Usar componentes UTC para evitar deslocamentos de fuso
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
   const initialForm = {
     nome: card?.nome ?? "",
     telefone: card?.telefone ?? "",
-    agendamento: card?.deadline ? new Date(card.deadline).toISOString().slice(0, 10) : "",
-    feito_em: card?.receivedAt ? new Date(card.receivedAt).toISOString().slice(0, 10) : "",
+    agendamento: card?.deadline && card?.deadline !== card?.receivedAt ? toDateInput(card.deadline) : "",
+    feito_em: card?.receivedAt ? toDateInput(card.receivedAt) : "",
     observacoes: card?.observacoes ?? "",
+    // Novos campos PF
+    cpf: card?.cpf_cnpj ?? "",
+    whatsapp: card?.whatsapp ?? "",
+    endereco: card?.endereco ?? "",
+    numero: card?.numero ?? "",
+    complemento: card?.complemento ?? "",
+    cep: card?.cep ?? "",
+    bairro: card?.bairro ?? "",
+    // Novos campos Plano/Venc/Carnê
+    plano_acesso: card?.plano_acesso ?? "",
+    venc: card?.venc ? String(card.venc) : "",
+    carne_impresso: (card?.carne_impresso === true ? 'Sim' : card?.carne_impresso === false ? 'Não' : ''),
   };
   
   const [form, setForm] = useState(initialForm);
+  // CTA de planos dentro do dropdown
+  const [planCTA, setPlanCTA] = useState<'CGNAT' | 'DIN' | 'FIXO'>('CGNAT');
+  const planOptions = React.useMemo(() => {
+    const base = {
+      CGNAT: [
+        '100 Mega por R$59,90',
+        '250 Mega por R$69,90',
+        '500 Mega por R$79,90',
+        '1000 Mega (1Gb) por R$99,90',
+      ],
+      DIN: [
+        '100 Mega + IP Dinâmico por R$74,90',
+        '250 Mega + IP Dinâmico por R$89,90',
+        '500 Mega + IP Dinâmico por R$94,90',
+        '1000 Mega (1Gb) + IP Dinâmico por R$114,90',
+      ],
+      FIXO: [
+        '100 Mega + IP Fixo por R$259,90',
+        '250 Mega + IP Fixo por R$269,90',
+        '500 Mega + IP Fixo por R$279,90',
+        '1000 Mega (1Gb) + IP Fixo por R$299,90',
+      ],
+    } as const;
+    return base[planCTA];
+  }, [planCTA]);
   const [pareceres, setPareceres] = useState<Array<{id:string; author_id?:string; author_name:string; author_role?:string; created_at:string; text:string; updated_by_id?:string; updated_by_name?:string; updated_at?:string; parent_id?:string; level?:number; thread_id?:string; is_thread_starter?:boolean}>>([]);
   const [showNewParecerEditor, setShowNewParecerEditor] = useState(false);
   const [newParecerText, setNewParecerText] = useState("");
@@ -85,6 +134,10 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleMaskChange = (name: string, value: string) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -244,12 +297,24 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   React.useEffect(() => {
     const timer = setTimeout(async () => {
       try {
-        // Update kanban_cards (title, phone, due_at)
+        // Update kanban_cards (title, phone, due_at, novos campos PF)
         const updates: any = {};
         if (form.nome !== initialForm.nome) updates.title = form.nome;
         if (form.telefone !== initialForm.telefone) updates.phone = form.telefone;
-        if (form.agendamento) updates.due_at = new Date(form.agendamento).toISOString();
+        if (form.agendamento !== initialForm.agendamento) {
+          if (form.agendamento) {
+            // Save as midnight UTC to keep the date stable across timezones
+            const parts = form.agendamento.split('-').map((x) => parseInt(x, 10));
+            const y = parts[0], m = parts[1], d = parts[2];
+            const midnightUTC = new Date(Date.UTC(y, (m - 1), d, 0, 0, 0));
+            updates.due_at = midnightUTC.toISOString();
+          } else {
+            updates.due_at = null;
+          }
+        }
         if (form.observacoes !== initialForm.observacoes) updates.comments = form.observacoes;
+        // Campos seguros no schema atual
+        if (form.cpf !== initialForm.cpf) updates.cpf_cnpj = form.cpf;
         if (Object.keys(updates).length > 0) {
           await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
         }
@@ -267,7 +332,23 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [form.nome, form.telefone, form.agendamento, form.observacoes]);
+  }, [form.nome, form.telefone, form.agendamento, form.observacoes, form.cpf, form.whatsapp, form.endereco, form.numero, form.complemento, form.cep, form.bairro]);
+  // incluir dependências novas
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    const timer = setTimeout(async () => {
+      try {
+        const updates: any = {};
+        if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
+        if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
+        if (form.carne_impresso !== initialForm.carne_impresso) updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
+        if (Object.keys(updates).length > 0) {
+          await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+        }
+      } catch {}
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [form.plano_acesso, form.venc, form.carne_impresso]);
 
   // Load pareceres (read-only) from backend for this ficha/card
   const loadPareceres = useCallback(async () => {
@@ -311,6 +392,43 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     }
   }, [card?.id]);
 
+  // Permitir que filhos (modais PF/PJ) forcem o recarregamento local de pareceres
+  const triggerLocalRefetch = useCallback(async () => {
+    // 1) Recarregar pareceres
+    loadPareceres();
+    // 2) Recarregar campos básicos do card para espelhar imediatamente no formulário
+    try {
+      if (!card?.id) return;
+      const { data: k } = await (supabase as any)
+        .from('kanban_cards')
+        .select('title, phone, cpf_cnpj, whatsapp, endereco, numero, complemento, cep, bairro, due_at, plano_acesso, venc, carne_impresso')
+        .eq('id', card.id)
+        .maybeSingle();
+      if (k) {
+        setForm((prev) => ({
+          ...prev,
+          nome: k.title ?? prev.nome,
+          telefone: k.phone ?? prev.telefone,
+          cpf: k.cpf_cnpj ?? prev.cpf,
+          whatsapp: k.whatsapp ?? prev.whatsapp,
+          endereco: k.endereco ?? prev.endereco,
+          numero: k.numero ?? prev.numero,
+          complemento: k.complemento ?? prev.complemento,
+          cep: k.cep ?? prev.cep,
+          bairro: k.bairro ?? prev.bairro,
+          agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
+          plano_acesso: k.plano_acesso ?? prev.plano_acesso,
+          venc: typeof k.venc !== 'undefined' && k.venc !== null ? String(k.venc) : prev.venc,
+          carne_impresso: typeof k.carne_impresso === 'boolean' ? (k.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+        }));
+      }
+    } catch (_) {
+      // silencioso
+    }
+    // 3) Avisar o pai (se existir) para recarregar listagens
+    onRefetch?.();
+  }, [loadPareceres, onRefetch, card?.id]);
+
   useEffect(() => {
     loadPareceres();
   }, [loadPareceres]);
@@ -329,6 +447,24 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         (payload) => {
           console.log('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
           loadPareceres();
+          const k: any = (payload as any).new || {};
+          // Espelhar campos básicos + plano/venc/carnê
+          setForm((prev) => ({
+            ...prev,
+            nome: k.title ?? prev.nome,
+            telefone: k.phone ?? prev.telefone,
+            cpf: k.cpf_cnpj ?? prev.cpf,
+            whatsapp: k.whatsapp ?? prev.whatsapp,
+            endereco: k.endereco ?? prev.endereco,
+            numero: k.numero ?? prev.numero,
+            complemento: k.complemento ?? prev.complemento,
+            cep: k.cep ?? prev.cep,
+            bairro: k.bairro ?? prev.bairro,
+            agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
+            plano_acesso: k.plano_acesso ?? prev.plano_acesso,
+            venc: typeof k.venc !== 'undefined' && k.venc !== null ? String(k.venc) : prev.venc,
+            carne_impresso: typeof k.carne_impresso === 'boolean' ? (k.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+          }));
         }
       )
       .subscribe((status) => {
@@ -657,6 +793,109 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     return JSON.stringify(form) !== JSON.stringify(initialForm);
   };
 
+  // Persistir imediatamente campos básicos antes de abrir a Análise
+  const persistBasicFieldsNow = async () => {
+    try {
+      if (!card?.id) return;
+      const updates: any = {
+        title: form.nome,
+        phone: form.telefone,
+        cpf_cnpj: form.cpf,
+      };
+      await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+
+      // due_at separado (formatar para meia-noite UTC se houver data)
+      if (form.agendamento) {
+        const parts = form.agendamento.split('-').map((x) => parseInt(x, 10));
+        if (parts.length === 3 && !parts.some(isNaN)) {
+          const [y, m, d] = parts;
+          const midnightUTC = new Date(Date.UTC(y, (m - 1), d, 0, 0, 0));
+          await (supabase as any).from('kanban_cards').update({ due_at: midnightUTC.toISOString() }).eq('id', card.id);
+        }
+      }
+      if (!form.agendamento && initialForm.agendamento) {
+        await (supabase as any).from('kanban_cards').update({ due_at: null }).eq('id', card.id);
+      }
+
+      // Espelhar alguns campos adicionais seguros
+      const more: any = {};
+      if (form.plano_acesso) more.plano_acesso = form.plano_acesso;
+      if (form.venc) more.venc = Number(form.venc);
+      if (form.carne_impresso === 'Sim') more.carne_impresso = true;
+      if (form.carne_impresso === 'Não') more.carne_impresso = false;
+      if (Object.keys(more).length > 0) {
+        await (supabase as any).from('kanban_cards').update(more).eq('id', card.id);
+      }
+
+      // Atualizar applicants (se existir) para manter consistência
+      if ((card as any).applicantId) {
+        const appUpdates: any = {};
+        if (form.nome) appUpdates.primary_name = form.nome;
+        if (form.telefone) appUpdates.phone = form.telefone;
+        if (Object.keys(appUpdates).length > 0) {
+          await (supabase as any).from('applicants').update(appUpdates).eq('id', (card as any).applicantId);
+        }
+      }
+    } catch (_) {
+      // silencioso: não bloquear UX do abrir análise
+    }
+  };
+
+  const handleAnalyze = async () => {
+    // 1) Persistir campos básicos no card
+    await persistBasicFieldsNow();
+
+    // 2) Atualizar (ou criar) rascunho mínimo para PF (applications_drafts)
+    try {
+      if (card?.id) {
+        const draftPayload: any = {
+          customer_data: {
+            nome: form.nome,
+            cpf: form.cpf,
+            tel: form.telefone,
+            email: (card as any)?.email || '',
+          },
+        };
+
+        // Verificar se já existe draft para esta aplicação
+        const { data: existing } = await (supabase as any)
+          .from('applications_drafts')
+          .select('id')
+          .eq('application_id', card.id)
+          .maybeSingle();
+
+        if (existing?.id) {
+          await (supabase as any)
+            .from('applications_drafts')
+            .update({
+              customer_data: draftPayload.customer_data,
+              application_id: card.id,
+              step: 'basic',
+            })
+            .eq('id', existing.id);
+        } else {
+          const { data: auth } = await (supabase as any).auth.getUser();
+          await (supabase as any)
+            .from('applications_drafts')
+            .insert({
+              user_id: auth?.user?.id,
+              application_id: card.id,
+              customer_data: draftPayload.customer_data,
+              step: 'basic',
+            });
+        }
+      }
+    } catch (_) {
+      // silencioso
+    }
+
+    // 3) Forçar espelhamento local e atualizar listas quando possível
+    await triggerLocalRefetch();
+
+    // 4) Abrir modal expandido
+    setShowExpandedModal(true);
+  };
+
   const handleClose = () => {
     if (!hasChanges()) {
       onClose();
@@ -680,8 +919,31 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     setShowSecondConfirmDialog(true);
   };
 
-  const handleSecondConfirm = () => {
+  const handleSecondConfirm = async () => {
     setShowSecondConfirmDialog(false);
+    // Persistir alterações imediatamente para evitar perda por debounce
+    try {
+      if (card?.id) {
+        // Persistir todos os campos espelhados
+        const updates: any = {
+          title: form.nome,
+          phone: form.telefone,
+          cpf_cnpj: form.cpf,
+        };
+        await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+
+        // due_at separado (formatado ao meio-dia UTC)
+        if (form.agendamento && form.agendamento !== initialForm.agendamento) {
+          const parts = form.agendamento.split('-').map((x) => parseInt(x, 10));
+          const y = parts[0], m = parts[1], d = parts[2];
+          const midnightUTC = new Date(Date.UTC(y, (m - 1), d, 0, 0, 0));
+          await (supabase as any).from('kanban_cards').update({ due_at: midnightUTC.toISOString() }).eq('id', card.id);
+        }
+        if (!form.agendamento && initialForm.agendamento) {
+          await (supabase as any).from('kanban_cards').update({ due_at: null }).eq('id', card.id);
+        }
+      }
+    } catch (_) {}
     onSave(form);
     // Defer closing parent modal to allow nested portals to unmount cleanly
     if (pendingAction === 'close') {
@@ -707,10 +969,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   };
 
   const basicInfo = {
-    nome: card?.nome || '',
-    cpf: card?.cpf || '',
-    telefone: card?.telefone || '',
-    whatsapp: card?.whatsapp || card?.telefone || '',
+    // Usar o estado atual do formulário para espelhar imediatamente na Ficha Completa
+    nome: form.nome || card?.nome || '',
+    cpf: form.cpf || card?.cpf || '',
+    telefone: form.telefone || card?.telefone || '',
+    whatsapp: form.whatsapp || card?.whatsapp || card?.telefone || '',
     nascimento: card?.nascimento ? new Date(card.nascimento).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     naturalidade: card?.naturalidade || '',
     uf: card?.uf || '',
@@ -718,8 +981,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   };
 
   const feitoEm = initialForm.feito_em;
-  const vendedorNome = (card?.vendedorNome) || (card?.analystName) || (card?.responsavel) || '';
-  const analistaNome = vendedorNome; // por ora, mesmo criador
+  const vendedorNome = (card?.vendedorNome) || '';
+  const analistaNome = (card?.responsavel) || '';
   const isPJ = (card?.cpf || '').replace(/\D+/g, '').length > 11;
 
   return (
@@ -744,46 +1007,252 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label>Nome do Cliente</Label>
-            <Input
-              name="nome"
-              value={form.nome}
-              onChange={handleChange}
-              className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <Label>Nome do Cliente</Label>
+                <Input
+                  name="nome"
+                  value={form.nome}
+                  onChange={handleChange}
+                  placeholder="Nome completo"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div>
+                <Label>{card?.personType === 'PJ' ? 'CNPJ' : 'CPF'}</Label>
+                <InputMask
+                  mask={card?.personType === 'PJ' ? "99.999.999/9999-99" : "999.999.999-99"}
+                  value={form.cpf || ""}
+                  onChange={(e) => handleMaskChange('cpf', e.target.value)}
+                  maskChar={null}
+                  alwaysShowMask={false}
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      placeholder={card?.personType === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"}
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Telefone</Label>
-            <Input
-              name="telefone"
-              inputMode="tel"
-              type="tel"
-              value={form.telefone}
-              onChange={handleChange}
-              className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>Telefone</Label>
+                <InputMask
+                  mask="(99) 99999-9999"
+                  value={form.telefone || ""}
+                  onChange={(e) => handleMaskChange('telefone', e.target.value)}
+                  maskChar={null}
+                  alwaysShowMask={false}
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      inputMode="tel"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+              <div>
+                <Label>WhatsApp</Label>
+                <InputMask
+                  mask="(99) 99999-9999"
+                  value={form.whatsapp || ""}
+                  onChange={(e) => handleMaskChange('whatsapp', e.target.value)}
+                  maskChar={null}
+                  alwaysShowMask={false}
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      inputMode="tel"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+            </div>
           </div>
+
+          {/* Novos campos de endereço PF */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="sm:col-span-2">
+                <Label>Endereço</Label>
+                <Input
+                  name="endereco"
+                  value={form.endereco}
+                  onChange={handleChange}
+                  placeholder="Ex: Rua das Flores"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div>
+                <Label>Número</Label>
+                <Input
+                  name="numero"
+                  value={form.numero}
+                  onChange={handleChange}
+                  placeholder="123"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <Label>Complemento</Label>
+                <Input
+                  name="complemento"
+                  value={form.complemento}
+                  onChange={handleChange}
+                  placeholder="Apto 45"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+              <div className="sm:col-span-2"></div>
+            </div>
+          </div>
+
+          {/* CEP / Bairro (mover acima de Planos) */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>CEP</Label>
+                <InputMask
+                  mask="99999-999"
+                  value={form.cep || ""}
+                  onChange={(e) => handleMaskChange('cep', e.target.value)}
+                  maskChar={null}
+                  alwaysShowMask={false}
+                >
+                  {(inputProps) => (
+                    <Input
+                      {...inputProps}
+                      placeholder="12345-678"
+                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                    />
+                  )}
+                </InputMask>
+              </div>
+              <div>
+                <Label>Bairro</Label>
+                <Input
+                  name="bairro"
+                  value={form.bairro}
+                  onChange={handleChange}
+                  placeholder="Centro"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+            </div>
+          </div>
+          {/* Plano / Vencimento / Carnê impresso */}
+          <div className="mt-4 space-y-2">
+            <div>
+              <Label>Plano</Label>
+              <Select
+                onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
+                value={form.plano_acesso}
+              >
+                <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                  <SelectValue placeholder="Selecionar plano" />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
+                    {([
+                      { key: 'CGNAT', label: 'CGNAT' },
+                      { key: 'DIN', label: 'DINÂMICO' },
+                      { key: 'FIXO', label: 'FIXO' },
+                    ] as const).map(({ key, label }) => {
+                      const active = planCTA === key;
+                      return (
+                        <Button
+                          key={key}
+                          type="button"
+                          variant="outline"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
+                          className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-2 text-xs rounded-[30px]'}
+                          size="sm"
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  {planOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>Dia de vencimento</Label>
+                <Select
+                  onValueChange={(v) => setForm((p) => ({ ...p, venc: v }))}
+                  value={form.venc}
+                >
+                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectValue placeholder="Selecionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['5','10','15','20','25'].map(v => (
+                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Carnê impresso</Label>
+                <Select
+                  onValueChange={(v) => setForm((p) => ({ ...p, carne_impresso: v }))}
+                  value={form.carne_impresso}
+                >
+                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectValue placeholder="Selecionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sim">Sim</SelectItem>
+                    <SelectItem value="Não">Não</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Feito em</Label>
-              <Input
+              <DatePicker
                 name="feito_em"
-                type="date"
                 value={feitoEm}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
             <div className="space-y-2">
               <Label>Instalação agendada para</Label>
-              <Input
+              <DatePicker
                 name="agendamento"
-                type="date"
                 value={form.agendamento}
-                onChange={handleChange}
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                onChange={(v) => setForm((prev) => ({ ...prev, agendamento: v }))}
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                allowTyping={false}
+                showIcon={true}
+                forceFlatpickr={true}
               />
             </div>
           </div>
@@ -794,7 +1263,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               <Input
                 value={vendedorNome || "—"}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
             <div className="space-y-1">
@@ -802,7 +1271,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               <Input
                 value={analistaNome || "—"}
                 disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
               />
             </div>
           </div>
@@ -824,12 +1293,12 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
             {/* Editor de novo parecer - agora aparece acima dos pareceres existentes */}
             {showNewParecerEditor && (
               <div className="mt-2">
-                <Textarea
+                <MentionableTextarea
                   rows={3}
                   value={newParecerText}
                   onChange={(e) => setNewParecerText(e.target.value)}
-                  placeholder="Escreva um novo parecer..."
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]/0.7"
+                  placeholder="Escreva um novo parecer... Use @ para mencionar"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
                 />
                 <div className="flex justify-end gap-2 mt-2">
                   <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
@@ -904,7 +1373,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                           
                           {editingParecerId === p.id ? (
                             <div>
-                              <Textarea rows={3} value={editingText} onChange={(e) => setEditingText(e.target.value)} className="text-sm text-[#018942]" />
+                              <MentionableTextarea rows={3} value={editingText} onChange={(e) => setEditingText(e.target.value)} className="text-sm text-[#018942]" placeholder="Edite... Use @ para mencionar" />
                               <div className="flex justify-end mt-2 gap-2">
                                 <Button size="sm" type="button" variant="secondary" onClick={cancelEditParecer} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
                                 <Button size="sm" type="button" onClick={saveEditParecer} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar</Button>
@@ -923,11 +1392,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                                   Respondendo a {p.author_name} ({p.author_role})
                                 </span>
                               </div>
-                              <Textarea 
+                              <MentionableTextarea 
                                 rows={3} 
                                 value={replyText} 
                                 onChange={(e) => setReplyText(e.target.value)}
-                                placeholder="Digite sua resposta como Gestor..."
+                                placeholder="Digite sua resposta... Use @ para mencionar"
                                 className="text-sm resize-none [&::placeholder]:text-[#018942]"
                                 style={{ color: '#018942' }}
                               />
@@ -972,7 +1441,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               name="observacoes"
               value={form.observacoes}
               onChange={handleChange}
-              className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]/0.7]"
+              className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
               placeholder="Use @mencoes para colaboradores..."
               cardId={card?.id || ''}
               onAttachmentClick={handleAttachmentClick}
@@ -984,7 +1453,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           <div className="flex items-center justify-between mt-8">
             <Button
               size="sm"
-              onClick={() => setShowExpandedModal(true)}
+              onClick={handleAnalyze}
               className="hover-scale !bg-[hsl(var(--brand))] !text-white hover:!bg-[hsl(var(--brand))/0.9] border border-transparent"
             >
               Analisar
@@ -1085,7 +1554,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           open={showExpandedModal}
           onClose={() => setShowExpandedModal(false)}
           applicationId={card?.id}
-          onRefetch={onRefetch}
+          onRefetch={triggerLocalRefetch}
         />
       ) : (
         <ExpandedFichaModal
@@ -1094,6 +1563,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           onSubmit={handleExpandedSubmit}
           basicInfo={basicInfo}
           applicationId={card?.id}
+          onRefetch={triggerLocalRefetch}
         />
       )}
 

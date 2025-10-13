@@ -9,9 +9,11 @@ import NovaFichaComercialForm, { ComercialFormValues } from '@/components/NovaFi
 import { BasicInfoData } from './BasicInfoModal';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useDraftPersistence } from '@/hooks/useDraftPersistence';
+import { useDraftForm } from '@/hooks/useDraftForm';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, SaveIcon, CheckIcon, X } from 'lucide-react';
+import { useApplicantsTestConnection } from '@/hooks/useApplicantsTestConnection';
+import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,7 +53,7 @@ export function ExpandedFichaModal({
   onStatusChange,
   onRefetch
 }: ExpandedFichaModalProps) {
-  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftPersistence();
+  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const [showFirstConfirmDialog, setShowFirstConfirmDialog] = useState(false);
   const [showSecondConfirmDialog, setShowSecondConfirmDialog] = useState(false);
@@ -62,6 +64,23 @@ export function ExpandedFichaModal({
   const [isInitialized, setIsInitialized] = useState(false);
   const [loadedDraftData, setLoadedDraftData] = useState<any>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [lastFormSnapshot, setLastFormSnapshot] = useState<ComercialFormValues | null>(null);
+  // Dev-safe CRUD state (test tables)
+  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
+  const { savePersonalData } = usePfFichasTestConnection();
+  const { ensureApplicantExists } = useApplicantsTestConnection();
+
+  const ensureCommercialFeitas = async (appId?: string) => {
+    if (!appId) return;
+    try {
+      await supabase
+        .from('kanban_cards')
+        .update({ area: 'comercial', stage: 'feitas' })
+        .eq('id', appId);
+    } catch (_) {
+      // ignore
+    }
+  };
 
   // Auto-save status component
   const SaveStatus = () => {
@@ -113,6 +132,7 @@ export function ExpandedFichaModal({
 
   const handleFormChange = (formData: any) => {
     setFormData(formData);
+    setLastFormSnapshot(formData);
     
     // Only set hasChanges if we're initialized and there are actual changes
     if (isInitialized && initialFormData) {
@@ -130,7 +150,7 @@ export function ExpandedFichaModal({
     }
 
     // Set new timer for auto-save
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const draftData = {
         customer_data: {
           ...basicInfo,
@@ -151,18 +171,60 @@ export function ExpandedFichaModal({
       };
       
       if (applicationId) {
-        saveDraft(applicationId, draftData, 'full', false); // Don't show toast for auto-save
+        await ensureCommercialFeitas(applicationId);
+        await saveDraft(draftData, applicationId, 'full', false);
+
+        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
+        try {
+          const updates: any = {};
+          if (formData?.cliente?.nome) updates.title = formData.cliente.nome;
+          if (formData?.cliente?.tel) updates.phone = formData.cliente.tel;
+          if (formData?.cliente?.email) updates.email = formData.cliente.email;
+          if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
+          // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
+          // Evitar 400: campos não existentes no schema atual
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+          }
+        } catch (_) {}
+
+        // Dev-safe: mirror into pf_fichas_test (debounced)
+        try {
+          // Ensure applicants_test record exists and cache its id
+          let testId = applicantTestId;
+          if (!testId) {
+            testId = await ensureApplicantExists({
+              id: applicationId,
+              person_type: 'PF',
+              cpf_cnpj: formData?.cliente?.cpf,
+              nome: formData?.cliente?.nome,
+              telefone: formData?.cliente?.tel,
+              email: formData?.cliente?.email,
+            });
+            if (testId && testId !== applicantTestId) {
+              setApplicantTestId(testId);
+            }
+          }
+          if (testId) {
+            await savePersonalData(testId, formData);
+          }
+        } catch (_) {
+          // non-blocking for development-safe persistence
+        }
       }
-    }, 700); // Save after 700ms of inactivity (optimized debounce)
+    }, 300); // Save after 300ms of inactivity (faster debounce)
 
     setAutoSaveTimer(timer);
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Se não há alterações, pode fechar direto
     if (!hasChanges) {
       onClose();
       return;
     }
+
+    // Há alterações: abrir fluxo de confirmação em duas etapas
     setPendingAction('close');
     setShowFirstConfirmDialog(true);
   };
@@ -177,8 +239,58 @@ export function ExpandedFichaModal({
     
     if (pendingAction === 'close' || pendingAction === 'save') {
       if (formData) {
-        await onSubmit(formData);
-        await clearEditingSession();
+        try {
+          if (applicationId) {
+            const draftData = {
+              customer_data: { ...basicInfo, ...formData.cliente },
+              address_data: formData.endereco,
+              employment_data: formData.empregoRenda,
+              household_data: formData.relacoes,
+              spouse_data: formData.conjuge,
+              references_data: formData.referencias,
+              other_data: {
+                spc: formData.spc,
+                pesquisador: formData.pesquisador,
+                filiacao: formData.filiacao,
+                outras: formData.outras,
+                infoRelevantes: formData.infoRelevantes,
+              },
+            };
+            await ensureCommercialFeitas(applicationId);
+            await saveDraft(draftData, applicationId, 'full', false);
+          // Atualiza campos do card (espelho com Editar Ficha)
+          const updates: any = {};
+          if (formData?.cliente?.nome) updates.title = formData.cliente.nome;
+          if (formData?.cliente?.tel) updates.phone = formData.cliente.tel;
+          if (formData?.cliente?.email) updates.email = formData.cliente.email;
+          if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
+          // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
+          if (formData?.endereco) {
+            if (formData.endereco.end) updates.endereco = formData.endereco.end;
+            if (formData.endereco.n) updates.numero = formData.endereco.n;
+            if (formData.endereco.compl) updates.complemento = formData.endereco.compl;
+            if (formData.endereco.cep) updates.cep = formData.endereco.cep;
+            if (formData.endereco.bairro) updates.bairro = formData.endereco.bairro;
+          }
+          if (formData?.outras) {
+            if (formData.outras.planoEscolhido) updates.plano_acesso = formData.outras.planoEscolhido;
+            if (formData.outras.diaVencimento) updates.venc = Number(formData.outras.diaVencimento);
+            if (typeof formData.outras.carneImpresso !== 'undefined') {
+              updates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
+            }
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
+          }
+          }
+          // Chamar fluxo original de submissão do formulário PF
+          await onSubmit(formData);
+          onRefetch?.();
+        } catch (_) {
+          // ignore errors, manter UX
+        } finally {
+          await clearEditingSession();
+        }
       }
       onClose();
     }
@@ -481,7 +593,7 @@ export function ExpandedFichaModal({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={() => handleClose()}>
+      <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
         <DialogContent 
           className="max-w-[1200px] max-h-[95vh] overflow-hidden"
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
@@ -506,7 +618,32 @@ export function ExpandedFichaModal({
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-hidden">
+          <div
+            className="flex-1 overflow-hidden"
+            onBlurCapture={async () => {
+              if (!applicationId || !lastFormSnapshot) return;
+              const formData = lastFormSnapshot;
+              const draftData = {
+                customer_data: { ...basicInfo, ...formData.cliente },
+                address_data: formData.endereco,
+                employment_data: formData.empregoRenda,
+                household_data: formData.relacoes,
+                spouse_data: formData.conjuge,
+                references_data: formData.referencias,
+                other_data: {
+                  spc: formData.spc,
+                  pesquisador: formData.pesquisador,
+                  filiacao: formData.filiacao,
+                  outras: formData.outras,
+                  infoRelevantes: formData.infoRelevantes,
+                },
+              };
+              try {
+                await ensureCommercialFeitas(applicationId);
+                await saveDraft(draftData, applicationId, 'full', false);
+              } catch {}
+            }}
+          >
             {isLoadingDraft ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />

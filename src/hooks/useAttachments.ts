@@ -1,8 +1,27 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentUser } from '@/hooks/use-current-user';
 import { useToast } from '@/hooks/use-toast';
+
+// Função standalone para download (escopo de módulo)
+export const getDownloadUrlStandalone = async (filePath: string): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase.storage
+      .from('card_attachments')
+      .createSignedUrl(filePath, 60);
+
+    if (error) {
+      console.error('Erro creating signed URL:', error);
+      return null;
+    }
+
+    return data?.signedUrl || null;
+  } catch (error) {
+    console.error('Erro creating signed URL:', error);
+    return null;
+  }
+};
 
 export interface CardAttachment {
   id: string;
@@ -308,41 +327,37 @@ export const useAttachments = (cardId: string) => {
 
   // Função para obter URL de download
   const getDownloadUrl = async (filePath: string): Promise<string | null> => {
+    // Sanitizar caminho (sem barra inicial, sem duplicatas)
+    const safePath = String(filePath || '').replace(/^\/+/, '').replace(/\/+/, '/');
     try {
+      // Tentativa 1: URL assinada (funciona em buckets privados)
       const { data, error } = await supabase.storage
         .from('card_attachments')
-        .createSignedUrl(filePath, 60); // URL válida por 1 minuto
+        .createSignedUrl(safePath, 60); // 60s é suficiente para preview/download
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+
+      // Tentativa 2: URL pública (caso bucket esteja público)
+      const { data: pub } = supabase.storage
+        .from('card_attachments')
+        .getPublicUrl(safePath);
+      if (pub?.publicUrl) {
+        return pub.publicUrl;
+      }
 
       if (error) {
         console.error('Error creating signed URL:', error);
-        return null;
       }
-
-      return data?.signedUrl || null;
+      return null;
     } catch (error) {
-      console.error('Error creating signed URL:', error);
+      console.error('Error creating download URL:', error);
       return null;
     }
   };
 
-  // Função standalone para download (exportada)
-  const getDownloadUrlStandalone = async (filePath: string): Promise<string | null> => {
-    try {
-      const { data, error } = await supabase.storage
-        .from('card_attachments')
-        .createSignedUrl(filePath, 60);
-
-      if (error) {
-        console.error('Error creating signed URL:', error);
-        return null;
-      }
-
-      return data?.signedUrl || null;
-    } catch (error) {
-      console.error('Error creating signed URL:', error);
-      return null;
-    }
-  };
+  
 
   // Função para formatar tamanho de arquivo
   const formatFileSize = (bytes: number): string => {
@@ -453,3 +468,4 @@ export const useAttachments = (cardId: string) => {
     listAllFiles
   };
 };
+

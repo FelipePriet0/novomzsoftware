@@ -36,26 +36,42 @@ export function useComments(cardId: string) {
     return [...new Set(mentions)]; // Remove duplicatas
   };
 
-  // Enviar notificaÃ§Ãµes
+  // Enviar notificações (somente: menções)
   const sendNotifications = async (content: string, authorId: string, parentComment?: Comment) => {
     try {
       const mentions = extractMentions(content);
-      
-      // Notificar autor original se for uma resposta
-      if (parentComment && parentComment.authorId !== authorId) {
-        toast({
-          title: "Nova resposta",
-          description: `VocÃª recebeu uma resposta em um comentÃ¡rio`,
-          variant: "default"
-        });
-      }
 
-      // Notificar usuÃ¡rios mencionados
+      // Notificar usuários mencionados via inbox_notifications
       for (const mention of mentions) {
+        try {
+          // Encontrar perfil por início do nome (menções usam primeira palavra)
+          const { data: profiles } = await (supabase as any)
+            .from('profiles')
+            .select('id, full_name')
+            .ilike('full_name', `${mention}%`)
+            .limit(5);
+          const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+          for (const userId of targets) {
+            if (userId === authorId) continue; // evitar notificar a si mesmo
+            await (supabase as any)
+              .from('inbox_notifications')
+              .insert({
+                user_id: userId,
+                type: 'mention',
+                priority: 'low',
+                title: 'Você foi mencionado',
+                body: `Você foi mencionado em um comentário (@${mention}).`,
+                meta: { cardId },
+                transient: false,
+              });
+          }
+        } catch (e) {
+          // Fallback silencioso: ainda mostra toast local
+        }
         toast({
-          title: "VocÃª foi mencionado",
-          description: `VocÃª foi mencionado em um comentÃ¡rio: @${mention}`,
-          variant: "default"
+          title: 'Você foi mencionado',
+          description: `Você foi mencionado em um comentário: @${mention}`,
+          variant: 'default',
         });
       }
     } catch (error) {
