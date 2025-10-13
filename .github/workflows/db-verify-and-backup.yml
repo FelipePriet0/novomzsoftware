@@ -2,13 +2,25 @@ name: DB Verify and Backup
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - test/kanban-validation
 
 jobs:
   verify-and-backup:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check required secrets
+        if: env.SUPABASE_DB_URL == ''
+        run: |
+          echo "Missing required secret SUPABASE_DB_URL." >&2
+          echo "Add it in Settings → Secrets and variables → Actions." >&2
+          exit 1
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -16,9 +28,10 @@ jobs:
           version: latest
 
       - name: List migrations (remote vs local)
+        if: env.SUPABASE_DB_URL != ''
         run: |
           supabase migration list \
-            --db-url "${{ secrets.SUPABASE_DB_URL }}" \
+            --db-url "$SUPABASE_DB_URL" \
             --workdir ./supabase | tee migration_status.txt
           {
             echo "# Migration Status";
@@ -29,10 +42,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dump database (full)
+        if: env.SUPABASE_DB_URL != ''
         run: |
           mkdir -p backups
           supabase db dump \
-            --db-url "${{ secrets.SUPABASE_DB_URL }}" \
+            --db-url "$SUPABASE_DB_URL" \
             --file backups/${{ github.run_id }}_full.sql
 
       - name: Upload artifacts
