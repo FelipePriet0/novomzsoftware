@@ -22,23 +22,35 @@ jobs:
           echo "Add it in Settings → Secrets and variables → Actions." >&2
           exit 1
 
+      - name: Install DNS tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dnsutils
+
       - name: Resolve IPv4 for DB host and build IPv4 URL
         run: |
           set -euo pipefail
           HOST="db.juxpvvpogpolspxnecsf.supabase.co"
-          IPV4=$(getent ahostsv4 "$HOST" | awk '{print $1; exit}')
-          if [ -z "${IPV4:-}" ]; then
+          echo "Resolving IPv4 for $HOST..."
+          IPV4=""
+          if command -v getent >/dev/null 2>&1; then
+            IPV4=$(getent hosts "$HOST" | awk '/^[0-9]+\./{print $1; exit}') || true
+          fi
+          if [ -z "$IPV4" ] && command -v dig >/dev/null 2>&1; then
+            IPV4=$(dig +short A "$HOST" | head -n1) || true
+          fi
+          if [ -z "$IPV4" ]; then
             echo "Failed to resolve IPv4 for $HOST" >&2
             exit 1
           fi
           echo "Resolved IPv4: $IPV4"
-          echo "DB_HOST_IPV4=$IPV4" >> $GITHUB_ENV
-          if echo "$SUPABASE_DB_URL" | grep -q '?'; then
+          if echo "$SUPABASE_DB_URL" | grep -q '?' ; then
             DB_URL_IPV4="$SUPABASE_DB_URL&hostaddr=$IPV4"
           else
             DB_URL_IPV4="$SUPABASE_DB_URL?hostaddr=$IPV4"
           fi
-          echo "DB_URL_IPV4=$DB_URL_IPV4" >> $GITHUB_ENV
+          echo "DB_HOST_IPV4=$IPV4" >> "$GITHUB_ENV"
+          echo "DB_URL_IPV4=$DB_URL_IPV4" >> "$GITHUB_ENV"
 
       - name: Install PostgreSQL client (pg_dump/psql)
         run: |
