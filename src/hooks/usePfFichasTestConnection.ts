@@ -63,6 +63,7 @@ interface PfFichaFormData {
   conjuge: {
     estadoCivil?: string;
     obs?: string;
+    idade?: string;
     nome?: string;
     telefone?: string;
     whatsapp?: string;
@@ -172,6 +173,7 @@ export function usePfFichasTestConnection() {
         updateData.birth_date = normalizeDate(formData.cliente.nasc);
         updateData.naturalidade = formData.cliente.naturalidade;
         updateData.uf_naturalidade = formData.cliente.uf;
+        updateData.do_ps = formData.cliente.doPs;
       }
 
       // Map endereco data
@@ -217,13 +219,14 @@ export function usePfFichasTestConnection() {
       if (formData.conjuge) {
         updateData.estado_civil = formData.conjuge.estadoCivil;
         updateData.conjuge_obs = formData.conjuge.obs;
+        updateData.conjuge_obs2 = formData.conjuge.obs2;
+        updateData.conjuge_idade = formData.conjuge.idade ? String(formData.conjuge.idade) : undefined;
         updateData.conjuge_nome = formData.conjuge.nome;
         updateData.conjuge_telefone = formData.conjuge.telefone;
         updateData.conjuge_whatsapp = formData.conjuge.whatsapp;
         updateData.conjuge_cpf = formData.conjuge.cpf;
         updateData.conjuge_naturalidade = formData.conjuge.naturalidade;
         updateData.conjuge_uf = formData.conjuge.uf;
-        updateData.conjuge_obs2 = formData.conjuge.obs2;
         updateData.conjuge_do_ps = formData.conjuge.doPs;
       }
 
@@ -250,19 +253,10 @@ export function usePfFichasTestConnection() {
       }
 
       // Map outras informacoes
-      if (formData.outras) {
-        updateData.plano_escolhido = formData.outras.planoEscolhido;
-        updateData.dia_vencimento = formData.outras.diaVencimento;
-        updateData.carne_impresso = formData.outras.carneImpresso;
-        updateData.sva_avulso = formData.outras.svaAvulso;
-      }
+      // NOTA: planoEscolhido, diaVencimento, carneImpresso, svaAvulso são salvos em applicants, não em pf_fichas_test
 
       // Map informacoes relevantes
-      if (formData.infoRelevantes) {
-        updateData.info = formData.infoRelevantes.info;
-        updateData.info_mk = formData.infoRelevantes.infoMk;
-        updateData.parecer_analise = formData.infoRelevantes.parecerAnalise;
-      }
+      // NOTA: info, infoMk, parecerAnalise são salvos em applicants, não em pf_fichas_test
 
       await updatePfFicha(pfFichaId, updateData);
       console.log('✅ [usePfFichasTestConnection] Dados pessoais salvos');
