@@ -326,7 +326,7 @@ export default function KanbanBoard() {
           received_at,
           due_at,
           source,
-          applicant:applicant_id ( id, primary_name, city, uf, email ),
+          applicant:applicant_id ( id, primary_name, email ),
           assignee:assignee_id ( id, full_name ),
           creator:created_by ( id, full_name )
         `)
@@ -1792,8 +1792,12 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
+        console.log('🆕 [KanbanBoard] Iniciando criação de ficha PF:', data);
+        
         // 1) Garantir applicant PF em PRODUÇÃO (para satisfazer FK do kanban_cards)
         const cpf = data.cpf.replace(/\D+/g, '');
+        console.log('🔍 [KanbanBoard] CPF limpo:', cpf);
+        
         let applicantProd: { id: string } | null = null;
         const { data: existingProd } = await (supabase as any)
           .from('applicants')
@@ -1801,9 +1805,19 @@ useEffect(() => {
           .eq('cpf_cnpj', cpf)
           .eq('person_type', 'PF')
           .maybeSingle();
+        
         if (existingProd?.id) {
+          console.log('✅ [KanbanBoard] Applicant já existe:', existingProd.id);
           applicantProd = { id: existingProd.id };
         } else {
+          console.log('📝 [KanbanBoard] Criando novo applicant com dados:', {
+            person_type: 'PF',
+            primary_name: data.nome,
+            cpf_cnpj: cpf,
+            phone: data.telefone,
+            email: data.email || null,
+          });
+          
           const { data: createdProd, error: aErrProd } = await (supabase as any)
             .from('applicants')
             .insert({
@@ -1816,13 +1830,20 @@ useEffect(() => {
             })
             .select('id')
             .single();
-          if (aErrProd) throw aErrProd;
+          
+          if (aErrProd) {
+            console.error('❌ [KanbanBoard] ERRO ao criar applicant:', aErrProd);
+            throw aErrProd;
+          }
+          
+          console.log('✅ [KanbanBoard] Applicant criado com sucesso! ID:', createdProd.id);
           applicantProd = createdProd;
         }
 
         // Removido: espelho em applicants_test (legado)
 
         // 2) Card no Kanban (Comercial/feitas)
+        console.log('📋 [KanbanBoard] Criando card no Kanban com applicant_id:', applicantProd!.id);
         const now = new Date();
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
@@ -1841,9 +1862,15 @@ useEffect(() => {
           })
           .select('id, title, phone, email, cpf_cnpj, received_at, stage')
           .single();
-        if (cErr) throw cErr;
+        
+        if (cErr) {
+          console.error('❌ [KanbanBoard] ERRO ao criar card:', cErr);
+          throw cErr;
+        }
+        console.log('✅ [KanbanBoard] Card criado com sucesso! ID:', created.id);
         
         // 3) Salvar dados básicos em pf_fichas_test (naturalidade e UF)
+        console.log('💾 [KanbanBoard] Salvando dados em pf_fichas_test...');
         try {
           const { data: existingPfFicha } = await (supabase as any)
             .from('pf_fichas_test')
@@ -1851,41 +1878,56 @@ useEffect(() => {
             .eq('applicant_id', applicantProd!.id)
             .maybeSingle();
           
+          const birthDate = data.nascimento ? (() => {
+            const parts = data.nascimento.split('/');
+            if (parts.length === 3) {
+              return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
+            }
+            return null;
+          })() : null;
+          
+          const pfFichaData = {
+            naturalidade: data.naturalidade,
+            uf_naturalidade: data.uf,
+            birth_date: birthDate
+          };
+          
           if (existingPfFicha) {
-            // Atualizar se já existe
-            await (supabase as any)
+            console.log('♻️ [KanbanBoard] PF Ficha já existe, atualizando:', existingPfFicha.id);
+            console.log('📝 [KanbanBoard] Dados para atualização:', pfFichaData);
+            
+            const { error: updateErr } = await (supabase as any)
               .from('pf_fichas_test')
-              .update({
-                naturalidade: data.naturalidade,
-                uf_naturalidade: data.uf,
-                birth_date: data.nascimento ? (() => {
-                  const parts = data.nascimento.split('/');
-                  if (parts.length === 3) {
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
-                  }
-                  return null;
-                })() : null
-              })
+              .update(pfFichaData)
               .eq('id', existingPfFicha.id);
+            
+            if (updateErr) {
+              console.error('❌ [KanbanBoard] Erro ao atualizar pf_fichas_test:', updateErr);
+            } else {
+              console.log('✅ [KanbanBoard] PF Ficha atualizada com sucesso!');
+            }
           } else {
-            // Criar novo se não existe
-            await (supabase as any)
+            console.log('🆕 [KanbanBoard] Criando nova PF Ficha');
+            console.log('📝 [KanbanBoard] Dados para inserção:', {
+              applicant_id: applicantProd!.id,
+              ...pfFichaData
+            });
+            
+            const { error: insertErr } = await (supabase as any)
               .from('pf_fichas_test')
               .insert({
                 applicant_id: applicantProd!.id,
-                naturalidade: data.naturalidade,
-                uf_naturalidade: data.uf,
-                birth_date: data.nascimento ? (() => {
-                  const parts = data.nascimento.split('/');
-                  if (parts.length === 3) {
-                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
-                  }
-                  return null;
-                })() : null
+                ...pfFichaData
               });
+            
+            if (insertErr) {
+              console.error('❌ [KanbanBoard] Erro ao criar pf_fichas_test:', insertErr);
+            } else {
+              console.log('✅ [KanbanBoard] PF Ficha criada com sucesso!');
+            }
           }
         } catch (pfErr) {
-          console.error('Erro ao salvar dados em pf_fichas_test:', pfErr);
+          console.error('❌ [KanbanBoard] Exceção ao salvar em pf_fichas_test:', pfErr);
           // Não bloquear o fluxo se falhar
         }
         
