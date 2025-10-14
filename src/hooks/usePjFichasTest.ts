@@ -10,50 +10,56 @@ interface Socio {
 interface PjFichaTest {
   id: string;
   applicant_id: string;
-  trade_name?: string;
-  contato_financeiro?: string;
-  contato_tecnico?: string;
+  // contato_financeiro e contato_tecnico foram dropados
   created_at: string;
   updated_at: string;
   
-  // Novos campos - Empresa
-  razao_social?: string;
-  cnpj?: string;
+  // Empresa (razao_social e cnpj foram dropados - ficam em applicants)
   data_abertura?: string;
   nome_fantasia?: string;
   nome_fachada?: string;
   area_atuacao?: string;
   
-  // Novos campos - Endereço
+  // Endereço/Estabelecimento
   tipo_imovel?: string;
   obs_tipo_imovel?: string;
   tempo_endereco?: string;
   tipo_estabelecimento?: string;
   obs_estabelecimento?: string;
-  endereco_pessoal?: string;
+  end_ps?: string; // Renomeada: endereco_pessoal → end_ps
   
-  // Novos campos - Contatos
-  fones_os?: string;
+  // Contatos
+  fones_ps?: string; // Renomeada: fones_os → fones_ps
   
-  // Novos campos - Documentos
-  comprovante_status?: string;
+  // Documentos/Comprovantes
+  enviou_comprovante?: string; // Renomeada: comprovante_status → enviou_comprovante
   tipo_comprovante?: string;
-  em_nome_de?: string;
+  nome_comprovante?: string; // Renomeada: em_nome_de → nome_comprovante
   possui_internet?: string;
   operadora_internet?: string;
   plano_internet?: string;
   valor_internet?: string;
   contrato_social?: string;
-  obs_contrato?: string;
+  obs_contrato_social?: string; // Renomeada: obs_contrato → obs_contrato_social
   
-  // Novos campos - Sócios
-  socios?: Socio[];
+  // Sócios (mudou de JSONB para colunas separadas)
+  socio1_nome?: string;
+  socio1_cpf?: string;
+  socio1_telefone?: string;
+  socio1_reside?: string;
+  socio2_nome?: string;
+  socio2_cpf?: string;
+  socio2_telefone?: string;
+  socio2_reside?: string;
+  socio3_nome?: string;
+  socio3_cpf?: string;
+  socio3_telefone?: string;
+  socio3_reside?: string;
   
-  // Novos campos - Informações
-  informacoes_relevantes?: string;
-  outras_pessoas?: string;
-  protocolo_mk?: string;
-  parecer_analise?: string;
+  // Soft delete
+  deleted_at?: string;
+  deleted_by?: string;
+  deletion_reason?: string;
 }
 
 export function usePjFichasTest(pjFichaId?: string) {
