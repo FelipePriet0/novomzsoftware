@@ -141,25 +141,21 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           stage: 'feitas',
           created_by: profile?.id || null,
           assignee_id: null,
-          title: values.corporate_name,
-          cpf_cnpj: cnpj, // Usar CNPJ limpo
-          // Exibir nos cards o telefone principal da empresa
-          phone: values.contact_phone || null,
-          email: values.email,
           received_at: now.toISOString(),
-          source: 'software_pj',
+          // Campos removidos: title, cpf_cnpj, phone, email, source
+          // Dados vêm de applicants via FK applicant_id
         })
-        .select('id, title, cpf_cnpj, phone, email, received_at')
+        .select('id, applicant_id, received_at')
         .single();
       if (cErr) throw cErr;
 
       toast({ title: 'Ficha PJ criada' });
       onCreated?.({
         id: createdCard.id,
-        title: createdCard.title,
-        cpf_cnpj: createdCard.cpf_cnpj ?? undefined,
-        phone: createdCard.phone ?? undefined,
-        email: createdCard.email ?? undefined,
+        title: values.corporate_name, // Dados vêm do form/applicants, não do card
+        cpf_cnpj: cnpj,
+        phone: values.contact_phone ?? undefined,
+        email: values.email,
         received_at: createdCard.received_at ?? undefined,
         applicant_id: applicantProd!.id,
       });

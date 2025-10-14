@@ -713,20 +713,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       try {
         await ensureCommercialFeitas(applicationId);
         await saveDraft(draftPayload, applicationId, 'pj', false);
-        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
-        try {
-          const updates: any = {};
-          if (data?.empresa?.razao) updates.title = data.empresa.razao;
-          if (data?.empresa?.cnpj) updates.cpf_cnpj = data.empresa.cnpj;
-          if (data?.contatos?.tel) updates.phone = data.contatos.tel;
-          if (data?.contatos?.email) updates.email = data.contatos.email;
-          if (Object.keys(updates).length > 0) {
-            const { error } = await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
-            if (error) console.warn('[PJ Autosave] Update kanban_cards error:', error);
-          }
-        } catch (e) {
-          console.warn('[PJ Autosave] Mirror error:', e);
-        }
+        // Campos da empresa agora são salvos em applicants, não em kanban_cards
+        // (removida atualização redundante de title, phone, email, cpf_cnpj)
         // Atualizar applicants com campos do cliente (autosave)
         try {
           const { data: kc } = await supabase
@@ -805,16 +793,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             await saveDraft({ other_data: { pj: formData } } as any, applicationId, 'pj', false);
           } catch (_) {}
           // Atualizar kanban_cards com os dados básicos
-          const updates: any = {};
-          if (formData.empresa?.razao) updates.title = formData.empresa.razao;
-          if (formData.empresa?.cnpj) updates.cpf_cnpj = formData.empresa.cnpj;
-          if (formData.contatos?.tel) updates.phone = formData.contatos.tel;
-          if (formData.contatos?.email) updates.email = formData.contatos.email;
-          // Plano/Venc da PJ agora vão para applicants (não no kanban)
-          
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
-          }
+          // Campos da empresa agora são salvos em applicants, não em kanban_cards
+          // (removida atualização redundante de title, phone, email, cpf_cnpj)
           
           // Atualizar applicants com campos do cliente (confirm)
           try {

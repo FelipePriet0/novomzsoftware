@@ -297,10 +297,9 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   React.useEffect(() => {
     const timer = setTimeout(async () => {
       try {
-        // Update kanban_cards (title, phone, due_at, novos campos PF)
+        // Update kanban_cards (apenas workflow, sem dados do cliente)
         const updates: any = {};
-        if (form.nome !== initialForm.nome) updates.title = form.nome;
-        if (form.telefone !== initialForm.telefone) updates.phone = form.telefone;
+        // Nome e telefone agora são salvos em applicants, não em kanban_cards
         if (form.agendamento !== initialForm.agendamento) {
           if (form.agendamento) {
             // Save as midnight UTC to keep the date stable across timezones
@@ -313,24 +312,28 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           }
         }
         if (form.observacoes !== initialForm.observacoes) updates.comments = form.observacoes;
-        // Campos seguros no schema atual
-        if (form.cpf !== initialForm.cpf) updates.cpf_cnpj = form.cpf;
+        
         if (Object.keys(updates).length > 0) {
           await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
         }
-        // Update applicants (primary_name, phone, whatsapp, endereço) se disponível
+        
+        // Salvar todos os dados do cliente em applicants (um único UPDATE)
         if ((card as any).applicantId) {
-          const appUpdates: any = {};
-          if (form.nome !== initialForm.nome) appUpdates.primary_name = form.nome;
-          if (form.telefone !== initialForm.telefone) appUpdates.phone = form.telefone;
-          if (form.whatsapp !== initialForm.whatsapp) appUpdates.whatsapp = form.whatsapp;
-          if (form.endereco !== initialForm.endereco) appUpdates.address_line = form.endereco;
-          if (form.numero !== initialForm.numero) appUpdates.address_number = form.numero;
-          if (form.complemento !== initialForm.complemento) appUpdates.address_complement = form.complemento;
-          if (form.cep !== initialForm.cep) appUpdates.cep = form.cep;
-          if (form.bairro !== initialForm.bairro) appUpdates.bairro = form.bairro;
-          if (Object.keys(appUpdates).length > 0) {
-            await (supabase as any).from('applicants').update(appUpdates).eq('id', (card as any).applicantId);
+          const applicantUpdates: any = {};
+          if (form.nome !== initialForm.nome) applicantUpdates.primary_name = form.nome;
+          if (form.telefone !== initialForm.telefone) applicantUpdates.phone = form.telefone;
+          if (form.cpf !== initialForm.cpf) applicantUpdates.cpf_cnpj = form.cpf.replace(/\D+/g, '');
+          if (form.email !== initialForm.email) applicantUpdates.email = form.email;
+          if (form.whatsapp !== initialForm.whatsapp) applicantUpdates.whatsapp = form.whatsapp;
+          if (form.endereco !== initialForm.endereco) applicantUpdates.address_line = form.endereco;
+          if (form.numero !== initialForm.numero) applicantUpdates.address_number = form.numero;
+          if (form.complemento !== initialForm.complemento) applicantUpdates.address_complement = form.complemento;
+          if (form.cep !== initialForm.cep) applicantUpdates.cep = form.cep;
+          if (form.bairro !== initialForm.bairro) applicantUpdates.bairro = form.bairro;
+          
+          if (Object.keys(applicantUpdates).length > 0) {
+            if (import.meta?.env?.DEV) console.log('[ModalEditar] Salvando mudanças em applicants:', applicantUpdates);
+            await (supabase as any).from('applicants').update(applicantUpdates).eq('id', (card as any).applicantId);
           }
         }
       } catch (e) {

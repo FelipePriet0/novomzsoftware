@@ -319,14 +319,9 @@ export default function KanbanBoard() {
           person_type,
           assignee_id,
           created_by,
-          title,
-          cpf_cnpj,
-          phone,
-          email,
           received_at,
           due_at,
-          source,
-          applicant:applicant_id ( id, primary_name, email ),
+          applicant:applicant_id ( id, primary_name, cpf_cnpj, phone, email ),
           assignee:assignee_id ( id, full_name ),
           creator:created_by ( id, full_name )
         `)
@@ -340,15 +335,15 @@ export default function KanbanBoard() {
       const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
       return {
         id: row.id,
-        nome: row.title ?? row.applicant?.primary_name ?? 'Cliente',
-          cpf: row.cpf_cnpj ?? '',
+        nome: row.applicant?.primary_name ?? 'Cliente',
+          cpf: row.applicant?.cpf_cnpj ?? '',
           receivedAt,
           deadline,
           hasDueAt,
           responsavel: row.assignee?.full_name ?? undefined,
           responsavelId: row.assignee_id ?? undefined,
-          telefone: row.phone ?? undefined,
-          email: row.email ?? row.applicant?.email ?? undefined,
+          telefone: row.applicant?.phone ?? undefined,
+          email: row.applicant?.email ?? undefined,
           naturalidade: undefined, // Será carregado de pf_fichas_test se necessário
           uf: undefined, // Será carregado de pf_fichas_test se necessário
           applicantId: row.applicant?.id ?? undefined,
@@ -400,20 +395,20 @@ export default function KanbanBoard() {
       try {
         const { data, error } = await (supabase as any)
           .from('kanban_cards')
-          .select('id, title, cpf_cnpj, phone, email, received_at, person_type, area, stage')
+          .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
           .eq('id', openId)
           .maybeSingle();
         if (!error && data) {
           const nc: CardItem = {
             id: data.id,
-            nome: data.title,
-            cpf: data.cpf_cnpj || '',
+            nome: data.applicant?.primary_name || 'Cliente',
+            cpf: data.applicant?.cpf_cnpj || '',
             receivedAt: data.received_at || new Date().toISOString(),
             deadline: data.received_at || new Date().toISOString(),
             responsavel: undefined,
             responsavelId: undefined,
-            telefone: data.phone || undefined,
-            email: data.email || undefined,
+            telefone: data.applicant?.phone || undefined,
+            email: data.applicant?.email || undefined,
             naturalidade: undefined,
             uf: undefined,
             applicantId: undefined,
@@ -1261,10 +1256,7 @@ useEffect(() => {
       const updatedCard: CardItem = {
         ...card,
         parecer: freshCard.reanalysis_notes || freshCard.comments || freshCard.comments_short || '',
-        // Atualizar outros campos que podem ter mudado
-        nome: freshCard.title || card.nome,
-        telefone: freshCard.phone || card.telefone,
-        email: freshCard.email || card.email,
+        // Dados vêm de applicants via card.applicantId, não do kanban_cards
       };
       
       setMockCard(updatedCard);
@@ -1870,14 +1862,11 @@ useEffect(() => {
             area: 'comercial',
             stage: 'feitas',
             created_by: profile?.id || null,
-            title: data.nome,
-            cpf_cnpj: data.cpf.replace(/\D+/g, ''),
-            phone: data.telefone,
-            email: data.email || null,
             received_at: now.toISOString(),
-            source: 'software_pf',
+            // Campos removidos: title, cpf_cnpj, phone, email, source
+            // Dados vêm de applicants via FK applicant_id
           })
-          .select('id, title, phone, email, cpf_cnpj, received_at, stage')
+          .select('id, applicant_id, received_at, stage')
           .single();
         
         if (cErr) {
@@ -1953,31 +1942,43 @@ useEffect(() => {
         setAutoOpenExpandedNext(true);
         toast({ title: 'Ficha criada com sucesso!' });
         await loadApplications();
-        // Seleciona card recém-criado para editar
-        const nc = (prevCards => prevCards.find(c => c.id === created.id))(cards) || (
-          (await (supabase as any).from('kanban_cards').select('id, title, cpf_cnpj, phone, email, received_at, stage').eq('id', created.id).single()).data
-            ? {
-                id: created.id,
-                nome: created.title,
-                cpf: created.cpf_cnpj || '',
-                receivedAt: created.received_at,
-                deadline: created.received_at,
-                responsavel: undefined,
-                responsavelId: undefined,
-                telefone: created.phone || undefined,
-                email: created.email || undefined,
-                naturalidade: data.naturalidade, // Apenas para exibição, salvo em pf_fichas_test
-                uf: data.uf, // Apenas para exibição, salvo em pf_fichas_test
-                applicantId: applicantProd!.id,
-                parecer: '',
-                columnId: 'com_feitas',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                lastMovedAt: new Date().toISOString(),
-                labels: [],
-                vendedorNome: currentUserName,
-              } as any : null);
-        if (nc) setMockCard(nc as any);
+        // Seleciona card recém-criado para editar (busca completa após reload com JOIN)
+        const nc = cards.find(c => c.id === created.id);
+        if (nc) {
+          setMockCard(nc as any);
+        } else {
+          // Fallback: buscar com JOIN completo
+          const { data: fullCard } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
+            .eq('id', created.id)
+            .single();
+          
+          if (fullCard) {
+            const fallbackCard = {
+              id: fullCard.id,
+              nome: fullCard.applicant?.primary_name || 'Cliente',
+              cpf: fullCard.applicant?.cpf_cnpj || '',
+              receivedAt: fullCard.received_at,
+              deadline: fullCard.received_at,
+              responsavel: undefined,
+              responsavelId: undefined,
+              telefone: fullCard.applicant?.phone || undefined,
+              email: fullCard.applicant?.email || undefined,
+              naturalidade: data.naturalidade,
+              uf: data.uf,
+              applicantId: applicantProd!.id,
+              parecer: '',
+              columnId: 'com_feitas',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              lastMovedAt: new Date().toISOString(),
+              labels: [],
+              vendedorNome: currentUserName,
+            } as any;
+            setMockCard(fallbackCard);
+          }
+        }
       } catch (e: any) {
         if (import.meta?.env?.DEV) console.error('Erro ao criar PF:', e);
         toast({ title: 'Erro ao criar ficha', description: e.message || String(e), variant: 'destructive' });
