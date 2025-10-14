@@ -79,22 +79,43 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
       // 1) Garantir applicant PJ em PRODUÇÃO (kanban_cards exige FK não nulo)
+      const cnpj = values.cnpj.replace(/\D+/g, '');
+      console.log('🔍 [NovaFichaPJ] CNPJ limpo:', cnpj);
+      
       let applicantProd: { id: string } | null = null;
       const { data: existingProd } = await supabase
         .from('applicants')
-        .select('id')
-        .eq('cpf_cnpj', values.cnpj)
+        .select('id, primary_name, phone, email, created_at')
+        .eq('cpf_cnpj', cnpj)
         .eq('person_type', 'PJ')
         .maybeSingle();
+      
       if (existingProd?.id) {
-        applicantProd = existingProd as any;
+        console.log('⚠️ [NovaFichaPJ] CNPJ já cadastrado! Bloqueando criação.', existingProd);
+        
+        // 🚫 BLOQUEAR criação e avisar usuário
+        toast({
+          title: '⚠️ CNPJ já cadastrado',
+          description: `Já existe um cadastro para este CNPJ:\n\n` +
+            `Razão Social: ${existingProd.primary_name}\n` +
+            `Telefone: ${existingProd.phone || 'Não informado'}\n` +
+            `Email: ${existingProd.email || 'Não informado'}\n` +
+            `Cadastrado em: ${new Date(existingProd.created_at).toLocaleDateString('pt-BR')}\n\n` +
+            `Não é possível criar nova ficha com CNPJ duplicado.`,
+          variant: 'destructive',
+          duration: 8000, // 8 segundos para ler
+        });
+        
+        // ❌ ABORTAR criação
+        return;
       } else {
+        console.log('📝 [NovaFichaPJ] Criando novo applicant PJ');
         const { data: createdProd, error: aErr1 } = await supabase
           .from('applicants')
           .insert({
             person_type: 'PJ',
             primary_name: values.corporate_name,
-            cpf_cnpj: values.cnpj,
+            cpf_cnpj: cnpj, // Usar CNPJ limpo (sem formatação)
             // Contatos principais da empresa
             phone: values.contact_phone || null,
             whatsapp: values.contact_whatsapp || null,
@@ -109,6 +130,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
       // Removido: espelho em applicants_test (legado)
 
       // 3) Card no Kanban (Comercial/feitas) com applicant_id de PRODUÇÃO
+      console.log('📋 [NovaFichaPJ] Criando card no Kanban para applicant:', applicantProd!.id);
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')
@@ -120,7 +142,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           created_by: profile?.id || null,
           assignee_id: null,
           title: values.corporate_name,
-          cpf_cnpj: values.cnpj,
+          cpf_cnpj: cnpj, // Usar CNPJ limpo
           // Exibir nos cards o telefone principal da empresa
           phone: values.contact_phone || null,
           email: values.email,

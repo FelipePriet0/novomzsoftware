@@ -591,7 +591,9 @@ export default function KanbanBoard() {
             parecerIds = new Set(matched);
           }
           // União dos conjuntos
-          const union = new Set<string>([...commentIds, ...parecerIds]);
+          const commentIdsArray = Array.from(commentIds) as string[];
+          const parecerIdsArray = Array.from(parecerIds) as string[];
+          const union = new Set<string>([...commentIdsArray, ...parecerIdsArray]);
           setAtribuidasCardIds(union);
         }
       } catch (_) {
@@ -1801,14 +1803,29 @@ useEffect(() => {
         let applicantProd: { id: string } | null = null;
         const { data: existingProd } = await (supabase as any)
           .from('applicants')
-          .select('id')
+          .select('id, primary_name, phone, email, created_at')
           .eq('cpf_cnpj', cpf)
           .eq('person_type', 'PF')
           .maybeSingle();
         
         if (existingProd?.id) {
-          console.log('✅ [KanbanBoard] Applicant já existe:', existingProd.id);
-          applicantProd = { id: existingProd.id };
+          console.log('⚠️ [KanbanBoard] CPF já cadastrado! Bloqueando criação.', existingProd);
+          
+          // 🚫 BLOQUEAR criação e avisar usuário
+          toast({
+            title: '⚠️ CPF já cadastrado',
+            description: `Já existe um cadastro para este CPF:\n\n` +
+              `Nome: ${existingProd.primary_name}\n` +
+              `Telefone: ${existingProd.phone || 'Não informado'}\n` +
+              `Email: ${existingProd.email || 'Não informado'}\n` +
+              `Cadastrado em: ${new Date(existingProd.created_at).toLocaleDateString('pt-BR')}\n\n` +
+              `Não é possível criar nova ficha com CPF duplicado.`,
+            variant: 'destructive',
+            duration: 8000, // 8 segundos para ler
+          });
+          
+          // ❌ ABORTAR criação
+          return;
         } else {
           console.log('📝 [KanbanBoard] Criando novo applicant com dados:', {
             person_type: 'PF',
