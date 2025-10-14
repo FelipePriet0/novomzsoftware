@@ -11,8 +11,10 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useDraftForm } from "@/hooks/useDraftForm";
-import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
-import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
+// Removido: conexões de teste
+// import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
+// import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
+import { useApplicantContacts } from "@/hooks/useApplicantContacts";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -71,10 +73,22 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
   const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
-  // Dev-safe CRUD state (test tables)
-  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
-  const { ensureApplicantExists } = useApplicantsTestConnection();
-  const { saveCompanyData } = usePjFichasTestConnection();
+  // Removido: estado e hooks de tabelas de teste
+
+  // Descobrir applicant_id e preparar hook de contatos
+  const [applicantId, setApplicantId] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      if (!applicationId) return;
+      const { data } = await (supabase as any)
+        .from('kanban_cards')
+        .select('applicant_id')
+        .eq('id', applicationId)
+        .maybeSingle();
+      setApplicantId((data as any)?.applicant_id || null);
+    })();
+  }, [applicationId]);
+  const { update: updateApplicantContacts } = useApplicantContacts(applicantId || undefined);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -206,6 +220,34 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             email: (card as any)?.email || '',
           },
         } as any;
+        // Prefill com Applicants (quem_solicitou, telefone_solicitante, parecer_analise)
+        try {
+          if ((card as any)?.applicant_id) {
+            const { data: appl } = await supabase
+              .from('applicants')
+              .select('quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email')
+              .eq('id', (card as any).applicant_id)
+              .maybeSingle();
+            if (appl) {
+              defaults = {
+                ...defaults,
+                contatos: {
+                  tel: (appl as any).phone || defaults.contatos?.tel || '',
+                  whats: (appl as any).whatsapp || defaults.contatos?.whats || '',
+                  email: (appl as any).email || defaults.contatos?.email || '',
+                },
+                solicitacao: {
+                  quem: (appl as any).quem_solicitou || '',
+                  tel: (appl as any).telefone_solicitante || '',
+                },
+                info: {
+                  ...(defaults as any).info,
+                  parecerAnalise: (appl as any).parecer_analise || (defaults as any)?.info?.parecerAnalise || '',
+                },
+              } as any;
+            }
+          }
+        } catch (_) {}
         // Tentar carregar rascunho salvo para esta aplicação e usuário
         try {
           const { data: draft } = await supabase
@@ -280,6 +322,22 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       const { error } = await supabase.from('kanban_cards').update({ reanalysis_notes: serialized }).eq('id', applicationId);
       if (error) throw error;
       console.log('✅ [ExpandedPJ] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
+
+      // 🔁 Espelhar texto do parecer mais recente em applicants.parecer_analise
+      try {
+        const { data: kc } = await supabase
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        const aid = (kc as any)?.applicant_id as string | undefined;
+        if (aid) {
+          await supabase
+            .from('applicants')
+            .update({ parecer_analise: text })
+            .eq('id', aid);
+        }
+      } catch (_) {}
       // 🔔 Notificações de menções no parecer
       try {
         const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
@@ -669,26 +727,50 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         } catch (e) {
           console.warn('[PJ Autosave] Mirror error:', e);
         }
-        // Dev-safe: mirror into pj_fichas_test (debounced)
+        // Atualizar applicants com campos do cliente (autosave)
         try {
-          let testId = applicantTestId;
-          if (!testId) {
-            testId = await ensureApplicantExists({
-              id: applicationId,
-              person_type: 'PJ',
-              cnpj: data?.empresa?.cnpj,
-              razao: data?.empresa?.razao,
-              telefone: data?.contatos?.tel,
-              email: data?.contatos?.email,
-            });
-            if (testId && testId !== applicantTestId) setApplicantTestId(testId);
+          const { data: kc } = await supabase
+            .from('kanban_cards')
+            .select('applicant_id')
+            .eq('id', applicationId)
+            .maybeSingle();
+          const aid = (kc as any)?.applicant_id as string | undefined;
+          if (aid) {
+            const contactUpdates: any = {};
+            if (data?.contatos?.tel) contactUpdates.phone = data.contatos.tel;
+            if (data?.contatos?.whats) contactUpdates.whatsapp = data.contatos.whats;
+            if (data?.solicitacao?.quem) contactUpdates.quem_solicitou = data.solicitacao.quem;
+            if (data?.solicitacao?.tel) contactUpdates.telefone_solicitante = data.solicitacao.tel;
+            if (Object.keys(contactUpdates).length) {
+              await updateApplicantContacts(contactUpdates);
+            }
+            const appUpdates: any = {};
+            // Outros campos (e-mail/endereço/intake/preferências/infos)
+            if (data?.contatos?.email) appUpdates.email = data.contatos.email;
+            // Endereço
+            if (data?.endereco?.end) appUpdates.address_line = data.endereco.end;
+            if (data?.endereco?.n) appUpdates.address_number = data.endereco.n;
+            if (data?.endereco?.compl) appUpdates.address_complement = data.endereco.compl;
+            if (data?.endereco?.cep) appUpdates.cep = data.endereco.cep;
+            if (data?.endereco?.bairro) appUpdates.bairro = data.endereco.bairro;
+            // Intake
+            if (data?.solicitacao?.meio) appUpdates.meio = data.solicitacao.meio;
+            if (data?.solicitacao?.protocolo) appUpdates.protocolo_mk = data.solicitacao.protocolo;
+            // Preferências
+            if (data?.solicitacao?.planoAcesso) appUpdates.plano_acesso = data.solicitacao.planoAcesso;
+            if (data?.solicitacao?.svaAvulso) appUpdates.sva_avulso = data.solicitacao.svaAvulso;
+            if (data?.solicitacao?.venc) appUpdates.venc = Number(data.solicitacao.venc);
+            // Informações
+            if (data?.info?.relevantes) appUpdates.info_relevantes = data.info.relevantes;
+            if (data?.info?.spc) appUpdates.info_spc = data.info.spc;
+            if (data?.info?.outrasPs) appUpdates.info_pesquisador = data.info.outrasPs;
+            if (data?.info?.mk) appUpdates.info_mk = data.info.mk;
+            if (data?.info?.parecerAnalise) appUpdates.parecer_analise = data.info.parecerAnalise;
+            if (Object.keys(appUpdates).length > 0) {
+              await supabase.from('applicants').update(appUpdates).eq('id', aid);
+            }
           }
-          if (testId) {
-            await saveCompanyData(testId, data as any);
-          }
-        } catch (_) {
-          // non-blocking for development-safe persistence
-        }
+        } catch (_) {}
       } catch (_) {
         // ignore
       }
@@ -728,93 +810,55 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           if (formData.empresa?.cnpj) updates.cpf_cnpj = formData.empresa.cnpj;
           if (formData.contatos?.tel) updates.phone = formData.contatos.tel;
           if (formData.contatos?.email) updates.email = formData.contatos.email;
-          // Plano/Venc da PJ
-          if (formData.solicitacao?.planoAcesso) updates.plano_acesso = formData.solicitacao.planoAcesso;
-          if (formData.solicitacao?.venc) updates.venc = Number(formData.solicitacao.venc);
+          // Plano/Venc da PJ agora vão para applicants (não no kanban)
           
           if (Object.keys(updates).length > 0) {
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
           }
           
-          // Salvar dados específicos da ficha PJ na TABELA DE TESTE
-          // 1) Buscar/garantir applicant_test (por CNPJ)
-          let targetApplicantId: string | null = null;
+          // Atualizar applicants com campos do cliente (confirm)
           try {
-            const { data: existing } = await supabase
-              .from('applicants_test')
-              .select('id')
-              .eq('cpf_cnpj', formData.empresa?.cnpj || '')
-              .eq('person_type', 'PJ')
+            const { data: kc } = await supabase
+              .from('kanban_cards')
+              .select('applicant_id')
+              .eq('id', applicationId)
               .maybeSingle();
-            if (existing?.id) {
-              targetApplicantId = existing.id;
-            } else {
-              const { data: created } = await supabase
-                .from('applicants_test')
-                .insert({
-                  person_type: 'PJ',
-                  primary_name: formData.empresa?.razao || '',
-                  cpf_cnpj: formData.empresa?.cnpj || '',
-                  phone: formData.contatos?.tel || '',
-                  email: formData.contatos?.email || '',
-                })
-                .select('id')
-                .single();
-              targetApplicantId = created?.id || null;
+            const aid = (kc as any)?.applicant_id as string | undefined;
+            if (aid) {
+              const contactUpdates: any = {};
+              if (formData?.contatos?.tel) contactUpdates.phone = formData.contatos.tel;
+              if (formData?.contatos?.whats) contactUpdates.whatsapp = formData.contatos.whats;
+              if (formData?.solicitacao?.quem) contactUpdates.quem_solicitou = formData.solicitacao.quem;
+              if (formData?.solicitacao?.tel) contactUpdates.telefone_solicitante = formData.solicitacao.tel;
+              if (Object.keys(contactUpdates).length) {
+                await updateApplicantContacts(contactUpdates);
+              }
+              const appUpdates: any = {};
+              if (formData?.contatos?.email) appUpdates.email = formData.contatos.email;
+              // Endereço
+              if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+              if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+              if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+              if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+              if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+              // Intake
+              if (formData?.solicitacao?.meio) appUpdates.meio = formData.solicitacao.meio;
+              if (formData?.solicitacao?.protocolo) appUpdates.protocolo_mk = formData.solicitacao.protocolo;
+              // Preferências
+              if (formData?.solicitacao?.planoAcesso) appUpdates.plano_acesso = formData.solicitacao.planoAcesso;
+              if (formData?.solicitacao?.svaAvulso) appUpdates.sva_avulso = formData.solicitacao.svaAvulso;
+              if (formData?.solicitacao?.venc) appUpdates.venc = Number(formData.solicitacao.venc);
+              // Informações
+              if (formData?.info?.relevantes) appUpdates.info_relevantes = formData.info.relevantes;
+              if (formData?.info?.spc) appUpdates.info_spc = formData.info.spc;
+              if (formData?.info?.outrasPs) appUpdates.info_pesquisador = formData.info.outrasPs;
+              if (formData?.info?.mk) appUpdates.info_mk = formData.info.mk;
+              if (formData?.info?.parecerAnalise) appUpdates.parecer_analise = formData.info.parecerAnalise;
+              if (Object.keys(appUpdates).length > 0) {
+                await supabase.from('applicants').update(appUpdates).eq('id', aid);
+              }
             }
           } catch (_) {}
-
-          if (targetApplicantId) {
-            const pjDataTest = {
-              applicant_id: targetApplicantId,
-              razao_social: formData.empresa?.razao || '',
-              cnpj: formData.empresa?.cnpj || '',
-              data_abertura: formData.empresa?.abertura || '',
-              nome_fantasia: formData.empresa?.fantasia || '',
-              nome_fachada: formData.empresa?.fachada || '',
-              area_atuacao: formData.empresa?.area || '',
-              tipo_imovel: formData.endereco?.tipo || '',
-              obs_tipo_imovel: formData.endereco?.obsTipo || '',
-              tempo_endereco: formData.endereco?.tempo || '',
-              tipo_estabelecimento: formData.endereco?.estab || '',
-              obs_estabelecimento: formData.endereco?.obsEstab || '',
-              endereco_pessoal: formData.endereco?.endPs || '',
-              fones_os: formData.contatos?.fonesOs || '',
-              comprovante_status: formData.docs?.comprovante || '',
-              tipo_comprovante: formData.docs?.tipo || '',
-              em_nome_de: formData.docs?.emNomeDe || '',
-              possui_internet: formData.docs?.possuiInternet || '',
-              operadora_internet: formData.docs?.operadora || '',
-              plano_internet: formData.docs?.plano || '',
-              valor_internet: formData.docs?.valor || '',
-              contrato_social: formData.docs?.contratoSocial || '',
-              obs_contrato: formData.docs?.obsContrato || '',
-              socios: formData.socios || [],
-              protocolo_mk: formData.solicitacao?.protocolo || '',
-              informacoes_relevantes: formData.info?.relevantes || '',
-              outras_pessoas: formData.info?.outrasPs || '',
-              parecer_analise: formData.info?.parecerAnalise || '',
-            } as any;
-
-            // Upsert sem on_conflict (tabela não possui unique em applicant_id)
-            const { data: existingFicha } = await supabase
-              .from('pj_fichas_test')
-              .select('applicant_id')
-              .eq('applicant_id', targetApplicantId)
-              .maybeSingle();
-            if (existingFicha?.applicant_id) {
-              const { error: upErr } = await supabase
-                .from('pj_fichas_test')
-                .update(pjDataTest)
-                .eq('applicant_id', targetApplicantId);
-              if (upErr) throw upErr;
-            } else {
-              const { error: insErr } = await supabase
-                .from('pj_fichas_test')
-                .insert(pjDataTest);
-              if (insErr) throw insErr;
-            }
-          }
           
           toast({
             title: "Ficha PJ salva com sucesso",

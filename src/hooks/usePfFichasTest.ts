@@ -36,6 +36,7 @@ interface PfFichaTest {
   emprego_do_ps?: string;
   estado_civil?: string;
   conjuge_obs?: string;
+  conjuge_idade?: string;
   conjuge_nome?: string;
   conjuge_telefone?: string;
   conjuge_whatsapp?: string;

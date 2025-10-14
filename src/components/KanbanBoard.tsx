@@ -349,8 +349,8 @@ export default function KanbanBoard() {
           responsavelId: row.assignee_id ?? undefined,
           telefone: row.phone ?? undefined,
           email: row.email ?? row.applicant?.email ?? undefined,
-          naturalidade: row.applicant?.city ?? undefined,
-          uf: row.applicant?.uf ?? undefined,
+          naturalidade: undefined, // Será carregado de pf_fichas_test se necessário
+          uf: undefined, // Será carregado de pf_fichas_test se necessário
           applicantId: row.applicant?.id ?? undefined,
           personType: row.person_type ?? undefined,
           parecer: '',
@@ -400,7 +400,7 @@ export default function KanbanBoard() {
       try {
         const { data, error } = await (supabase as any)
           .from('kanban_cards')
-          .select('id, title, cpf_cnpj, phone, email, received_at')
+          .select('id, title, cpf_cnpj, phone, email, received_at, person_type, area, stage')
           .eq('id', openId)
           .maybeSingle();
         if (!error && data) {
@@ -417,13 +417,17 @@ export default function KanbanBoard() {
             naturalidade: undefined,
             uf: undefined,
             applicantId: undefined,
+            personType: (data as any)?.person_type || undefined,
             parecer: '',
-            columnId: 'recebido',
+            columnId: ((data as any)?.area === 'comercial') ? ((): any => {
+              const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
+              return stageMap[(data as any)?.stage] || 'com_entrada';
+            })() : 'recebido',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastMovedAt: new Date().toISOString(),
             labels: [],
-            area: 'analise',
+            area: ((data as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
           setAutoOpenExpandedNext(true);
@@ -1808,8 +1812,7 @@ useEffect(() => {
               cpf_cnpj: cpf,
               phone: data.telefone,
               email: data.email || null,
-              city: data.naturalidade,
-              uf: data.uf,
+              // Naturalidade e UF são salvos em pf_fichas_test, não em applicants
             })
             .select('id')
             .single();
@@ -1817,26 +1820,7 @@ useEffect(() => {
           applicantProd = createdProd;
         }
 
-        // 2) Garantir espelho na tabela de TESTE (find-or-create)
-        const { data: existingTest } = await (supabase as any)
-          .from('applicants_test')
-          .select('id')
-          .eq('cpf_cnpj', cpf)
-          .eq('person_type', 'PF')
-          .maybeSingle();
-        if (!existingTest?.id) {
-          await (supabase as any)
-            .from('applicants_test')
-            .insert({
-              person_type: 'PF',
-              primary_name: data.nome,
-              cpf_cnpj: cpf,
-              phone: data.telefone,
-              email: data.email || null,
-              city: data.naturalidade,
-              uf: data.uf,
-            });
-        }
+        // Removido: espelho em applicants_test (legado)
 
         // 2) Card no Kanban (Comercial/feitas)
         const now = new Date();
@@ -1858,6 +1842,53 @@ useEffect(() => {
           .select('id, title, phone, email, cpf_cnpj, received_at, stage')
           .single();
         if (cErr) throw cErr;
+        
+        // 3) Salvar dados básicos em pf_fichas_test (naturalidade e UF)
+        try {
+          const { data: existingPfFicha } = await (supabase as any)
+            .from('pf_fichas_test')
+            .select('id')
+            .eq('applicant_id', applicantProd!.id)
+            .maybeSingle();
+          
+          if (existingPfFicha) {
+            // Atualizar se já existe
+            await (supabase as any)
+              .from('pf_fichas_test')
+              .update({
+                naturalidade: data.naturalidade,
+                uf_naturalidade: data.uf,
+                birth_date: data.nascimento ? (() => {
+                  const parts = data.nascimento.split('/');
+                  if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
+                  }
+                  return null;
+                })() : null
+              })
+              .eq('id', existingPfFicha.id);
+          } else {
+            // Criar novo se não existe
+            await (supabase as any)
+              .from('pf_fichas_test')
+              .insert({
+                applicant_id: applicantProd!.id,
+                naturalidade: data.naturalidade,
+                uf_naturalidade: data.uf,
+                birth_date: data.nascimento ? (() => {
+                  const parts = data.nascimento.split('/');
+                  if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
+                  }
+                  return null;
+                })() : null
+              });
+          }
+        } catch (pfErr) {
+          console.error('Erro ao salvar dados em pf_fichas_test:', pfErr);
+          // Não bloquear o fluxo se falhar
+        }
+        
         // Abrir modal de edição (ficha) com o card criado (busca completa após reload)
         setShowBasicInfo(false);
         setAutoOpenExpandedNext(true);
@@ -1876,8 +1907,8 @@ useEffect(() => {
                 responsavelId: undefined,
                 telefone: created.phone || undefined,
                 email: created.email || undefined,
-                naturalidade: data.naturalidade,
-                uf: data.uf,
+                naturalidade: data.naturalidade, // Apenas para exibição, salvo em pf_fichas_test
+                uf: data.uf, // Apenas para exibição, salvo em pf_fichas_test
                 applicantId: applicantProd!.id,
                 parecer: '',
                 columnId: 'com_feitas',
@@ -1922,6 +1953,7 @@ useEffect(() => {
         naturalidade: undefined,
         uf: undefined,
         applicantId: created.applicant_id,
+        personType: 'PJ',
         parecer: '',
         columnId: 'com_feitas',
         createdAt: new Date().toISOString(),

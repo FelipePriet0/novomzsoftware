@@ -45,8 +45,10 @@ const schema = z.object({
   trade_name: z.string().min(1, "Obrigatório"),
   cnpj: z.string().min(18, "CNPJ inválido"),
   email: z.string().email("E-mail inválido"),
-  phone: z.string().min(14, "Telefone inválido"),
-  contact_name: z.string().min(1, "Obrigatório"),
+  // Contatos da empresa (opcionais)
+  contact_phone: z.string().optional(),
+  contact_whatsapp: z.string().optional(),
+  // Removidos: Nome do Solicitante e Tel do Solicitante (usar Modal PJ)
 });
 
 type PJForm = z.infer<typeof schema>;
@@ -69,8 +71,8 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
       trade_name: "",
       cnpj: "",
       email: "",
-      phone: "",
-      contact_name: "",
+      contact_phone: "",
+      contact_whatsapp: "",
     }
   });
 
@@ -93,7 +95,9 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
             person_type: 'PJ',
             primary_name: values.corporate_name,
             cpf_cnpj: values.cnpj,
-            phone: values.phone,
+            // Contatos principais da empresa
+            phone: values.contact_phone || null,
+            whatsapp: values.contact_whatsapp || null,
             email: values.email,
           })
           .select('id')
@@ -102,41 +106,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         applicantProd = createdProd as any;
       }
 
-      // 1b) Garantir ESPELHO em applicants_test (para testes)
-      let applicantTestId: string | null = null;
-      const { data: existingTest } = await supabase
-        .from('applicants_test')
-        .select('id')
-        .eq('cpf_cnpj', values.cnpj)
-        .eq('person_type', 'PJ')
-        .maybeSingle();
-      if (existingTest?.id) {
-        applicantTestId = existingTest.id;
-      } else {
-        const { data: createdTest } = await supabase
-          .from('applicants_test')
-          .insert({
-            person_type: 'PJ',
-            primary_name: values.corporate_name,
-            cpf_cnpj: values.cnpj,
-            phone: values.phone,
-            email: values.email,
-          })
-          .select('id')
-          .single();
-        applicantTestId = createdTest?.id || null;
-      }
-
-      // 2) Detalhes PJ mínimos (TESTE) apontando para applicants_test
-      if (applicantTestId) {
-        await supabase
-          .from('pj_fichas_test')
-          .insert({ 
-            applicant_id: applicantTestId, 
-            nome_fantasia: values.trade_name || null, 
-            contato_tecnico: values.contact_name 
-          });
-      }
+      // Removido: espelho em applicants_test (legado)
 
       // 3) Card no Kanban (Comercial/feitas) com applicant_id de PRODUÇÃO
       const now = new Date();
@@ -151,7 +121,8 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           assignee_id: null,
           title: values.corporate_name,
           cpf_cnpj: values.cnpj,
-          phone: values.phone,
+          // Exibir nos cards o telefone principal da empresa
+          phone: values.contact_phone || null,
           email: values.email,
           received_at: now.toISOString(),
           source: 'software_pj',
@@ -215,17 +186,20 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="phone" render={({ field }) => (
+              {/* Ordem desejada: Telefone | Whatsapp (Solicitante removidos desta etapa) */}
+              <FormField control={form.control} name="contact_phone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Telefone</FormLabel>
-                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" /></FormControl>
+                  <FormControl>
+                    <Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="contact_name" render={({ field }) => (
+              <FormField control={form.control} name="contact_whatsapp" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome completo (contato)</FormLabel>
-                  <FormControl><Input {...field} placeholder="Nome completo do contato" /></FormControl>
+                  <FormLabel>WhatsApp</FormLabel>
+                  <FormControl><Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

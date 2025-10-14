@@ -318,11 +318,17 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         if (Object.keys(updates).length > 0) {
           await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
         }
-        // Update applicants (primary_name, phone) se disponível
+        // Update applicants (primary_name, phone, whatsapp, endereço) se disponível
         if ((card as any).applicantId) {
           const appUpdates: any = {};
           if (form.nome !== initialForm.nome) appUpdates.primary_name = form.nome;
           if (form.telefone !== initialForm.telefone) appUpdates.phone = form.telefone;
+          if (form.whatsapp !== initialForm.whatsapp) appUpdates.whatsapp = form.whatsapp;
+          if (form.endereco !== initialForm.endereco) appUpdates.address_line = form.endereco;
+          if (form.numero !== initialForm.numero) appUpdates.address_number = form.numero;
+          if (form.complemento !== initialForm.complemento) appUpdates.address_complement = form.complemento;
+          if (form.cep !== initialForm.cep) appUpdates.cep = form.cep;
+          if (form.bairro !== initialForm.bairro) appUpdates.bairro = form.bairro;
           if (Object.keys(appUpdates).length > 0) {
             await (supabase as any).from('applicants').update(appUpdates).eq('id', (card as any).applicantId);
           }
@@ -338,12 +344,15 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   React.useEffect(() => {
     const timer = setTimeout(async () => {
       try {
-        const updates: any = {};
-        if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
-        if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
-        if (form.carne_impresso !== initialForm.carne_impresso) updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
-        if (Object.keys(updates).length > 0) {
-          await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
+        // Salvar Plano/Venc/Carnê em applicants (fonte-da-verdade)
+        if ((card as any).applicantId) {
+          const updates: any = {};
+          if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
+          if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
+          if (form.carne_impresso !== initialForm.carne_impresso) updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
+          if (Object.keys(updates).length > 0) {
+            await (supabase as any).from('applicants').update(updates).eq('id', (card as any).applicantId);
+          }
         }
       } catch {}
     }, 700);
@@ -401,25 +410,32 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       if (!card?.id) return;
       const { data: k } = await (supabase as any)
         .from('kanban_cards')
-        .select('title, phone, cpf_cnpj, whatsapp, endereco, numero, complemento, cep, bairro, due_at, plano_acesso, venc, carne_impresso')
+        .select(`
+          title, phone, cpf_cnpj, due_at,
+          applicant:applicant_id (
+            whatsapp, address_line, address_number, address_complement, bairro, cep,
+            plano_acesso, venc, carne_impresso
+          )
+        `)
         .eq('id', card.id)
         .maybeSingle();
       if (k) {
+        const a = (k as any).applicant || {};
         setForm((prev) => ({
           ...prev,
           nome: k.title ?? prev.nome,
           telefone: k.phone ?? prev.telefone,
           cpf: k.cpf_cnpj ?? prev.cpf,
-          whatsapp: k.whatsapp ?? prev.whatsapp,
-          endereco: k.endereco ?? prev.endereco,
-          numero: k.numero ?? prev.numero,
-          complemento: k.complemento ?? prev.complemento,
-          cep: k.cep ?? prev.cep,
-          bairro: k.bairro ?? prev.bairro,
+          whatsapp: a.whatsapp ?? prev.whatsapp,
+          endereco: a.address_line ?? prev.endereco,
+          numero: a.address_number ?? prev.numero,
+          complemento: a.address_complement ?? prev.complemento,
+          cep: a.cep ?? prev.cep,
+          bairro: a.bairro ?? prev.bairro,
           agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
-          plano_acesso: k.plano_acesso ?? prev.plano_acesso,
-          venc: typeof k.venc !== 'undefined' && k.venc !== null ? String(k.venc) : prev.venc,
-          carne_impresso: typeof k.carne_impresso === 'boolean' ? (k.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+          plano_acesso: a.plano_acesso ?? prev.plano_acesso,
+          venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+          carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
         }));
       }
     } catch (_) {
@@ -448,22 +464,13 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           console.log('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
           loadPareceres();
           const k: any = (payload as any).new || {};
-          // Espelhar campos básicos + plano/venc/carnê
+          // Espelhar apenas campos básicos do card (demais vêm de applicants)
           setForm((prev) => ({
             ...prev,
             nome: k.title ?? prev.nome,
             telefone: k.phone ?? prev.telefone,
             cpf: k.cpf_cnpj ?? prev.cpf,
-            whatsapp: k.whatsapp ?? prev.whatsapp,
-            endereco: k.endereco ?? prev.endereco,
-            numero: k.numero ?? prev.numero,
-            complemento: k.complemento ?? prev.complemento,
-            cep: k.cep ?? prev.cep,
-            bairro: k.bairro ?? prev.bairro,
             agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
-            plano_acesso: k.plano_acesso ?? prev.plano_acesso,
-            venc: typeof k.venc !== 'undefined' && k.venc !== null ? String(k.venc) : prev.venc,
-            carne_impresso: typeof k.carne_impresso === 'boolean' ? (k.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
           }));
         }
       )
@@ -975,15 +982,16 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     telefone: form.telefone || card?.telefone || '',
     whatsapp: form.whatsapp || card?.whatsapp || card?.telefone || '',
     nascimento: card?.nascimento ? new Date(card.nascimento).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-    naturalidade: card?.naturalidade || '',
-    uf: card?.uf || '',
+    naturalidade: card?.naturalidade || '', // Virá de pf_fichas_test
+    uf: card?.uf || '', // Virá de pf_fichas_test
     email: card?.email || ''
   };
 
   const feitoEm = initialForm.feito_em;
   const vendedorNome = (card?.vendedorNome) || '';
   const analistaNome = (card?.responsavel) || '';
-  const isPJ = (card?.cpf || '').replace(/\D+/g, '').length > 11;
+  // Determinar tipo de pessoa de forma robusta: prioriza flag vinda do card
+  const isPJ = (card?.personType === 'PJ') || (card?.person_type === 'PJ');
 
   return (
     <>

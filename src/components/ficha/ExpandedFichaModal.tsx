@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { useDraftForm } from '@/hooks/useDraftForm';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, SaveIcon, CheckIcon, X } from 'lucide-react';
-import { useApplicantsTestConnection } from '@/hooks/useApplicantsTestConnection';
 import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
@@ -68,7 +67,7 @@ export function ExpandedFichaModal({
   // Dev-safe CRUD state (test tables)
   const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
   const { savePersonalData } = usePfFichasTestConnection();
-  const { ensureApplicantExists } = useApplicantsTestConnection();
+  // Removido: fluxo applicants_test (legado)
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -188,29 +187,49 @@ export function ExpandedFichaModal({
           }
         } catch (_) {}
 
-        // Dev-safe: mirror into pf_fichas_test (debounced)
+        // Atualizar applicants com campos canônicos (whatsapp, endereço, plano/venc/carnê, intake e infos)
         try {
-          // Ensure applicants_test record exists and cache its id
-          let testId = applicantTestId;
-          if (!testId) {
-            testId = await ensureApplicantExists({
-              id: applicationId,
-              person_type: 'PF',
-              cpf_cnpj: formData?.cliente?.cpf,
-              nome: formData?.cliente?.nome,
-              telefone: formData?.cliente?.tel,
-              email: formData?.cliente?.email,
-            });
-            if (testId && testId !== applicantTestId) {
-              setApplicantTestId(testId);
+          const { data: kc } = await supabase
+            .from('kanban_cards')
+            .select('applicant_id')
+            .eq('id', applicationId)
+            .maybeSingle();
+          const aid = (kc as any)?.applicant_id as string | undefined;
+          if (aid) {
+            const appUpdates: any = {};
+            // WhatsApp
+            if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
+            // Endereço
+            if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+            if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+            if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+            if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+            if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+            // Preferências comerciais
+            if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
+            if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
+            if (typeof formData?.outras?.carneImpresso !== 'undefined') {
+              appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
+            }
+            if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
+            // Intake/solicitação
+            if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
+            if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
+            if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
+            if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
+            // Informações/Notas
+            if (formData?.spc) appUpdates.info_spc = formData.spc;
+            if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
+            if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
+            if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
+            if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
+            if (Object.keys(appUpdates).length > 0) {
+              await supabase.from('applicants').update(appUpdates).eq('id', aid);
             }
           }
-          if (testId) {
-            await savePersonalData(testId, formData);
-          }
-        } catch (_) {
-          // non-blocking for development-safe persistence
-        }
+        } catch (_) {}
+
+        // Removido: fluxo experimental de applicants_test/pf_fichas_test (legado)
       }
     }, 300); // Save after 300ms of inactivity (faster debounce)
 
@@ -265,23 +284,46 @@ export function ExpandedFichaModal({
           if (formData?.cliente?.email) updates.email = formData.cliente.email;
           if (formData?.cliente?.cpf) updates.cpf_cnpj = formData.cliente.cpf;
           // if (formData?.cliente?.whats) updates.whatsapp = formData.cliente.whats; // evitar 400 se coluna não existir
-          if (formData?.endereco) {
-            if (formData.endereco.end) updates.endereco = formData.endereco.end;
-            if (formData.endereco.n) updates.numero = formData.endereco.n;
-            if (formData.endereco.compl) updates.complemento = formData.endereco.compl;
-            if (formData.endereco.cep) updates.cep = formData.endereco.cep;
-            if (formData.endereco.bairro) updates.bairro = formData.endereco.bairro;
-          }
-          if (formData?.outras) {
-            if (formData.outras.planoEscolhido) updates.plano_acesso = formData.outras.planoEscolhido;
-            if (formData.outras.diaVencimento) updates.venc = Number(formData.outras.diaVencimento);
-            if (typeof formData.outras.carneImpresso !== 'undefined') {
-              updates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
-            }
-          }
+          // Endereço/plano/venc/carnê agora são salvos em applicants; não persistir essas cópias no card
           if (Object.keys(updates).length > 0) {
             await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
           }
+          // Atualizar applicants com campos canônicos ao confirmar
+          try {
+            const { data: kc } = await supabase
+              .from('kanban_cards')
+              .select('applicant_id')
+              .eq('id', applicationId)
+              .maybeSingle();
+            const aid = (kc as any)?.applicant_id as string | undefined;
+            if (aid) {
+              const appUpdates: any = {};
+              if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
+              if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+              if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+              if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+              if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+              if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+              if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
+              if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
+              if (typeof formData?.outras?.carneImpresso !== 'undefined') {
+                appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
+              }
+              if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
+              if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
+              if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
+              if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
+              if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
+              if (formData?.spc) appUpdates.info_spc = formData.spc;
+              if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
+              if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
+              if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
+              if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
+              if (Object.keys(appUpdates).length > 0) {
+                await supabase.from('applicants').update(appUpdates).eq('id', aid);
+              }
+            }
+          } catch (_) {}
           }
           // Chamar fluxo original de submissão do formulário PF
           await onSubmit(formData);
@@ -379,10 +421,10 @@ export function ExpandedFichaModal({
   const mapDraftToFormData = (draft: any): Partial<ComercialFormValues> => {
     return {
       cliente: {
-        nome: basicInfo.nome,
-        cpf: basicInfo.cpf,
+        nome: draft?.customer_data?.nome || basicInfo.nome,
+        cpf: draft?.customer_data?.cpf || basicInfo.cpf,
         nasc: ((): string => {
-          const raw = basicInfo.nascimento as unknown;
+          const raw = (draft?.customer_data?.nasc ?? basicInfo.nascimento) as unknown;
           if (raw instanceof Date && !isNaN((raw as Date).getTime())) {
             const d = String((raw as Date).getDate()).padStart(2,'0');
             const m = String((raw as Date).getMonth()+1).padStart(2,'0');
@@ -395,11 +437,11 @@ export function ExpandedFichaModal({
           }
           return '';
         })(),
-        tel: basicInfo.telefone,
-        whats: basicInfo.whatsapp || '',
-        naturalidade: basicInfo.naturalidade,
-        uf: basicInfo.uf,
-        email: basicInfo.email || '',
+        tel: draft?.customer_data?.tel || basicInfo.telefone,
+        whats: draft?.customer_data?.whats || basicInfo.whatsapp || '',
+        naturalidade: draft?.customer_data?.naturalidade || basicInfo.naturalidade,
+        uf: draft?.customer_data?.uf || basicInfo.uf,
+        email: draft?.customer_data?.email || basicInfo.email || '',
         doPs: draft?.customer_data?.doPs || '',
       },
       endereco: {

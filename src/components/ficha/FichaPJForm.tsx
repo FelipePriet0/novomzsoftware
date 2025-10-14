@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { useApplicantsTestConnection } from '@/hooks/useApplicantsTestConnection';
 import { toast } from '@/hooks/use-toast';
 import { usePjFichasTestConnection } from '@/hooks/usePjFichasTestConnection';
 import InputMask from 'react-input-mask';
@@ -89,8 +88,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
     return base[pjPlanCTA];
   }, [pjPlanCTA]);
   
-  // Hook para conectar com a tabela applicants_test
-  const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
+  // Removido: fluxo applicants_test (legado)
   // Hook para conectar com a tabela pj_fichas_test
   const { saveCompanyData } = usePjFichasTestConnection();
 
@@ -124,66 +122,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
 
   // Função wrapper para salvar dados na tabela teste
   const handleSubmit = async (values: PJFormValues) => {
-    // Salvar dados na tabela applicants_test (experimental)
-    if (applicationId) {
-      try {
-        // Buscar ou criar applicant na tabela teste
-        const applicantTestId = await ensureApplicantExists({
-          id: applicationId,
-          cpf_cnpj: values.empresa.cnpj,
-          person_type: 'PJ',
-          nome: values.empresa.razao,
-          telefone: values.contatos?.tel,
-          email: values.contatos?.email,
-        });
-        if (!applicantTestId) {
-          toast({ title: 'Erro ao garantir applicant de teste (PJ)', description: 'Não foi possível criar/obter applicants_test para esta ficha (PJ).', variant: 'destructive' });
-          console.error('[PJ submit] ensureApplicantExists retornou null');
-        }
-
-        if (applicantTestId) {
-          // Salvar dados de solicitação (via id explícito)
-          try {
-            await saveSolicitacaoDataFor(applicantTestId, {
-              quem_solicitou: values.solicitacao?.quem,
-              meio: values.solicitacao?.meio,
-              protocolo_mk: values.solicitacao?.protocolo,
-            });
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar Solicitação (PJ)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PJ submit] saveSolicitacaoDataFor erro:', e);
-          }
-
-          // Salvar dados de análise (via id explícito)
-          try {
-            await saveAnaliseDataFor(applicantTestId, {
-              spc: values.info?.spc,
-              pesquisador: values.info?.mk, // Usar mk como pesquisador
-              plano_acesso: values.solicitacao?.planoAcesso,
-              venc: values.solicitacao?.venc,
-              sva_avulso: values.solicitacao?.svaAvulso,
-            });
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar Análise (PJ)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PJ submit] saveAnaliseDataFor erro:', e);
-          }
-
-          // Salvar dados da empresa na tabela pj_fichas_test
-          try {
-            await saveCompanyData(applicantTestId, values as any);
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar PJ Ficha (teste)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PJ submit] saveCompanyData erro:', e);
-          }
-        }
-      } catch (error) {
-        console.error('❌ [PJ submit] Erro ao salvar dados experimentais PJ:', error);
-        toast({ title: 'Erro ao salvar dados (teste)', description: (error as any)?.message || String(error), variant: 'destructive' });
-        // Não bloquear o submit principal por erro experimental
-      }
-    }
-
-    // Submeter formulário original
+    // Removido: fluxo applicants_test (legado)
     await onSubmit(values);
   };
 

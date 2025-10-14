@@ -131,6 +131,7 @@ const schema = z.object({
   conjuge: z.object({
     estadoCivil: z.enum(["Solteiro(a)", "Casado(a)", "Amasiado(a)", "Separado(a)", "Viúvo(a)"]).optional(),
     obs: z.string().optional(),
+    idade: z.string().optional(),
     nome: z.string().optional(),
     telefone: z.string().optional(),
     whatsapp: z.string().optional(),
@@ -793,8 +794,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   }, [nasc]);
 
   async function submit(values: ComercialFormValues) {
-    // Preserve existing pareceres during submit
-    const currentParecerAnalise = values.infoRelevantes?.parecerAnalise || JSON.stringify(pareceres);
+    // Padronizar: parecer_analise como TEXTO simples
+    const lastParecerText = Array.isArray(pareceres) && pareceres.length > 0
+      ? (pareceres[pareceres.length - 1]?.text || '')
+      : '';
+    const currentParecerAnalise = (values.infoRelevantes?.parecerAnalise || '').trim() || lastParecerText;
     
     values.infoRelevantes = {
       info: values.infoRelevantes?.info || "",
@@ -802,64 +806,51 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       parecerAnalise: currentParecerAnalise, // Preserve pareceres instead of clearing
     };
 
-    // Salvar dados na tabela applicants_test (experimental)
-    if (applicationId) {
-      try {
-        // Buscar ou criar applicant na tabela teste
-        const applicantTestId = await ensureApplicantExists({
-          id: applicationId,
-          cpf_cnpj: values.cliente.cpf,
-          person_type: 'PF',
-          nome: values.cliente.nome,
-          telefone: values.cliente.tel,
-          email: values.cliente.email,
-        });
-        if (!applicantTestId) {
-          toast({ title: 'Erro ao garantir applicant de teste', description: 'Não foi possível criar/obter applicants_test para esta ficha (PF).', variant: 'destructive' });
-          console.error('[PF submit] ensureApplicantExists retornou null');
-        }
+    // Removido: fluxo experimental de applicants_test (legado)
 
-        if (applicantTestId) {
-          // Salvar dados de solicitação (via id explícito)
-          try {
-            await saveSolicitacaoDataFor(applicantTestId, {
-              quem_solicitou: values.outras?.administrativas?.quemSolicitou,
-              meio: values.outras?.administrativas?.meio,
-              protocolo_mk: values.outras?.administrativas?.protocoloMk,
-            });
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar Solicitação (PF)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PF submit] saveSolicitacaoDataFor erro:', e);
+    // Atualizar applicants (produção) com campos canônicos se tivermos applicationId
+    try {
+      if (applicationId) {
+        const { data: kc } = await (supabase as any)
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        const aid = (kc as any)?.applicant_id as string | undefined;
+        if (aid) {
+          const appUpdates: any = {};
+          // WhatsApp
+          if (values?.cliente?.whats) appUpdates.whatsapp = values.cliente.whats;
+          // Endereço
+          if (values?.endereco?.end) appUpdates.address_line = values.endereco.end;
+          if (values?.endereco?.n) appUpdates.address_number = values.endereco.n;
+          if (values?.endereco?.compl) appUpdates.address_complement = values.endereco.compl;
+          if (values?.endereco?.cep) appUpdates.cep = values.endereco.cep;
+          if (values?.endereco?.bairro) appUpdates.bairro = values.endereco.bairro;
+          // Preferências comerciais
+          if (values?.outras?.planoEscolhido) appUpdates.plano_acesso = values.outras.planoEscolhido;
+          if (values?.outras?.diaVencimento) appUpdates.venc = Number(values.outras.diaVencimento);
+          if (typeof values?.outras?.carneImpresso !== 'undefined') {
+            appUpdates.carne_impresso = values.outras.carneImpresso === 'Sim' ? true : values.outras.carneImpresso === 'Não' ? false : null;
           }
-
-          // Salvar dados de análise (via id explícito)
-          try {
-            await saveAnaliseDataFor(applicantTestId, {
-              spc: values.spc,
-              pesquisador: values.pesquisador,
-              plano_acesso: values.outras?.planoEscolhido,
-              venc: values.outras?.diaVencimento,
-              sva_avulso: values.outras?.svaAvulso,
-            });
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar Análise (PF)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PF submit] saveAnaliseDataFor erro:', e);
-          }
-
-          // Salvar dados pessoais na tabela pf_fichas_test
-          try {
-            await savePersonalData(applicantTestId, values);
-          } catch (e: any) {
-            toast({ title: 'Falha ao salvar PF Ficha (teste)', description: e?.message || String(e), variant: 'destructive' });
-            console.error('[PF submit] savePersonalData erro:', e);
+          if (values?.outras?.svaAvulso) appUpdates.sva_avulso = values.outras.svaAvulso;
+          // Intake/solicitação
+          if ((values as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (values as any).outras.administrativas.quemSolicitou;
+          if ((values as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (values as any).outras.administrativas.fone;
+          if ((values as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (values as any).outras.administrativas.protocoloMk;
+          if ((values as any)?.outras?.administrativas?.meio) appUpdates.meio = (values as any).outras.administrativas.meio;
+          // Informações/Notas
+          if (values?.spc) appUpdates.info_spc = values.spc;
+          if (values?.pesquisador) appUpdates.info_pesquisador = values.pesquisador;
+          if (values?.infoRelevantes?.info) appUpdates.info_relevantes = values.infoRelevantes.info;
+          if (values?.infoRelevantes?.infoMk) appUpdates.info_mk = values.infoRelevantes.infoMk;
+          if (currentParecerAnalise) appUpdates.parecer_analise = currentParecerAnalise;
+          if (Object.keys(appUpdates).length > 0) {
+            await (supabase as any).from('applicants').update(appUpdates).eq('id', aid);
           }
         }
-      } catch (error) {
-        console.error('❌ [PF submit] Erro ao salvar dados experimentais:', error);
-        toast({ title: 'Erro ao salvar dados (teste)', description: (error as any)?.message || String(error), variant: 'destructive' });
-        // Não bloquear o submit principal por erro experimental
       }
-    }
+    } catch (_) {}
 
     await onSubmit(values);
   }
@@ -1392,9 +1383,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         {/* 5. Cônjuge */}
         <section>
           <h3 className="text-lg font-semibold mb-3">5. Cônjuge</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+            {/* Linha 1: Estado civil + Obs (Obs com estilo Do PS) */}
             <FormField control={form.control} name="conjuge.estadoCivil" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>Estado civil</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
@@ -1410,40 +1402,72 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 </Select>
               </FormItem>
             )} />
+            <FormField control={form.control} name="conjuge.obs" render={({ field }) => (
+              <FormItem className="md:col-span-3">
+                <FormLabel>Obs</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                </FormControl>
+              </FormItem>
+            )} />
+
+            {/* Linha 2: Nome (maior) + Telefone + WhatsApp */}
             <FormField control={form.control} name="conjuge.nome" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-2">
                 <FormLabel>Nome</FormLabel>
                 <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.telefone" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>Telefone</FormLabel>
                 <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.whatsapp" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>WhatsApp</FormLabel>
                 <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
+
+            {/* Linha 3: CPF + Naturalidade + UF + Idade */}
             <FormField control={form.control} name="conjuge.cpf" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>CPF</FormLabel>
                 <FormControl><Input {...field} placeholder="000.000.000-00" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.naturalidade" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>Naturalidade</FormLabel>
                 <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.uf" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-1">
                 <FormLabel>UF</FormLabel>
                 <FormControl><Input maxLength={2} {...field} placeholder="Ex: MG" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="conjuge.idade" render={({ field }) => (
+              <FormItem className="md:col-span-1">
+                <FormLabel>Idade</FormLabel>
+                <FormControl><Input inputMode="numeric" {...field} placeholder="Ex: 35" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+              </FormItem>
+            )} />
+
+            {/* Linha 4: Do PS (full width) */}
+            <FormField control={form.control} name="conjuge.doPs" render={({ field }) => (
+              <FormItem className="md:col-span-4">
+                <FormLabel>Do PS</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Digite aqui..."
+                    className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
           </div>

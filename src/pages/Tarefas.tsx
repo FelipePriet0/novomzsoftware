@@ -130,6 +130,7 @@ export default function Tarefas() {
         telefone: freshCard.phone || undefined,
         email: freshCard.email || freshCard.applicant?.email || undefined,
         cpf: freshCard.cpf_cnpj || '',
+        personType: freshCard.person_type || undefined,
         receivedAt,
         deadline,
         updatedAt: receivedAt,
