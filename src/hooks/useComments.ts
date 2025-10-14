@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Comment } from '@/components/comments/CommentItem';
 import { toast } from '@/hooks/use-toast';
@@ -22,6 +22,7 @@ export function useComments(cardId: string) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Extrair @menÃ§Ãµes do texto
   const extractMentions = (text: string): string[] => {
@@ -486,6 +487,12 @@ export function useComments(cardId: string) {
   useEffect(() => {
     if (!cardId) return;
 
+    // Evitar criar canais duplicados
+    if (channelRef.current) {
+      console.log('⚠️ [useComments] Canal já existe, pulando criação');
+      return;
+    }
+
     console.log('🔴 [useComments] Configurando Realtime para card:', cardId);
     
     const channel = supabase
@@ -509,10 +516,15 @@ export function useComments(cardId: string) {
         console.log('🔴 [useComments] Status da subscrição Realtime:', status);
       });
 
+    channelRef.current = channel;
+
     // Cleanup ao desmontar
     return () => {
       console.log('🔴 [useComments] Removendo subscrição Realtime');
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, [cardId, loadComments]);
 

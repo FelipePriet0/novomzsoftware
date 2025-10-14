@@ -191,7 +191,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         if (import.meta?.env?.DEV) console.log('[PJ] Loading initial data for applicationId', applicationId);
         const cardPromise = supabase
           .from('kanban_cards')
-          .select('id, applicant_id, title, cpf_cnpj, phone, email')
+          .select('id, applicant_id')
           .eq('id', applicationId)
           .maybeSingle();
 

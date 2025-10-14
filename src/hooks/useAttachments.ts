@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { useCurrentUser } from '@/hooks/use-current-user';
@@ -56,6 +56,7 @@ export const useAttachments = (cardId: string) => {
   const { profile } = useAuth();
   const { name: currentUserName } = useCurrentUser();
   const { toast } = useToast();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Load attachments for a card (useCallback para evitar re-criação infinita)
   const loadAttachments = useCallback(async () => {
@@ -424,6 +425,12 @@ export const useAttachments = (cardId: string) => {
   useEffect(() => {
     if (!cardId) return;
 
+    // Evitar criar canais duplicados
+    if (channelRef.current) {
+      console.log('⚠️ [useAttachments] Canal já existe, pulando criação');
+      return;
+    }
+
     console.log('🔴 [useAttachments] Configurando Realtime para card:', cardId);
     
     const channel = supabase
@@ -447,12 +454,17 @@ export const useAttachments = (cardId: string) => {
         console.log('🔴 [useAttachments] Status da subscrição Realtime:', status);
       });
 
+    channelRef.current = channel;
+
     // Cleanup ao desmontar
     return () => {
       console.log('🔴 [useAttachments] Removendo subscrição Realtime');
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [cardId]);
+  }, [cardId, loadAttachments]);
 
   return {
     attachments,

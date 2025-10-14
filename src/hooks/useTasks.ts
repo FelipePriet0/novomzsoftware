@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Task, CreateTaskInput } from '@/types/tasks';
@@ -8,6 +8,7 @@ export function useTasks(userId?: string, cardId?: string) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { profile } = useAuth();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Carregar tarefas (useCallback para evitar re-criação infinita)
   const loadTasks = useCallback(async () => {
@@ -402,6 +403,12 @@ export function useTasks(userId?: string, cardId?: string) {
     // Só ativar Realtime quando filtrar por cardId (não por userId)
     if (!cardId) return;
 
+    // Evitar criar canais duplicados
+    if (channelRef.current) {
+      console.log('⚠️ [useTasks] Canal já existe, pulando criação');
+      return;
+    }
+
     console.log('🔴 [useTasks] Configurando Realtime para card:', cardId);
     
     const channel = supabase
@@ -425,12 +432,17 @@ export function useTasks(userId?: string, cardId?: string) {
         console.log('🔴 [useTasks] Status da subscrição Realtime:', status);
       });
 
+    channelRef.current = channel;
+
     // Cleanup ao desmontar
     return () => {
       console.log('🔴 [useTasks] Removendo subscrição Realtime');
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [cardId]);
+  }, [cardId, loadTasks]);
 
   return {
     tasks,
