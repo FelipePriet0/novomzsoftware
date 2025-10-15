@@ -394,35 +394,52 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         try {
           const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
           const unique = Array.from(new Set(matches));
+          
           if (unique.length > 0) {
-            for (const mention of unique) {
-              const { data: profiles } = await (supabase as any)
-                .from('profiles')
-                .select('id, full_name')
-                .ilike('full_name', `${mention}%`)
-                .limit(5);
-              const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
-              for (const userId of targets) {
-                if (userId === (profile?.id || '')) continue;
-                await (supabase as any)
-                  .from('inbox_notifications')
-                  .insert({
-                    user_id: userId,
-                    type: 'mention',
-                    priority: 'low',
-                    title: 'Você foi mencionado',
-                    body: `Você foi mencionado em um parecer (@${mention}).`,
-                    meta: { cardId: applicationId, parecerId: newParecer.id },
-                    transient: false,
-                  });
+            // 🚀 OTIMIZAÇÃO: Paralelizar processamento de menções
+            const mentionPromises = unique.map(async (mention) => {
+              try {
+                const { data: profiles } = await supabase
+                  .from('profiles')
+                  .select('id, full_name')
+                  .ilike('full_name', `${mention}%`)
+                  .limit(5);
+                
+                const targets = (profiles || [])
+                  .map((p: any) => p.id)
+                  .filter((id: string) => id && id !== (profile?.id || ''));
+                
+                // 🚀 Paralelizar inserts de notificações
+                if (targets.length > 0) {
+                  await Promise.all(
+                    targets.map((userId: string) =>
+                      supabase.from('inbox_notifications').insert({
+                        user_id: userId,
+                        type: 'mention',
+                        priority: 'low',
+                        title: 'Você foi mencionado',
+                        body: `Você foi mencionado em um parecer (@${mention}).`,
+                        meta: { cardId: applicationId, parecerId: newParecer.id },
+                        transient: false,
+                      })
+                    )
+                  );
+                }
+              } catch (err) {
+                // Falha em uma menção não deve quebrar o salvamento
+                if (import.meta.env.DEV) console.error('Erro ao processar menção:', mention, err);
               }
-            }
+            });
+            
+            await Promise.all(mentionPromises);
           }
         } catch (_) { /* silencioso */ }
-        // Chamar onRefetch para atualizar outros componentes
-        if (onRefetch) {
-          onRefetch();
-        }
+        
+        // 🧪 TESTE: Comentado temporariamente para verificar se Realtime sincroniza sozinho
+        // Se pareceres não aparecerem em outros modais, descomentar esta linha
+        // if (onRefetch) {
+        //   onRefetch();
+        // }
       } catch (e: any) {
         console.error('❌ [NovaFicha] Erro ao adicionar parecer:', e);
         toast({ title: 'Erro ao salvar parecer', description: e?.message || String(e), variant: 'destructive' });

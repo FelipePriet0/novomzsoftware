@@ -41,7 +41,7 @@ export function ObservationsWithComments({
   const { profile } = useAuth();
   
   // Debug: verificar se o profile está sendo carregado
-  console.log('🔍 ObservationsWithComments - Debug:', { 
+  if (import.meta.env.DEV) console.log('🔍 ObservationsWithComments - Debug:', { 
     profile: profile?.full_name, 
     profileId: profile?.id,
     cardId 
@@ -61,7 +61,7 @@ export function ObservationsWithComments({
 
 
   const handleReply = async (parentId: string, content: string) => {
-    console.log('🔍 DEBUG ObservationsWithComments handleReply:', {
+    if (import.meta.env.DEV) console.log('🔍 DEBUG ObservationsWithComments handleReply:', {
       parentId,
       content,
       profileId: profile?.id,
@@ -70,12 +70,12 @@ export function ObservationsWithComments({
     });
     
     if (!profile?.id) {
-      console.error('🚨 ERRO: profile.id não encontrado');
+      if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
       return null;
     }
     
     try {
-      console.log('🔍 DEBUG: Chamando replyToComment...');
+      if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando replyToComment...');
       const result = await replyToComment(
         parentId,
         content,
@@ -83,16 +83,16 @@ export function ObservationsWithComments({
         currentUserName || profile.full_name || 'Usuário',
         profile.role
       );
-      console.log('🔍 DEBUG: replyToComment resultado:', result);
+      if (import.meta.env.DEV) console.log('🔍 DEBUG: replyToComment resultado:', result);
       return result; // IMPORTANTE: Retornar o resultado para o CommentsList
     } catch (error) {
-      console.error('🚨 ERRO em handleReply:', error);
+      if (import.meta.env.DEV) console.error('🚨 ERRO em handleReply:', error);
       return null;
     }
   };
 
   const handleDelete = async (commentId: string) => {
-    console.log('🔍 DEBUG ObservationsWithComments handleDelete:', {
+    if (import.meta.env.DEV) console.log('🔍 DEBUG ObservationsWithComments handleDelete:', {
       commentId,
       profileId: profile?.id,
       currentUserName,
@@ -100,27 +100,27 @@ export function ObservationsWithComments({
     });
     
     if (!profile?.id) {
-      console.error('🚨 ERRO: profile.id não encontrado');
+      if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
       return false;
     }
     
     try {
-      console.log('🔍 DEBUG: Chamando deleteComment...');
+      if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando deleteComment...');
       const result = await deleteComment(commentId);
-      console.log('🔍 DEBUG: deleteComment resultado:', result);
+      if (import.meta.env.DEV) console.log('🔍 DEBUG: deleteComment resultado:', result);
       
-      // IMPORTANTE: Recarregar comentários do banco após exclusão
-      // para garantir sincronização com o estado real
-      if (result && onRefetch) {
-        console.log('🔍 DEBUG: Chamando onRefetch para recarregar comentários...');
-        setTimeout(() => {
-          onRefetch();
-        }, 100);
-      }
+      // 🧪 TESTE: Comentado temporariamente - Realtime deve sincronizar automaticamente
+      // Se comentários não desaparecerem após deletar, descomentar este bloco
+      // if (result && onRefetch) {
+      //   if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando onRefetch para recarregar comentários...');
+      //   setTimeout(() => {
+      //     onRefetch();
+      //   }, 100);
+      // }
       
       return result;
     } catch (error) {
-      console.error('🚨 ERRO em handleDelete:', error);
+      if (import.meta.env.DEV) console.error('🚨 ERRO em handleDelete:', error);
       return false;
     }
   };
