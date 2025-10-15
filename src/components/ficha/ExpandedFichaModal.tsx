@@ -170,77 +170,72 @@ export function ExpandedFichaModal({
       };
       
       if (applicationId) {
-        await ensureCommercialFeitas(applicationId);
-        await saveDraft(draftData, applicationId, 'full', false);
+        // 🚀 OTIMIZAÇÃO: Buscar applicant_id UMA VEZ SÓ (antes fazia 2x!)
+        const { data: cardData } = await supabase
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        
+        const applicantId = (cardData as any)?.applicant_id as string | undefined;
 
-        // Campos do cliente agora são salvos em applicants, não em kanban_cards
-        // (removida atualização redundante de title, phone, email, cpf_cnpj)
+        // 🚀 OTIMIZAÇÃO: Paralelizar operações (antes era sequencial)
+        const savePromises: Promise<any>[] = [
+          ensureCommercialFeitas(applicationId),
+          saveDraft(draftData, applicationId, 'full', false)
+        ];
 
-        // Atualizar applicants com campos canônicos (whatsapp, endereço, plano/venc/carnê, intake e infos)
-        try {
-          const { data: kc } = await supabase
-            .from('kanban_cards')
-            .select('applicant_id')
-            .eq('id', applicationId)
-            .maybeSingle();
-          const aid = (kc as any)?.applicant_id as string | undefined;
-          if (aid) {
-            const appUpdates: any = {};
-            // WhatsApp
-            if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
-            // Endereço
-            if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
-            if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
-            if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
-            if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
-            if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
-            // Preferências comerciais
-            if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
-            if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
-            if (typeof formData?.outras?.carneImpresso !== 'undefined') {
-              appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
-            }
-            if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
-            // Intake/solicitação
-            if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
-            if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
-            if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
-            if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
-            // Informações/Notas
-            if (formData?.spc) appUpdates.info_spc = formData.spc;
-            if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
-            if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
-            if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
-            if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
-            if (Object.keys(appUpdates).length > 0) {
-              await supabase.from('applicants').update(appUpdates).eq('id', aid);
-            }
+        // Atualizar applicants com campos canônicos
+        if (applicantId) {
+          const appUpdates: any = {};
+          // WhatsApp
+          if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
+          // Endereço
+          if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+          if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+          if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+          if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+          if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+          // Preferências comerciais
+          if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
+          if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
+          if (typeof formData?.outras?.carneImpresso !== 'undefined') {
+            appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
           }
-        } catch (_) {}
-
-        // ✅ Salvar dados específicos de PF em pf_fichas_test
-        try {
-          // Buscar applicant_id do card
-          const { data: cardData } = await supabase
-            .from('kanban_cards')
-            .select('applicant_id')
-            .eq('id', applicationId)
-            .maybeSingle();
+          if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
+          // Intake/solicitação
+          if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
+          if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
+          if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
+          if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
+          // Informações/Notas
+          if (formData?.spc) appUpdates.info_spc = formData.spc;
+          if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
+          if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
+          if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
+          if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
           
-          const applicantId = (cardData as any)?.applicant_id;
-          
-          if (applicantId) {
-            console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test... applicant_id:', applicantId);
-            await savePersonalData(applicantId, formData); // ✅ Ordem correta: applicantId primeiro!
-            console.log('✅ [ExpandedFichaModal] Dados salvos em pf_fichas_test com sucesso!');
-          } else {
-            console.warn('⚠️ [ExpandedFichaModal] applicant_id não encontrado, pulando pf_fichas_test');
+          // Adicionar updates de applicants e pf_fichas_test ao Promise.all
+          if (Object.keys(appUpdates).length > 0) {
+            savePromises.push(
+              supabase.from('applicants').update(appUpdates).eq('id', applicantId)
+            );
           }
-        } catch (pfErr) {
-          console.error('❌ [ExpandedFichaModal] Erro ao salvar em pf_fichas_test:', pfErr);
+
+          // Salvar dados específicos de PF em pf_fichas_test
+          if (import.meta.env.DEV) console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test... applicant_id:', applicantId);
+          savePromises.push(savePersonalData(applicantId, formData));
+        }
+
+        // 🚀 Executar TODAS as operações em paralelo
+        try {
+          await Promise.all(savePromises);
+          if (import.meta.env.DEV) console.log('✅ [ExpandedFichaModal] Auto-save completo!');
+        } catch (err) {
+          console.error('❌ [ExpandedFichaModal] Erro no auto-save:', err);
         }
       }
-    }, 300); // Save after 300ms of inactivity (faster debounce)
+    }, 1500); // 🚀 OTIMIZAÇÃO: Aumentado de 300ms para 1500ms (reduz saves desnecessários)
 
     setAutoSaveTimer(timer);
   };

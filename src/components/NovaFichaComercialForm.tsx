@@ -296,7 +296,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       
       // Filtrar pareceres deletados (soft delete)
       const activePareceres = migratedNotes.filter((p: any) => !p.deleted);
-      console.log('📊 [NovaFicha] Pareceres carregados:', migratedNotes.length, 'Ativos:', activePareceres.length);
+      if (import.meta.env.DEV) console.log('📊 [NovaFicha] Pareceres carregados:', migratedNotes.length, 'Ativos:', activePareceres.length);
       setPareceres(activePareceres);
     } catch {
       // ignore
@@ -311,7 +311,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   React.useEffect(() => {
     if (!applicationId) return;
     
-    console.log('🔴 [NovaFicha] Configurando Realtime para pareceres do card:', applicationId);
+    if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Configurando Realtime para pareceres do card:', applicationId);
     
     const channel = supabase
       .channel(`pareceres-nova-ficha-${applicationId}`)
@@ -319,16 +319,16 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'kanban_cards', filter: `id=eq.${applicationId}` },
         (payload) => {
-          console.log('🔴 [NovaFicha] Card atualizado, recarregando pareceres:', payload);
+          if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Card atualizado, recarregando pareceres:', payload);
           loadPareceres();
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [NovaFicha] Status da subscrição Realtime de pareceres:', status);
+        if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Status da subscrição Realtime de pareceres:', status);
       });
     
     return () => {
-      console.log('🔴 [NovaFicha] Removendo subscrição Realtime de pareceres');
+      if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Removendo subscrição Realtime de pareceres');
       supabase.removeChannel(channel);
     };
   }, [applicationId, loadPareceres]);
@@ -383,13 +383,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     const serialized = JSON.stringify(next);
     if (applicationId) {
       try {
-        console.log('➕ [NovaFicha] Adicionando novo parecer ao banco:', newParecer.id);
+        if (import.meta.env.DEV) console.log('➕ [NovaFicha] Adicionando novo parecer ao banco:', newParecer.id);
         const { error } = await supabase
           .from('kanban_cards')
           .update({ reanalysis_notes: serialized })
           .eq('id', applicationId);
         if (error) throw error;
-        console.log('✅ [NovaFicha] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
+        if (import.meta.env.DEV) console.log('✅ [NovaFicha] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
         // 🔔 Notificações de menções: procurar @nome e inserir na inbox de mencionados
         try {
           const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
@@ -490,13 +490,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     const serialized = JSON.stringify(updated);
     if (applicationId) {
       try {
-        console.log('✏️ [NovaFicha] Editando parecer no banco:', editingParecerId);
+        if (import.meta.env.DEV) console.log('✏️ [NovaFicha] Editando parecer no banco:', editingParecerId);
         const { error } = await supabase
           .from('kanban_cards')
           .update({ reanalysis_notes: serialized })
           .eq('id', applicationId);
         if (error) throw error;
-        console.log('✅ [NovaFicha] Parecer editado com sucesso! Realtime vai sincronizar outros modais.');
+        if (import.meta.env.DEV) console.log('✅ [NovaFicha] Parecer editado com sucesso! Realtime vai sincronizar outros modais.');
         
         // Chamar onRefetch para atualizar outros componentes
         if (onRefetch) {
@@ -671,10 +671,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       
       setReplyingToParecerId(null);
       setReplyText("");
-      console.log('✅ [NovaFicha] Resposta salva com sucesso! Realtime vai sincronizar outros modais.');
+      if (import.meta.env.DEV) console.log('✅ [NovaFicha] Resposta salva com sucesso! Realtime vai sincronizar outros modais.');
       toast({ title: 'Resposta salva', description: 'Sua resposta foi adicionada ao parecer.' });
     } catch (error) {
-      console.error('❌ [NovaFicha] Erro ao salvar resposta:', error);
+      if (import.meta.env.DEV) console.error('❌ [NovaFicha] Erro ao salvar resposta:', error);
       toast({ title: 'Erro ao salvar resposta', variant: 'destructive' });
     }
   };
@@ -713,7 +713,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       });
       const serialized = JSON.stringify(updated);
       
-      console.log('✅ [Comercial] Parecer marcado como deletado (soft delete):', deletingParecerId);
+      if (import.meta.env.DEV) console.log('✅ [Comercial] Parecer marcado como deletado (soft delete):', deletingParecerId);
       
       // Preparar dados para update
       const updateData: any = { reanalysis_notes: serialized };
@@ -726,7 +726,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       
       if (error) throw error;
       
-      console.log('💾 [Comercial] Parecer excluído do banco com sucesso!', updateData);
+      if (import.meta.env.DEV) console.log('💾 [Comercial] Parecer excluído do banco com sucesso!', updateData);
       
       // Atualizar estado local
       setPareceres(prev => prev.filter(p => p.id !== deletingParecerId));
@@ -774,22 +774,22 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   const nasc = form.watch("cliente.nasc");
   const showFiliacao = React.useMemo(() => {
     if (!nasc) {
-      console.log("🔍 [Filiação] Data de nascimento não preenchida");
+      if (import.meta.env.DEV) console.log("🔍 [Filiação] Data de nascimento não preenchida");
       return false;
     }
     const parts = String(nasc).split('/');
     if (parts.length !== 3) {
-      console.log("🔍 [Filiação] Formato de data inválido:", nasc);
+      if (import.meta.env.DEV) console.log("🔍 [Filiação] Formato de data inválido:", nasc);
       return false;
     }
     const [dd, mm, yyyy] = parts;
     const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
     if (isNaN(d.getTime())) {
-      console.log("🔍 [Filiação] Data inválida:", nasc);
+      if (import.meta.env.DEV) console.log("🔍 [Filiação] Data inválida:", nasc);
       return false;
     }
     const age = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-    console.log("🔍 [Filiação] Idade calculada:", age, "anos - Mostrar filiação:", age < 45);
+    if (import.meta.env.DEV) console.log("🔍 [Filiação] Idade calculada:", age, "anos - Mostrar filiação:", age < 45);
     return age < 45;
   }, [nasc]);
 
