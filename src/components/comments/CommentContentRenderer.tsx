@@ -48,6 +48,8 @@ export function CommentContentRenderer({
 }: CommentContentRendererProps) {
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
+  // Override local para refletir imediatamente o toggle, sem depender de recarregar
+  const [forcedStatus, setForcedStatus] = useState<'pending' | 'completed' | null>(null);
 
   // Logs removidos para performance
 
@@ -112,6 +114,13 @@ export function CommentContentRenderer({
   
   if (taskData) {
     const { relatedTask, assignedTo, assignedToFromComment, description, descriptionFromComment, deadline, isCompleted } = taskData;
+    const effectiveCompleted = forcedStatus ? (forcedStatus === 'completed') : !!isCompleted;
+
+    // Se o estado do banco já reflete o forçado, limpar override
+    if (forcedStatus && relatedTask && ((forcedStatus === 'completed') === (relatedTask.status === 'completed'))) {
+      // Evita loop de render; limpar de forma segura
+      setTimeout(() => setForcedStatus(null), 0);
+    }
     
     const handleToggleTask = async () => {
       if (isUpdating || !onUpdateTaskStatus) return;
@@ -120,7 +129,7 @@ export function CommentContentRenderer({
       
       setIsUpdating(true);
       try {
-        const newStatus = isCompleted ? 'pending' : 'completed';
+        const newStatus = effectiveCompleted ? 'pending' : 'completed';
         let taskId = relatedTask?.id;
         
         // Se não tem relatedTask, buscar tarefa pelo comment_id ou descrição
@@ -165,7 +174,10 @@ export function CommentContentRenderer({
           return;
         }
         
-        await onUpdateTaskStatus(taskId, newStatus);
+        const ok = await onUpdateTaskStatus(taskId, newStatus);
+        if (ok) {
+          setForcedStatus(newStatus);
+        }
         
         toast({
           title: newStatus === 'completed' ? 'Tarefa concluída!' : 'Tarefa reaberta',
@@ -194,7 +206,7 @@ export function CommentContentRenderer({
         )}>
           <div className="flex-shrink-0 mt-0.5">
             <Checkbox
-              checked={isCompleted}
+              checked={effectiveCompleted}
               onCheckedChange={handleToggleTask}
               disabled={isUpdating}
               className="w-6 h-6 border-2 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
@@ -205,11 +217,11 @@ export function CommentContentRenderer({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-2">
               <Badge className={cn(
-                isCompleted 
+                effectiveCompleted 
                   ? "bg-green-500 hover:bg-green-600" 
                   : "bg-blue-500 hover:bg-blue-600"
               )}>
-                {isCompleted ? 'Tarefa Concluída' : 'Tarefa'}
+                {effectiveCompleted ? 'Tarefa Concluída' : 'Tarefa'}
               </Badge>
               
               {/* CTA de 3 pontinhos para editar */}
@@ -238,20 +250,20 @@ export function CommentContentRenderer({
             
             <div className={cn(
               "space-y-2 text-sm transition-all",
-              isCompleted && "opacity-75"
+              effectiveCompleted && "opacity-75"
             )}>
               <div className={cn(
                 "flex items-center gap-2",
-                isCompleted ? "text-green-700 line-through" : "text-gray-700"
+                effectiveCompleted ? "text-green-700 line-through" : "text-gray-700"
               )}>
-                <User className={cn("h-4 w-4", isCompleted ? "text-green-600" : "text-blue-600")} />
+                <User className={cn("h-4 w-4", effectiveCompleted ? "text-green-600" : "text-blue-600")} />
                 <span className="font-medium">Para:</span>
-                <span className={cn(isCompleted ? "text-green-700" : "text-blue-700")}>@{assignedTo}</span>
+                <span className={cn(effectiveCompleted ? "text-green-700" : "text-blue-700")}>@{assignedTo}</span>
               </div>
               
               <div className={cn(
                 "text-gray-900",
-                isCompleted && "line-through"
+                effectiveCompleted && "line-through"
               )}>
                 <span className="font-medium">Descrição:</span> {description}
               </div>
@@ -259,9 +271,9 @@ export function CommentContentRenderer({
               {deadline && (
                 <div className={cn(
                   "flex items-center gap-2",
-                  isCompleted ? "text-green-700 line-through" : "text-gray-700"
+                  effectiveCompleted ? "text-green-700 line-through" : "text-gray-700"
                 )}>
-                  <Calendar className={cn("h-4 w-4", isCompleted ? "text-green-600" : "text-blue-600")} />
+                  <Calendar className={cn("h-4 w-4", effectiveCompleted ? "text-green-600" : "text-blue-600")} />
                   <span className="font-medium">Prazo:</span>
                   <span>{deadline}</span>
                 </div>
