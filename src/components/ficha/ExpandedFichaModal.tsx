@@ -218,7 +218,14 @@ export function ExpandedFichaModal({
           }
         } catch (_) {}
 
-        // Removido: fluxo experimental de applicants_test/pf_fichas_test (legado)
+        // ✅ Salvar dados específicos de PF em pf_fichas_test
+        try {
+          console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test...');
+          await savePersonalData(formData, applicationId);
+          console.log('✅ [ExpandedFichaModal] Dados salvos em pf_fichas_test com sucesso!');
+        } catch (pfErr) {
+          console.error('❌ [ExpandedFichaModal] Erro ao salvar em pf_fichas_test:', pfErr);
+        }
       }
     }, 300); // Save after 300ms of inactivity (faster debounce)
 
