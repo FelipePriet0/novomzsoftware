@@ -219,8 +219,7 @@ export function usePfFichasTestConnection() {
       if (formData.conjuge) {
         updateData.estado_civil = formData.conjuge.estadoCivil;
         updateData.conjuge_obs = formData.conjuge.obs;
-        updateData.conjuge_obs2 = formData.conjuge.obs2;
-        updateData.conjuge_idade = formData.conjuge.idade ? String(formData.conjuge.idade) : undefined;
+        updateData.conjuge_idade = formData.conjuge.idade ? Number(formData.conjuge.idade) : undefined;
         updateData.conjuge_nome = formData.conjuge.nome;
         updateData.conjuge_telefone = formData.conjuge.telefone;
         updateData.conjuge_whatsapp = formData.conjuge.whatsapp;
