@@ -377,8 +377,8 @@ export default function KanbanBoard() {
           area: row.area as 'comercial' | 'analise',
         } as CardItem;
       });
-      console.log('Loaded cards:', mapped.length);
-      console.log('Cards by column:', mapped.map(c => ({ id: c.id, nome: c.nome, columnId: c.columnId })));
+      if (import.meta.env.DEV) console.log('Loaded cards:', mapped.length);
+      if (import.meta.env.DEV) console.log('Cards by column:', mapped.map(c => ({ id: c.id, nome: c.nome, columnId: c.columnId })));
       setCards(mapped);
     } catch (e) {
       // eslint-disable-next-line no-console
@@ -1786,11 +1786,11 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
-        console.log('🆕 [KanbanBoard] Iniciando criação de ficha PF:', data);
+        if (import.meta.env.DEV) console.log('🆕 [KanbanBoard] Iniciando criação de ficha PF:', data);
         
         // 1) Garantir applicant PF em PRODUÇÃO (para satisfazer FK do kanban_cards)
         const cpf = data.cpf.replace(/\D+/g, '');
-        console.log('🔍 [KanbanBoard] CPF limpo:', cpf);
+        if (import.meta.env.DEV) console.log('🔍 [KanbanBoard] CPF limpo:', cpf);
         
         let applicantProd: { id: string } | null = null;
         const { data: existingProd } = await (supabase as any)
@@ -1801,7 +1801,7 @@ useEffect(() => {
           .maybeSingle();
         
         if (existingProd?.id) {
-          console.log('⚠️ [KanbanBoard] CPF já cadastrado! Bloqueando criação.', existingProd);
+          if (import.meta.env.DEV) console.log('⚠️ [KanbanBoard] CPF já cadastrado! Bloqueando criação.', existingProd);
           
           // 🚫 BLOQUEAR criação e avisar usuário
           toast({
