@@ -375,7 +375,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={handleIngressarAction}
                   disabled={actionLoading === "Ingressar"}
-                  className="h-7 text-xs px-2"
+                  className="h-7 text-xs px-2 bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
                   data-action-button
                 >
                   {actionLoading === "Ingressar" ? "..." : "Ingressar"}
