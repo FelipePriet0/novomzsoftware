@@ -210,14 +210,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         if (!mounted) return;
         let defaults: Partial<PJFormValues> = {
           empresa: {
-            razao: (card as any)?.title || '',
-            cnpj: (card as any)?.cpf_cnpj || '',
+            razao: '',
+            cnpj: '',
             fantasia: tradeName || '',
           },
           contatos: {
-            tel: (card as any)?.phone || '',
-            whats: (card as any)?.phone || '',
-            email: (card as any)?.email || '',
+            tel: '',
+            whats: '',
+            email: '',
           },
         } as any;
         // Prefill com Applicants (quem_solicitou, telefone_solicitante, parecer_analise)
@@ -225,12 +225,17 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           if ((card as any)?.applicant_id) {
             const { data: appl } = await supabase
               .from('applicants')
-              .select('quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email')
+              .select('primary_name, cpf_cnpj, quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email')
               .eq('id', (card as any).applicant_id)
               .maybeSingle();
             if (appl) {
               defaults = {
                 ...defaults,
+                empresa: {
+                  razao: (appl as any).primary_name || (defaults as any)?.empresa?.razao || '',
+                  cnpj: (appl as any).cpf_cnpj || (defaults as any)?.empresa?.cnpj || '',
+                  fantasia: (defaults as any)?.empresa?.fantasia || '',
+                },
                 contatos: {
                   tel: (appl as any).phone || defaults.contatos?.tel || '',
                   whats: (appl as any).whatsapp || defaults.contatos?.whats || '',

@@ -1999,17 +1999,36 @@ useEffect(() => {
       setShowNovaPj(false);
       setAutoOpenExpandedNext(true);
       await loadApplications();
-      // Build minimal card object to open editor immediately
+      // Build minimal card object to open editor imediatamente (dados via Applicants)
+      let nome = 'Cliente';
+      let cpf = '';
+      let telefone: string | undefined = undefined;
+      let email: string | undefined = undefined;
+      if (created.applicant_id) {
+        try {
+          const { data: appl } = await (supabase as any)
+            .from('applicants')
+            .select('primary_name, cpf_cnpj, phone, email')
+            .eq('id', created.applicant_id)
+            .maybeSingle();
+          if (appl) {
+            nome = appl.primary_name || nome;
+            cpf = appl.cpf_cnpj || '';
+            telefone = appl.phone || undefined;
+            email = appl.email || undefined;
+          }
+        } catch {}
+      }
       const newCard: CardItem = {
         id: created.id,
-        nome: created.title,
-        cpf: created.cpf_cnpj || '',
+        nome,
+        cpf,
         receivedAt: created.received_at || new Date().toISOString(),
         deadline: created.received_at || new Date().toISOString(),
         responsavel: undefined,
         responsavelId: undefined,
-        telefone: created.phone || undefined,
-        email: created.email || undefined,
+        telefone,
+        email,
         naturalidade: undefined,
         uf: undefined,
         applicantId: created.applicant_id,
@@ -2039,9 +2058,6 @@ useEffect(() => {
             console.log('🗑️ [DEBUG] Soft delete de card:', cardToDelete.id, 'motivo:', reason);
             
             // SOFT DELETE (não deleta permanentemente!)
-            console.log('🔍 [DEBUG] Profile ID:', profile?.id);
-            console.log('🔍 [DEBUG] Fazendo UPDATE no banco...');
-            
             const { error } = await (supabase as any)
               .from('kanban_cards')
               .update({
@@ -2050,8 +2066,6 @@ useEffect(() => {
                 deletion_reason: reason
               })
               .eq('id', cardToDelete.id);
-              
-            console.log('🔍 [DEBUG] Resultado do UPDATE:', { error });
 
             if (error) {
               console.error('🚨 [DEBUG] Erro ao fazer soft delete:', error);

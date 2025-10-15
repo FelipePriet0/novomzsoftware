@@ -266,6 +266,22 @@ export function usePfFichasTestConnection() {
       // Map informacoes relevantes
       // NOTA: info, infoMk, parecerAnalise são salvos em applicants, não em pf_fichas_test
 
+      // 🔍 DEBUG TEMPORÁRIO: Verificar campos "do ps"
+      if (import.meta.env.DEV) {
+        console.log('🔍 [DEBUG] Campos DO PS que serão salvos:', {
+          'cliente.doPs → do_ps': updateData.do_ps,
+          'endereco.doPs → endereco_do_ps': updateData.endereco_do_ps,
+          'empregoRenda.doPs → emprego_do_ps': updateData.emprego_do_ps,
+          'conjuge.doPs → conjuge_do_ps': updateData.conjuge_do_ps,
+          'formData recebido': {
+            cliente_doPs: formData.cliente?.doPs,
+            endereco_doPs: formData.endereco?.doPs,
+            empregoRenda_doPs: formData.empregoRenda?.doPs,
+            conjuge_doPs: formData.conjuge?.doPs,
+          }
+        });
+      }
+
       await updatePfFicha(pfFichaId, updateData);
       if (import.meta.env.DEV) console.log('✅ [usePfFichasTestConnection] Dados pessoais salvos');
 

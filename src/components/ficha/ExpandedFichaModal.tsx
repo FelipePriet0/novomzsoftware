@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,11 +7,10 @@ import {
 } from "@/components/ui/dialog";
 import NovaFichaComercialForm, { ComercialFormValues } from '@/components/NovaFichaComercialForm';
 import { BasicInfoData } from './BasicInfoModal';
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useDraftForm } from '@/hooks/useDraftForm';
+// Drafts desativados temporariamente
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, SaveIcon, CheckIcon, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
@@ -52,8 +51,7 @@ export function ExpandedFichaModal({
   onStatusChange,
   onRefetch
 }: ExpandedFichaModalProps) {
-  const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  // Drafts desativados: remover auto-save e estados relacionados
   const [showFirstConfirmDialog, setShowFirstConfirmDialog] = useState(false);
   const [showSecondConfirmDialog, setShowSecondConfirmDialog] = useState(false);
   const [formData, setFormData] = useState<ComercialFormValues | null>(null);
@@ -61,9 +59,11 @@ export function ExpandedFichaModal({
   const [pendingAction, setPendingAction] = useState<'close' | 'save' | null>(null);
   const [initialFormData, setInitialFormData] = useState<ComercialFormValues | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [loadedDraftData, setLoadedDraftData] = useState<any>(null);
-  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
-  const [lastFormSnapshot, setLastFormSnapshot] = useState<ComercialFormValues | null>(null);
+  // Drafts desativados: não carregamos/salvamos drafts por enquanto
+  // PF ficha (fonte específica PF)
+  const [pfInitial, setPfInitial] = useState<Partial<ComercialFormValues> | null>(null);
+  // Applicants (fonte primária)
+  const [applicantInitial, setApplicantInitial] = useState<Partial<ComercialFormValues> | null>(null);
   // Dev-safe CRUD state (test tables)
   const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
   const { savePersonalData } = usePfFichasTestConnection();
@@ -82,27 +82,7 @@ export function ExpandedFichaModal({
   };
 
   // Auto-save status component
-  const SaveStatus = () => {
-    if (isAutoSaving) {
-      return (
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Salvando...
-        </Badge>
-      );
-    }
-
-    if (lastSaved) {
-      return (
-        <Badge variant="outline" className="flex items-center gap-1">
-          <CheckIcon className="h-3 w-3 text-green-500" />
-          Salvo às {lastSaved.toLocaleTimeString()}
-        </Badge>
-      );
-    }
-
-    return null;
-  };
+  // Drafts desativados: indicador de auto-save removido
 
   // Function to normalize values for comparison
   const normalizeValue = (value: any): any => {
@@ -131,8 +111,6 @@ export function ExpandedFichaModal({
 
   const handleFormChange = (formData: any) => {
     setFormData(formData);
-    setLastFormSnapshot(formData);
-    
     // Only set hasChanges if we're initialized and there are actual changes
     if (isInitialized && initialFormData) {
       setHasChanges(true);
@@ -142,113 +120,11 @@ export function ExpandedFichaModal({
       setIsInitialized(true);
       setHasChanges(false); // No changes on initialization
     }
-    
-    // Clear existing timer
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
-    }
-
-    // Set new timer for auto-save
-    const timer = setTimeout(async () => {
-      const draftData = {
-        customer_data: {
-          ...basicInfo,
-          ...formData.cliente,
-        },
-        address_data: formData.endereco,
-        employment_data: formData.empregoRenda,
-        household_data: formData.relacoes,
-        spouse_data: formData.conjuge,
-        references_data: formData.referencias,
-        other_data: {
-          spc: formData.spc,
-          pesquisador: formData.pesquisador,
-          filiacao: formData.filiacao,
-          outras: formData.outras,
-          infoRelevantes: formData.infoRelevantes,
-        },
-      };
-      
-      if (applicationId) {
-        // 🚀 OTIMIZAÇÃO: Buscar applicant_id UMA VEZ SÓ (antes fazia 2x!)
-        const { data: cardData } = await supabase
-          .from('kanban_cards')
-          .select('applicant_id')
-          .eq('id', applicationId)
-          .maybeSingle();
-        
-        const applicantId = (cardData as any)?.applicant_id as string | undefined;
-
-        // 🚀 OTIMIZAÇÃO: Paralelizar operações (antes era sequencial)
-        const savePromises: Promise<any>[] = [
-          ensureCommercialFeitas(applicationId),
-          saveDraft(draftData, applicationId, 'full', false)
-        ];
-
-        // Atualizar applicants com campos canônicos
-        if (applicantId) {
-          const appUpdates: any = {};
-          // WhatsApp
-          if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
-          // Endereço
-          if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
-          if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
-          if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
-          if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
-          if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
-          // Preferências comerciais
-          if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
-          if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
-          if (typeof formData?.outras?.carneImpresso !== 'undefined') {
-            appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
-          }
-          if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
-          // Intake/solicitação
-          if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
-          if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
-          if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
-          if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
-          // Informações/Notas
-          if (formData?.spc) appUpdates.info_spc = formData.spc;
-          if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
-          if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
-          if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
-          if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
-          
-          // Adicionar updates de applicants e pf_fichas_test ao Promise.all
-          if (Object.keys(appUpdates).length > 0) {
-            savePromises.push(
-              supabase.from('applicants').update(appUpdates).eq('id', applicantId)
-            );
-          }
-
-          // Salvar dados específicos de PF em pf_fichas_test
-          savePromises.push(savePersonalData(applicantId, formData));
-        }
-
-        // 🚀 Executar TODAS as operações em paralelo
-        try {
-          await Promise.all(savePromises);
-          if (import.meta.env.DEV) console.log('✅ [ExpandedFichaModal] Auto-save completo!');
-        } catch (err) {
-          console.error('❌ [ExpandedFichaModal] Erro no auto-save:', err);
-        }
-      }
-    }, 5000); // 🚀 OTIMIZAÇÃO: Aumentado para 5s (reduz saves excessivos durante digitação)
-
-    setAutoSaveTimer(timer);
   };
 
   const handleClose = async () => {
-    // Se não há alterações, pode fechar direto
-    if (!hasChanges) {
-      onClose();
-      return;
-    }
-
-    // Há alterações: abrir fluxo de confirmação em duas etapas
-    setPendingAction('close');
-    setShowFirstConfirmDialog(true);
+    // Sem drafts: fechar diretamente quando solicitado
+    onClose();
   };
 
   const handleFirstConfirm = () => {
@@ -279,7 +155,6 @@ export function ExpandedFichaModal({
               },
             };
             await ensureCommercialFeitas(applicationId);
-            await saveDraft(draftData, applicationId, 'full', false);
           // Campos do cliente agora são salvos em applicants, não em kanban_cards
           // (removida atualização redundante de title, phone, email, cpf_cnpj)
           // Atualizar applicants com campos canônicos ao confirmar
@@ -292,6 +167,11 @@ export function ExpandedFichaModal({
             const aid = (kc as any)?.applicant_id as string | undefined;
             if (aid) {
               const appUpdates: any = {};
+              // Campos principais (Applicants como fonte primária)
+              if (formData?.cliente?.nome) appUpdates.primary_name = formData.cliente.nome;
+              if (formData?.cliente?.cpf) appUpdates.cpf_cnpj = formData.cliente.cpf;
+              if (formData?.cliente?.tel) appUpdates.phone = formData.cliente.tel;
+              if (formData?.cliente?.email) appUpdates.email = formData.cliente.email;
               if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
               if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
               if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
@@ -316,6 +196,11 @@ export function ExpandedFichaModal({
               if (Object.keys(appUpdates).length > 0) {
                 await supabase.from('applicants').update(appUpdates).eq('id', aid);
               }
+
+              // Persistir PF (pf_fichas_test) a partir do formulário (espelho do backend)
+              try {
+                await savePersonalData(aid, formData as any);
+              } catch (_) { /* silencioso para UX */ }
             }
           } catch (_) {}
           }
@@ -325,7 +210,7 @@ export function ExpandedFichaModal({
         } catch (_) {
           // ignore errors, manter UX
         } finally {
-          await clearEditingSession();
+          // Drafts desativados
         }
       }
       onClose();
@@ -335,7 +220,6 @@ export function ExpandedFichaModal({
   };
 
   const handleDiscardChanges = async () => {
-    await clearEditingSession();
     setShowFirstConfirmDialog(false);
     setShowSecondConfirmDialog(false);
     setPendingAction(null);
@@ -351,7 +235,7 @@ export function ExpandedFichaModal({
     } else {
       // Direct submit for new ficha
       await onSubmit(data);
-      await clearEditingSession();
+          // Drafts desativados
       // Fechar modal após submissão
       onClose();
     }
@@ -359,40 +243,7 @@ export function ExpandedFichaModal({
 
   // Deleção de pareceres desativada por regra de negócio
 
-  // Load existing draft data when modal opens
-  useEffect(() => {
-    const loadExistingDraft = async () => {
-      if (open && applicationId) {
-        setIsLoadingDraft(true);
-        try {
-          const { data: draft, error } = await supabase
-            .from('applications_drafts')
-            .select('*')
-            .eq('application_id', applicationId)
-            .maybeSingle();
-
-          if (!error && draft) {
-            if (import.meta?.env?.DEV) console.log('Loaded existing draft data:', draft);
-            setLoadedDraftData(draft);
-          } else {
-            if (import.meta?.env?.DEV) console.log('No existing draft found for applicationId:', applicationId);
-            setLoadedDraftData(null);
-          }
-        } catch (error) {
-          if (import.meta?.env?.DEV) console.error('Error loading draft data:', error);
-          setLoadedDraftData(null);
-        } finally {
-          setIsLoadingDraft(false);
-        }
-      } else if (open) {
-        // Reset state for new applications
-        setLoadedDraftData(null);
-        setIsLoadingDraft(false);
-      }
-    };
-
-    loadExistingDraft();
-  }, [open, applicationId]);
+  // Drafts desativados: sem carregamento de drafts
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -400,16 +251,144 @@ export function ExpandedFichaModal({
       setHasChanges(false);
       setIsInitialized(false);
       setInitialFormData(null);
+      setPfInitial(null);
     }
   }, [open]);
 
+  // Carregar PF (pf_fichas_test) primeiro e mapear para o form
   useEffect(() => {
-    return () => {
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-      }
-    };
-  }, [autoSaveTimer]);
+    (async () => {
+      try {
+        if (!open || !applicationId) return;
+        const { data: kc } = await (supabase as any)
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        const applicantId = (kc as any)?.applicant_id as string | undefined;
+        if (!applicantId) return;
+        // 1) Carregar Applicants (PRIMÁRIO)
+        try {
+          const { data: applicant } = await (supabase as any)
+            .from('applicants')
+            .select('*')
+            .eq('id', applicantId)
+            .maybeSingle();
+          if (applicant) {
+            const vencStr = typeof applicant.venc === 'number' && !isNaN(applicant.venc) ? String(applicant.venc) : undefined;
+            const carneStr = typeof applicant.carne_impresso === 'boolean'
+              ? (applicant.carne_impresso ? 'Sim' : 'Não')
+              : undefined;
+            const mappedApplicant: Partial<ComercialFormValues> = {
+              cliente: {
+                nome: applicant.primary_name || '',
+                cpf: applicant.cpf_cnpj || '',
+                tel: applicant.phone || '',
+                whats: applicant.whatsapp || '',
+                email: applicant.email || '',
+              },
+              endereco: {
+                end: applicant.address_line || '',
+                n: applicant.address_number || '',
+                compl: applicant.address_complement || '',
+                cep: applicant.cep || '',
+                bairro: applicant.bairro || '',
+              },
+              outras: {
+                planoEscolhido: applicant.plano_acesso || '',
+                diaVencimento: vencStr as any,
+                carneImpresso: carneStr as any,
+                svaAvulso: applicant.sva_avulso || '',
+                administrativas: {
+                  quemSolicitou: applicant.quem_solicitou || '',
+                  fone: applicant.telefone_solicitante || '',
+                  protocoloMk: applicant.protocolo_mk || '',
+                  meio: applicant.meio || undefined,
+                }
+              },
+              infoRelevantes: {
+                info: applicant.info_relevantes || '',
+                infoMk: applicant.info_mk || '',
+                parecerAnalise: applicant.parecer_analise || '',
+              },
+            };
+            setApplicantInitial(mappedApplicant);
+          }
+        } catch (_) { /* silencioso */ }
+
+        // 2) Carregar PF como complemento
+        const { data: pf } = await (supabase as any)
+          .from('pf_fichas_test')
+          .select('*')
+          .eq('applicant_id', applicantId)
+          .maybeSingle();
+        if (!pf) return;
+        const toISO = (d?: string | null) => (d ? String(d) : '');
+        const mapped: Partial<ComercialFormValues> = {
+          cliente: {
+            nasc: toISO(pf.birth_date),
+            naturalidade: pf.naturalidade || '',
+            uf: pf.uf_naturalidade || '',
+            doPs: pf.do_ps || '',
+          },
+          endereco: {
+            cond: pf.cond || '',
+            tempo: pf.tempo_endereco || '',
+            tipoMoradia: pf.tipo_moradia || undefined,
+            tipoMoradiaObs: pf.tipo_moradia_obs || '',
+            doPs: pf.endereco_do_ps || '',
+          },
+          relacoes: {
+            unicaNoLote: pf.unica_no_lote || undefined,
+            unicaNoLoteObs: pf.unica_no_lote_obs || '',
+            comQuemReside: pf.com_quem_reside || '',
+            nasOutras: pf.nas_outras || undefined,
+            temContrato: pf.tem_contrato || 'Não',
+            enviouContrato: pf.enviou_contrato || undefined,
+            nomeDe: pf.nome_de || '',
+            nomeLocador: pf.nome_locador || '',
+            telefoneLocador: pf.telefone_locador || '',
+            enviouComprovante: pf.enviou_comprovante || undefined,
+            tipoComprovante: pf.tipo_comprovante || undefined,
+            nomeComprovante: pf.nome_comprovante || '',
+            temInternetFixa: pf.tem_internet_fixa || undefined,
+            empresaInternet: pf.empresa_internet || '',
+            observacoes: pf.observacoes || '',
+          },
+          empregoRenda: {
+            profissao: pf.profissao || '',
+            empresa: pf.empresa || '',
+            vinculo: pf.vinculo || '',
+            vinculoObs: pf.vinculo_obs || '',
+            doPs: pf.emprego_do_ps || '',
+          },
+          conjuge: {
+            estadoCivil: pf.estado_civil || undefined,
+            obs: pf.conjuge_obs || '',
+            idade: typeof pf.conjuge_idade === 'number' ? String(pf.conjuge_idade) : '',
+            nome: pf.conjuge_nome || '',
+            telefone: pf.conjuge_telefone || '',
+            whatsapp: pf.conjuge_whatsapp || '',
+            cpf: pf.conjuge_cpf || '',
+            naturalidade: pf.conjuge_naturalidade || '',
+            uf: pf.conjuge_uf || '',
+            doPs: pf.conjuge_do_ps || '',
+          },
+          filiacao: {
+            pai: { nome: pf.pai_nome || '', reside: pf.pai_reside || '', telefone: pf.pai_telefone || '' },
+            mae: { nome: pf.mae_nome || '', reside: pf.mae_reside || '', telefone: pf.mae_telefone || '' },
+          },
+          referencias: {
+            ref1: { nome: pf.ref1_nome || '', parentesco: pf.ref1_parentesco || '', reside: pf.ref1_reside || '', telefone: pf.ref1_telefone || '' },
+            ref2: { nome: pf.ref2_nome || '', parentesco: pf.ref2_parentesco || '', reside: pf.ref2_reside || '', telefone: pf.ref2_telefone || '' },
+          },
+        };
+        setPfInitial(mapped);
+      } catch (_) { /* silencioso */ }
+    })();
+  }, [open, applicationId]);
+
+  // Drafts desativados: sem timers de auto-save
 
   // Map loaded draft data to form format
   const mapDraftToFormData = (draft: any): Partial<ComercialFormValues> => {
@@ -529,9 +508,7 @@ export function ExpandedFichaModal({
   };
 
   // Generate transformed form data based on loaded draft or defaults
-  const transformedFormData: Partial<ComercialFormValues> = loadedDraftData 
-    ? mapDraftToFormData(loadedDraftData) 
-    : {
+  const baseDefaults: Partial<ComercialFormValues> = {
     cliente: {
       nome: basicInfo.nome,
       cpf: basicInfo.cpf,
@@ -626,6 +603,28 @@ export function ExpandedFichaModal({
       parecerAnalise: '',
     },
   };
+  // Precedência: Applicants (primário) → PF (complementar) → Defaults
+  // Deep merge memoizado para evitar recriar o objeto a cada render (evita "travamento" ao digitar)
+  const transformedFormData: Partial<ComercialFormValues> = useMemo(() => {
+    const deepMerge = (target: any, source: any): any => {
+      if (!source) return target;
+      const out: any = Array.isArray(target) ? [...target] : { ...target };
+      for (const key of Object.keys(source)) {
+        const sVal = (source as any)[key];
+        const tVal = (out as any)[key];
+        if (sVal && typeof sVal === 'object' && !Array.isArray(sVal)) {
+          out[key] = deepMerge(tVal && typeof tVal === 'object' ? tVal : {}, sVal);
+        } else {
+          out[key] = sVal;
+        }
+      }
+      return out;
+    };
+    return deepMerge(
+      deepMerge(baseDefaults, applicantInitial || {}),
+      pfInitial || {}
+    );
+  }, [applicantInitial, pfInitial]);
 
   return (
     <>
@@ -641,7 +640,6 @@ export function ExpandedFichaModal({
                 Ficha Comercial - {basicInfo.nome}
               </DialogTitle>
               <div className="flex items-center gap-2">
-                <SaveStatus />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -655,46 +653,14 @@ export function ExpandedFichaModal({
             </div>
           </DialogHeader>
 
-          <div
-            className="flex-1 overflow-hidden"
-            onBlurCapture={async () => {
-              if (!applicationId || !lastFormSnapshot) return;
-              const formData = lastFormSnapshot;
-              const draftData = {
-                customer_data: { ...basicInfo, ...formData.cliente },
-                address_data: formData.endereco,
-                employment_data: formData.empregoRenda,
-                household_data: formData.relacoes,
-                spouse_data: formData.conjuge,
-                references_data: formData.referencias,
-                other_data: {
-                  spc: formData.spc,
-                  pesquisador: formData.pesquisador,
-                  filiacao: formData.filiacao,
-                  outras: formData.outras,
-                  infoRelevantes: formData.infoRelevantes,
-                },
-              };
-              try {
-                await ensureCommercialFeitas(applicationId);
-                await saveDraft(draftData, applicationId, 'full', false);
-              } catch {}
-            }}
-          >
-            {isLoadingDraft ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <span className="ml-2">Carregando dados da ficha...</span>
-              </div>
-            ) : (
-              <NovaFichaComercialForm
+          <div className="flex-1 overflow-hidden">
+            <NovaFichaComercialForm
                 onSubmit={handleSubmitWrapper}
                 initialValues={transformedFormData}
                 onFormChange={handleFormChange}
                 applicationId={applicationId}
                 onRefetch={onRefetch}
               />
-            )}
           </div>
         </DialogContent>
       </Dialog>

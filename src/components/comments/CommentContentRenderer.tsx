@@ -17,7 +17,7 @@ interface CommentContentRendererProps {
   onDeleteAttachment?: (attachmentId: string, filePath: string) => void;
   cardId?: string;
   commentId?: string;
-  onEditTask?: (task: any) => void; // Callback para editar tarefa
+  onEditTask?: (task: Task) => void; // Callback para editar tarefa
   tasks?: Task[]; // Tarefas carregadas no componente pai (otimização)
   onUpdateTaskStatus?: (taskId: string, status: 'pending' | 'completed') => Promise<boolean>; // Callback para atualizar status
   // Removido sistema de empresas - todos podem acessar anexos
@@ -49,14 +49,7 @@ export function CommentContentRenderer({
   const { toast } = useToast();
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Debug: verificar conteúdo do comentário (apenas se contém anexo)
-  if (content.includes('📎')) {
-    console.log('CommentContentRenderer processing attachment comment:', { 
-      content: content.substring(0, 100) + '...',
-      hasAttachmentsFromDB: attachments.length > 0,
-      attachmentsFromDB: attachments
-    });
-  }
+  // Logs removidos para performance
 
   // Verificar se é um comentário de TAREFA primeiro
   const taskMatch = content.match(TASK_COMMENT_REGEX);
@@ -123,13 +116,7 @@ export function CommentContentRenderer({
     const handleToggleTask = async () => {
       if (isUpdating || !onUpdateTaskStatus) return;
       
-      console.log('🔘 [handleToggleTask] Iniciando toggle da tarefa:', {
-        hasRelatedTask: !!relatedTask,
-        relatedTaskId: relatedTask?.id,
-        commentId,
-        cardId,
-        description: descriptionFromComment
-      });
+      // logs removidos
       
       setIsUpdating(true);
       try {
@@ -170,7 +157,6 @@ export function CommentContentRenderer({
         }
         
         if (!taskId) {
-          console.error('❌ [handleToggleTask] Nenhuma tarefa encontrada para atualizar');
           toast({
             title: 'Tarefa não encontrada',
             description: 'Não foi possível localizar a tarefa no banco de dados.',
@@ -188,7 +174,6 @@ export function CommentContentRenderer({
             : 'A tarefa foi reaberta.',
         });
       } catch (error) {
-        console.error('❌ [handleToggleTask] Erro ao processar tarefa:', error);
         toast({
           title: 'Erro ao processar tarefa',
           description: 'Não foi possível processar a tarefa.',
@@ -241,10 +226,7 @@ export function CommentContentRenderer({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() => {
-                        console.log('🔧 Clicando em "Editar Tarefa" - relatedTask:', relatedTask);
-                        onEditTask(relatedTask);
-                      }}
+                      onClick={() => onEditTask(relatedTask)}
                       className="text-sm"
                     >
                       Editar Tarefa
@@ -347,8 +329,7 @@ export function CommentContentRenderer({
       created_at: new Date().toISOString()
     };
 
-    // Debug reduzido
-    console.log('Created attachment data:', { file_path: attachmentData.file_path });
+    // Logs removidos
 
     // Função para tentar encontrar o arquivo correto baseado no nome
     const findCorrectFilePath = (fileName: string, cardTitle: string) => {
@@ -366,8 +347,7 @@ export function CommentContentRenderer({
         `card-attachments/${cardTitle}/${fileName}` // card-attachments/ANTONIO BOZUTT/FICHA CNPJ  (2).pdf
       ];
       
-      // Debug reduzido
-      console.log('Finding file path for:', { fileName, cardTitle });
+      // Logs removidos
       
       return variations[1]; // Retornar o segundo (com prefixo card-attachments) como padrão
     };

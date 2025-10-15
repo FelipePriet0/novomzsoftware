@@ -54,47 +54,25 @@ export function ObservationsWithComments({
 
 
   const handleReply = async (parentId: string, content: string) => {
-    if (!profile?.id) {
-      if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
-      return null;
-    }
-    
+    if (!profile?.id) return null;
     try {
-      const result = await replyToComment(
+      return await replyToComment(
         parentId,
         content,
         profile.id,
         currentUserName || profile.full_name || 'Usuário',
         profile.role
       );
-      return result; // IMPORTANTE: Retornar o resultado para o CommentsList
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('🚨 ERRO em handleReply:', error);
+    } catch {
       return null;
     }
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!profile?.id) {
-      if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
-      return false;
-    }
-    
+    if (!profile?.id) return false;
     try {
-      const result = await deleteComment(commentId);
-      
-      // 🧪 TESTE: Comentado temporariamente - Realtime deve sincronizar automaticamente
-      // Se comentários não desaparecerem após deletar, descomentar este bloco
-      // if (result && onRefetch) {
-      //   if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando onRefetch para recarregar comentários...');
-      //   setTimeout(() => {
-      //     onRefetch();
-      //   }, 100);
-      // }
-      
-      return result;
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('🚨 ERRO em handleDelete:', error);
+      return await deleteComment(commentId);
+    } catch {
       return false;
     }
   };
@@ -130,9 +108,7 @@ export function ObservationsWithComments({
                   onChange({
                     target: { name, value: '' }
                   } as React.ChangeEvent<HTMLTextAreaElement>);
-                } catch (error) {
-                  console.error('🚨 ERRO ao criar conversa:', error);
-                }
+                } catch {}
               }
             }
           }}
@@ -191,7 +167,7 @@ export function ObservationsWithComments({
             onAddComment={undefined}
             onReply={handleReply}
             onDelete={handleDelete}
-            onRefetch={onRefetch}
+            // Realtime sincroniza comentários; sem onRefetch explícito
           />
         </div>
       )}

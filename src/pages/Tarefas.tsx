@@ -88,13 +88,9 @@ export default function Tarefas() {
           person_type,
           assignee_id,
           created_by,
-          title,
-          cpf_cnpj,
-          phone,
-          email,
           received_at,
           due_at,
-          applicant:applicant_id ( id, primary_name, city, uf, email ),
+          applicant:applicant_id ( id, primary_name, cpf_cnpj, phone, email, city, uf ),
           creator:created_by ( id, full_name )
         `)
         .eq('id', cardId)
@@ -126,10 +122,10 @@ export default function Tarefas() {
 
       const mappedCard = {
         id: freshCard.id,
-        nome: freshCard.title ?? freshCard.applicant?.primary_name ?? 'Cliente',
-        telefone: freshCard.phone || undefined,
-        email: freshCard.email || freshCard.applicant?.email || undefined,
-        cpf: freshCard.cpf_cnpj || '',
+        nome: freshCard.applicant?.primary_name ?? 'Cliente',
+        telefone: freshCard.applicant?.phone || undefined,
+        email: freshCard.applicant?.email || undefined,
+        cpf: freshCard.applicant?.cpf_cnpj || '',
         personType: freshCard.person_type || undefined,
         receivedAt,
         deadline,

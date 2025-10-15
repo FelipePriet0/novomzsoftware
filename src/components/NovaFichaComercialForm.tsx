@@ -247,6 +247,20 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     defaultValues,
   });
 
+  // Resetar o formulário quando os valores iniciais mudarem (dados carregados do backend)
+  React.useEffect(() => {
+    // Se initialValues chegar/atualizar, reidratar o form para espelhar o backend
+    // Evitar sobrescrever enquanto o usuário digita (isDirty)
+    if (initialValues && !form.formState.isDirty) {
+      const merged: Partial<ComercialFormValues> = {
+        cliente: { nome: "" },
+        relacoes: { temContrato: "Não" },
+        ...initialValues,
+      };
+      form.reset(merged as any, { keepDirty: false, keepTouched: false });
+    }
+  }, [initialValues, applicationId, form.formState.isDirty]);
+
   // Initialize pareceres from existing data
   React.useEffect(() => {
     const existing = initialValues?.infoRelevantes?.parecerAnalise;

@@ -61,6 +61,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     // Novos campos PF
     cpf: card?.cpf_cnpj ?? "",
     whatsapp: card?.whatsapp ?? "",
+    email: (card as any)?.email ?? "",
     endereco: card?.endereco ?? "",
     numero: card?.numero ?? "",
     complemento: card?.complemento ?? "",
@@ -70,6 +71,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     plano_acesso: card?.plano_acesso ?? "",
     venc: card?.venc ? String(card.venc) : "",
     carne_impresso: (card?.carne_impresso === true ? 'Sim' : card?.carne_impresso === false ? 'Não' : ''),
+    // Novo campo SVA Avulso
+    sva_avulso: (card as any)?.sva_avulso ?? "",
   };
   
   const [form, setForm] = useState(initialForm);
@@ -240,16 +243,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         console.log('ℹ️ [ModalEditarFicha] Fallback de comentário ignorado:', err);
       }
 
-      console.log('📎 [ModalEditarFicha] Chamando onRefetch...');
-      // Recarregar a página para mostrar o comentário automático
-      if (onRefetch) {
-        onRefetch();
-      }
+      // Realtime cuida da sincronização
       // Forçar remount de CommentsList para recarregar comentários e anexos
       setCommentsRefreshKey((k) => k + 1);
-      console.log('📎 [ModalEditarFicha] Processo de upload completo!');
     } catch (error) {
-      console.error('Error uploading attachment:', error);
+      // silencioso para UX
     }
   };
 
@@ -341,7 +339,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [form.nome, form.telefone, form.agendamento, form.observacoes, form.cpf, form.whatsapp, form.endereco, form.numero, form.complemento, form.cep, form.bairro]);
+  }, [form.nome, form.telefone, form.agendamento, form.observacoes, form.cpf, form.whatsapp, form.endereco, form.numero, form.complemento, form.cep, form.bairro, form.email]);
   // incluir dependências novas
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
@@ -353,6 +351,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           if (form.plano_acesso !== initialForm.plano_acesso) updates.plano_acesso = form.plano_acesso;
           if (form.venc !== initialForm.venc) updates.venc = form.venc ? Number(form.venc) : null;
           if (form.carne_impresso !== initialForm.carne_impresso) updates.carne_impresso = form.carne_impresso === 'Sim' ? true : form.carne_impresso === 'Não' ? false : null;
+          if (form.sva_avulso !== initialForm.sva_avulso) updates.sva_avulso = form.sva_avulso;
           if (Object.keys(updates).length > 0) {
             await (supabase as any).from('applicants').update(updates).eq('id', (card as any).applicantId);
           }
@@ -360,7 +359,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       } catch {}
     }, 700);
     return () => clearTimeout(timer);
-  }, [form.plano_acesso, form.venc, form.carne_impresso]);
+  }, [form.plano_acesso, form.venc, form.carne_impresso, form.sva_avulso]);
 
   // Load pareceres (read-only) from backend for this ficha/card
   const loadPareceres = useCallback(async () => {
@@ -413,34 +412,35 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       if (!card?.id) return;
       const { data: k } = await (supabase as any)
         .from('kanban_cards')
-        .select(`
-          title, phone, cpf_cnpj, due_at,
-          applicant:applicant_id (
-            whatsapp, address_line, address_number, address_complement, bairro, cep,
-            plano_acesso, venc, carne_impresso
-          )
-        `)
+        .select('due_at, applicant_id')
         .eq('id', card.id)
         .maybeSingle();
-      if (k) {
-        const a = (k as any).applicant || {};
-        setForm((prev) => ({
-          ...prev,
-          nome: k.title ?? prev.nome,
-          telefone: k.phone ?? prev.telefone,
-          cpf: k.cpf_cnpj ?? prev.cpf,
-          whatsapp: a.whatsapp ?? prev.whatsapp,
-          endereco: a.address_line ?? prev.endereco,
-          numero: a.address_number ?? prev.numero,
-          complemento: a.address_complement ?? prev.complemento,
-          cep: a.cep ?? prev.cep,
-          bairro: a.bairro ?? prev.bairro,
-          agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
-          plano_acesso: a.plano_acesso ?? prev.plano_acesso,
-          venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
-          carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
-        }));
+      if (!k) return;
+      const applicantId = (k as any).applicant_id || (card as any)?.applicantId;
+      let a: any = {};
+      if (applicantId) {
+        const { data: aData } = await (supabase as any)
+          .from('applicants')
+          .select('email, whatsapp, address_line, address_number, address_complement, bairro, cep, plano_acesso, venc, carne_impresso, sva_avulso')
+          .eq('id', applicantId)
+          .maybeSingle();
+        a = aData || {};
       }
+      setForm((prev) => ({
+        ...prev,
+        email: a.email ?? prev.email,
+        whatsapp: a.whatsapp ?? prev.whatsapp,
+        endereco: a.address_line ?? prev.endereco,
+        numero: a.address_number ?? prev.numero,
+        complemento: a.address_complement ?? prev.complemento,
+        cep: a.cep ?? prev.cep,
+        bairro: a.bairro ?? prev.bairro,
+        agendamento: (k as any).due_at ? toDateInput((k as any).due_at) : prev.agendamento,
+        plano_acesso: a.plano_acesso ?? prev.plano_acesso,
+        venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+        carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+        sva_avulso: a.sva_avulso ?? prev.sva_avulso,
+      }));
     } catch (_) {
       // silencioso
     }
@@ -451,6 +451,88 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   useEffect(() => {
     loadPareceres();
   }, [loadPareceres]);
+
+  // Carregar valores atuais dando preferência a Applicants (fonte de verdade)
+  useEffect(() => {
+    const loadInitialForm = async () => {
+      try {
+        if (!card?.id) return;
+        const applicantId = (card as any)?.applicantId;
+        if (applicantId) {
+          // Buscar Applicants primeiro e espelhar no formulário
+          const { data: a } = await (supabase as any)
+            .from('applicants')
+            .select('primary_name, phone, cpf_cnpj, email, whatsapp, address_line, address_number, address_complement, bairro, cep, plano_acesso, venc, carne_impresso, sva_avulso')
+            .eq('id', applicantId)
+            .maybeSingle();
+          if (a) {
+            setForm((prev) => ({
+              ...prev,
+              nome: a.primary_name ?? prev.nome,
+              telefone: a.phone ?? prev.telefone,
+              cpf: a.cpf_cnpj ?? prev.cpf,
+              email: a.email ?? prev.email,
+              whatsapp: a.whatsapp ?? prev.whatsapp,
+              endereco: a.address_line ?? prev.endereco,
+              numero: a.address_number ?? prev.numero,
+              complemento: a.address_complement ?? prev.complemento,
+              cep: a.cep ?? prev.cep,
+              bairro: a.bairro ?? prev.bairro,
+              plano_acesso: a.plano_acesso ?? prev.plano_acesso,
+              venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+              carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+              sva_avulso: a.sva_avulso ?? prev.sva_avulso,
+            }));
+          }
+          // Buscar due_at do card para o campo de agendamento
+          const { data: k2 } = await (supabase as any)
+            .from('kanban_cards')
+            .select('due_at')
+            .eq('id', card.id)
+            .maybeSingle();
+          if (k2?.due_at) {
+            setForm((prev) => ({ ...prev, agendamento: toDateInput(k2.due_at) }));
+          }
+        } else {
+          // Fallback: buscar card e depois applicants
+          const { data: k } = await (supabase as any)
+            .from('kanban_cards')
+            .select('due_at, applicant_id')
+            .eq('id', card.id)
+            .maybeSingle();
+          if (!k) return;
+          let a: any = {};
+          if ((k as any).applicant_id) {
+            const { data: aData } = await (supabase as any)
+              .from('applicants')
+              .select('primary_name, phone, cpf_cnpj, email, whatsapp, address_line, address_number, address_complement, bairro, cep, plano_acesso, venc, carne_impresso, sva_avulso')
+              .eq('id', (k as any).applicant_id)
+              .maybeSingle();
+            a = aData || {};
+          }
+          setForm((prev) => ({
+            ...prev,
+            email: a.email ?? prev.email,
+            whatsapp: a.whatsapp ?? prev.whatsapp,
+            endereco: a.address_line ?? prev.endereco,
+            numero: a.address_number ?? prev.numero,
+            complemento: a.address_complement ?? prev.complemento,
+            cep: a.cep ?? prev.cep,
+            bairro: a.bairro ?? prev.bairro,
+            agendamento: (k as any).due_at ? toDateInput((k as any).due_at) : prev.agendamento,
+            plano_acesso: a.plano_acesso ?? prev.plano_acesso,
+            venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+            carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+            sva_avulso: a.sva_avulso ?? prev.sva_avulso,
+          }));
+        }
+      } catch (_) {
+        // silencioso
+      }
+    };
+    loadInitialForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card?.id]);
 
   // 🔴 REALTIME: Sincronizar pareceres quando o card for atualizado
   useEffect(() => {
@@ -486,6 +568,40 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       supabase.removeChannel(channel);
     };
   }, [card?.id, loadPareceres]);
+
+  // 🔴 REALTIME: Sincronizar campos do formulário quando Applicants (cliente) mudar (fonte de verdade)
+  useEffect(() => {
+    const applicantId = (card as any)?.applicantId;
+    if (!applicantId) return;
+    const channel = supabase
+      .channel(`applicant-fields-${applicantId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'applicants', filter: `id=eq.${applicantId}` },
+        (payload) => {
+          const a: any = (payload as any).new || {};
+          setForm((prev) => ({
+            ...prev,
+            nome: typeof a.primary_name !== 'undefined' ? (a.primary_name ?? prev.nome) : prev.nome,
+            telefone: typeof a.phone !== 'undefined' ? (a.phone ?? prev.telefone) : prev.telefone,
+            cpf: typeof a.cpf_cnpj !== 'undefined' ? (a.cpf_cnpj ?? prev.cpf) : prev.cpf,
+            email: typeof a.email !== 'undefined' ? (a.email ?? prev.email) : prev.email,
+            whatsapp: typeof a.whatsapp !== 'undefined' ? (a.whatsapp ?? prev.whatsapp) : prev.whatsapp,
+            endereco: typeof a.address_line !== 'undefined' ? (a.address_line ?? prev.endereco) : prev.endereco,
+            numero: typeof a.address_number !== 'undefined' ? (a.address_number ?? prev.numero) : prev.numero,
+            complemento: typeof a.address_complement !== 'undefined' ? (a.address_complement ?? prev.complemento) : prev.complemento,
+            cep: typeof a.cep !== 'undefined' ? (a.cep ?? prev.cep) : prev.cep,
+            bairro: typeof a.bairro !== 'undefined' ? (a.bairro ?? prev.bairro) : prev.bairro,
+            plano_acesso: typeof a.plano_acesso !== 'undefined' ? (a.plano_acesso ?? prev.plano_acesso) : prev.plano_acesso,
+            venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+            carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+            sva_avulso: typeof a.sva_avulso !== 'undefined' ? (a.sva_avulso ?? prev.sva_avulso) : prev.sva_avulso,
+          }));
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [(card as any)?.applicantId]);
 
   // Create new parecer and persist
   const handleCreateParecer = async () => {
@@ -807,13 +923,6 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   const persistBasicFieldsNow = async () => {
     try {
       if (!card?.id) return;
-      const updates: any = {
-        title: form.nome,
-        phone: form.telefone,
-        cpf_cnpj: form.cpf,
-      };
-      await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
-
       // due_at separado (formatar para meia-noite UTC se houver data)
       if (form.agendamento) {
         const parts = form.agendamento.split('-').map((x) => parseInt(x, 10));
@@ -827,21 +936,12 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         await (supabase as any).from('kanban_cards').update({ due_at: null }).eq('id', card.id);
       }
 
-      // Espelhar alguns campos adicionais seguros
-      const more: any = {};
-      if (form.plano_acesso) more.plano_acesso = form.plano_acesso;
-      if (form.venc) more.venc = Number(form.venc);
-      if (form.carne_impresso === 'Sim') more.carne_impresso = true;
-      if (form.carne_impresso === 'Não') more.carne_impresso = false;
-      if (Object.keys(more).length > 0) {
-        await (supabase as any).from('kanban_cards').update(more).eq('id', card.id);
-      }
-
       // Atualizar applicants (se existir) para manter consistência
       if ((card as any).applicantId) {
         const appUpdates: any = {};
         if (form.nome) appUpdates.primary_name = form.nome;
         if (form.telefone) appUpdates.phone = form.telefone;
+        if (form.email) appUpdates.email = form.email;
         if (Object.keys(appUpdates).length > 0) {
           await (supabase as any).from('applicants').update(appUpdates).eq('id', (card as any).applicantId);
         }
@@ -854,55 +954,10 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   const handleAnalyze = async () => {
     // 1) Persistir campos básicos no card
     await persistBasicFieldsNow();
-
-    // 2) Atualizar (ou criar) rascunho mínimo para PF (applications_drafts)
-    try {
-      if (card?.id) {
-        const draftPayload: any = {
-          customer_data: {
-            nome: form.nome,
-            cpf: form.cpf,
-            tel: form.telefone,
-            email: (card as any)?.email || '',
-          },
-        };
-
-        // Verificar se já existe draft para esta aplicação
-        const { data: existing } = await (supabase as any)
-          .from('applications_drafts')
-          .select('id')
-          .eq('application_id', card.id)
-          .maybeSingle();
-
-        if (existing?.id) {
-          await (supabase as any)
-            .from('applications_drafts')
-            .update({
-              customer_data: draftPayload.customer_data,
-              application_id: card.id,
-              step: 'basic',
-            })
-            .eq('id', existing.id);
-        } else {
-          const { data: auth } = await (supabase as any).auth.getUser();
-          await (supabase as any)
-            .from('applications_drafts')
-            .insert({
-              user_id: auth?.user?.id,
-              application_id: card.id,
-              customer_data: draftPayload.customer_data,
-              step: 'basic',
-            });
-        }
-      }
-    } catch (_) {
-      // silencioso
-    }
-
-    // 3) Forçar espelhamento local e atualizar listas quando possível
+    // 2) Forçar espelhamento local e atualizar listas quando possível
     await triggerLocalRefetch();
 
-    // 4) Abrir modal expandido
+    // 3) Abrir modal expandido
     setShowExpandedModal(true);
   };
 
@@ -934,14 +989,6 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     // Persistir alterações imediatamente para evitar perda por debounce
     try {
       if (card?.id) {
-        // Persistir todos os campos espelhados
-        const updates: any = {
-          title: form.nome,
-          phone: form.telefone,
-          cpf_cnpj: form.cpf,
-        };
-        await (supabase as any).from('kanban_cards').update(updates).eq('id', card.id);
-
         // due_at separado (formatado ao meio-dia UTC)
         if (form.agendamento && form.agendamento !== initialForm.agendamento) {
           const parts = form.agendamento.split('-').map((x) => parseInt(x, 10));
@@ -1094,6 +1141,23 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               </div>
             </div>
           </div>
+          {/* E-mail abaixo de Telefone e WhatsApp */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2">
+              <div>
+                <Label>E-mail</Label>
+                <Input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="cliente@exemplo.com"
+                  autoComplete="off"
+                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Novos campos de endereço PF */}
           <div className="space-y-2">
@@ -1167,47 +1231,47 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               </div>
             </div>
           </div>
-          {/* Plano / Vencimento / Carnê impresso */}
+          {/* Plano / Vencimento ao lado & SVA Avulso no lugar do Vencimento */}
           <div className="mt-4 space-y-2">
-            <div>
-              <Label>Plano</Label>
-              <Select
-                onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
-                value={form.plano_acesso}
-              >
-                <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
-                  <SelectValue placeholder="Selecionar plano" />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
-                    {([
-                      { key: 'CGNAT', label: 'CGNAT' },
-                      { key: 'DIN', label: 'DINÂMICO' },
-                      { key: 'FIXO', label: 'FIXO' },
-                    ] as const).map(({ key, label }) => {
-                      const active = planCTA === key;
-                      return (
-                        <Button
-                          key={key}
-                          type="button"
-                          variant="outline"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
-                          className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-2 text-xs rounded-[30px]'}
-                          size="sm"
-                        >
-                          {label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                  {planOptions.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>Plano</Label>
+                <Select
+                  onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
+                  value={form.plano_acesso}
+                >
+                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectValue placeholder="Selecionar plano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
+                      {([
+                        { key: 'CGNAT', label: 'CGNAT' },
+                        { key: 'DIN', label: 'DINÂMICO' },
+                        { key: 'FIXO', label: 'FIXO' },
+                      ] as const).map(({ key, label }) => {
+                        const active = planCTA === key;
+                        return (
+                          <Button
+                            key={key}
+                            type="button"
+                            variant="outline"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
+                            className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-2 text-xs rounded-[30px]'}
+                            size="sm"
+                          >
+                            {label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    {planOptions.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label>Dia de vencimento</Label>
                 <Select
@@ -1221,6 +1285,31 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                     {['5','10','15','20','25'].map(v => (
                       <SelectItem key={v} value={v}>{v}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <Label>SVA Avulso</Label>
+                <Select
+                  onValueChange={(v) => setForm((p) => ({ ...p, sva_avulso: v }))}
+                  value={form.sva_avulso}
+                >
+                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectValue placeholder="Selecionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)">MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)</SelectItem>
+                    <SelectItem value="DEZZER: R$15,00">DEZZER: R$15,00</SelectItem>
+                    <SelectItem value="MZ CINE-PLAY: R$19,90">MZ CINE-PLAY: R$19,90</SelectItem>
+                    <SelectItem value="SETUP BOX MZNET: R$100,00">SETUP BOX MZNET: R$100,00</SelectItem>
+                    <SelectItem value="01 WI-FI EXTEND (SEM FIO): R$25,90">01 WI-FI EXTEND (SEM FIO): R$25,90</SelectItem>
+                    <SelectItem value="02 WI-FI EXTEND (SEM FIO): R$49,90">02 WI-FI EXTEND (SEM FIO): R$49,90</SelectItem>
+                    <SelectItem value="03 WI-FI EXTEND (SEM FIO): R$74,90">03 WI-FI EXTEND (SEM FIO): R$74,90</SelectItem>
+                    <SelectItem value="01 WI-FI EXTEND (CABEADO): R$35,90">01 WI-FI EXTEND (CABEADO): R$35,90</SelectItem>
+                    <SelectItem value="02 WI-FI EXTEND (CABEADO): R$69,90">02 WI-FI EXTEND (CABEADO): R$69,90</SelectItem>
+                    <SelectItem value="03 WI-FI EXTEND (CABEADO): R$100,00">03 WI-FI EXTEND (CABEADO): R$100,00</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
