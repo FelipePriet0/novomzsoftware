@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -45,7 +45,7 @@ import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Calendar as CalendarIcon, UserPlus, Search, Edit, User, ChevronDown } from "lucide-react";
+import { Calendar as CalendarIcon, UserPlus, Search, Edit, User, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import ModalEditarFicha from "@/components/ui/ModalEditarFicha";
 import NovaFichaComercialForm, { ComercialFormValues } from "@/components/NovaFichaComercialForm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -291,6 +291,8 @@ export default function KanbanBoard() {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   const { checkForExistingSession } = useDraftPersistence();
+  // Ref para rolagem horizontal (estilo Trello)
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   
   // Hook para gerenciar anexos do card selecionado
   const { 
@@ -644,27 +646,39 @@ export default function KanbanBoard() {
     
     if (!active.rect.current.translated) return;
     
-    const { top, bottom } = active.rect.current.translated;
-    const container = document.querySelector('.kanban-container');
-    
-    if (!container) return;
-    
-    const containerRect = container.getBoundingClientRect();
-    const scrollThreshold = 100;
-    
-    // Scroll para cima se próximo do topo
-    if (top < containerRect.top + scrollThreshold) {
-      container.scrollBy({ top: -10, behavior: 'smooth' });
-      setIsScrolling(true);
+    const { top, bottom, left, right } = active.rect.current.translated;
+    // Container vertical (página) e horizontal (colunas)
+    const pageContainer = document.querySelector('.kanban-container');
+    const hContainer = scrollRef.current;
+
+    const vThreshold = 100;
+    const hThreshold = 140;
+
+    let didScroll = false;
+
+    if (pageContainer) {
+      const rect = pageContainer.getBoundingClientRect();
+      if (top < rect.top + vThreshold) {
+        pageContainer.scrollBy({ top: -10, behavior: 'smooth' });
+        didScroll = true;
+      } else if (bottom > rect.bottom - vThreshold) {
+        pageContainer.scrollBy({ top: 10, behavior: 'smooth' });
+        didScroll = true;
+      }
     }
-    // Scroll para baixo se próximo da parte inferior
-    else if (bottom > containerRect.bottom - scrollThreshold) {
-      container.scrollBy({ top: 10, behavior: 'smooth' });
-      setIsScrolling(true);
+
+    if (hContainer) {
+      const rect = hContainer.getBoundingClientRect();
+      if (left < rect.left + hThreshold) {
+        hContainer.scrollBy({ left: -16, behavior: 'smooth' });
+        didScroll = true;
+      } else if (right > rect.right - hThreshold) {
+        hContainer.scrollBy({ left: 16, behavior: 'smooth' });
+        didScroll = true;
+      }
     }
-    else {
-      setIsScrolling(false);
-    }
+
+    setIsScrolling(didScroll);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -1658,73 +1672,106 @@ useEffect(() => {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
-            <ColumnDropArea 
-              key={col.id} 
-              columnId={col.id}
-              isDragOver={dragOverColumn === col.id}
-              activeId={activeId}
-            >
-              <div className="rounded-xl border bg-card">
-                <div
-                  className="px-4 py-3 border-b flex items-center justify-between"
-                  style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
-                >
-                  <h2 className="font-semibold">{col.title}</h2>
-                  <Badge variant="secondary" className="bg-white text-[#018942]">
-                    {getCardsWithPlaceholder(
-                      kanbanArea === 'comercial'
-                        ? (commercialByColumn.get(col.id) || [])
-                        : (analysisByColumn.get(col.id) || []),
-                      col.id
-                    ).length}
-                  </Badge>
-                </div>
-                <div className="p-3">
-                  <SortableContext
-                    items={getCardsWithPlaceholder(
-                      kanbanArea === 'comercial'
-                        ? (commercialByColumn.get(col.id) || [])
-                        : (analysisByColumn.get(col.id) || []),
-                      col.id
-                    ).map((c) => c.id)}
-                    strategy={verticalListSortingStrategy}
+        {/* Contêiner horizontal de colunas estilo Trello */}
+        <div className="relative">
+          <div
+            ref={scrollRef}
+            className="overflow-x-auto overflow-y-visible pb-4"
+          >
+            <div className="flex items-start gap-4 min-h-[200px] w-max pr-4">
+              {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
+                <div key={col.id} className="min-w-[320px] w-[320px] max-w-[340px]">
+                  <ColumnDropArea 
+                    columnId={col.id}
+                    isDragOver={dragOverColumn === col.id}
+                    activeId={activeId}
                   >
-                    <div className="min-h-[120px] space-y-3">
-                      {getCardsWithPlaceholder(
-                        kanbanArea === 'comercial'
-                          ? (commercialByColumn.get(col.id) || [])
-                          : (analysisByColumn.get(col.id) || []),
-                        col.id
-                      )
-                         .map((card) => (
-                             <OptimizedKanbanCard
-                               key={card.id}
-                               card={card}
-                               isOverdue={isOverdue(card)}
-                               allowMove={allowMove}
-                               onEdit={openEdit}
-                               onDelete={(card) => {
-                                 setCardToDelete(card);
-                                 setShowDeleteConfirm(true);
-                               }}
-                               onIngressar={handleIngressar}
-                               onAprovar={handleAprovar}
-                               onNegar={handleNegar}
-                               onReanalisar={handleReanalisar}
-                               onStatusChange={handleStatusChange}
-                               isDragging={activeId === card.id}
-                               onAttachmentClick={handleAttachmentClick}
-                               onCardClick={handleCardClick}
-                             />
-                         ))}
+                    <div className="rounded-xl border bg-card h-full">
+                      <div
+                        className="px-4 py-3 border-b flex items-center justify-between sticky top-0 z-10"
+                        style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
+                      >
+                        <h2 className="font-semibold truncate">{col.title}</h2>
+                        <Badge variant="secondary" className="bg-white text-[#018942]">
+                          {getCardsWithPlaceholder(
+                            kanbanArea === 'comercial'
+                              ? (commercialByColumn.get(col.id) || [])
+                              : (analysisByColumn.get(col.id) || []),
+                            col.id
+                          ).length}
+                        </Badge>
+                      </div>
+                      <div className="p-3">
+                        <SortableContext
+                          items={getCardsWithPlaceholder(
+                            kanbanArea === 'comercial'
+                              ? (commercialByColumn.get(col.id) || [])
+                              : (analysisByColumn.get(col.id) || []),
+                            col.id
+                          ).map((c) => c.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="min-h-[120px] space-y-3">
+                            {getCardsWithPlaceholder(
+                              kanbanArea === 'comercial'
+                                ? (commercialByColumn.get(col.id) || [])
+                                : (analysisByColumn.get(col.id) || []),
+                              col.id
+                            )
+                               .map((card) => (
+                                   <OptimizedKanbanCard
+                                     key={card.id}
+                                     card={card}
+                                     isOverdue={isOverdue(card)}
+                                     allowMove={allowMove}
+                                     onEdit={openEdit}
+                                     onDelete={(card) => {
+                                       setCardToDelete(card);
+                                       setShowDeleteConfirm(true);
+                                     }}
+                                     onIngressar={handleIngressar}
+                                     onAprovar={handleAprovar}
+                                     onNegar={handleNegar}
+                                     onReanalisar={handleReanalisar}
+                                     onStatusChange={handleStatusChange}
+                                     isDragging={activeId === card.id}
+                                     onAttachmentClick={handleAttachmentClick}
+                                     onCardClick={handleCardClick}
+                                   />
+                               ))}
+                          </div>
+                        </SortableContext>
+                      </div>
                     </div>
-                  </SortableContext>
+                  </ColumnDropArea>
                 </div>
-              </div>
-            </ColumnDropArea>
-          ))}
+              ))}
+            </div>
+          </div>
+
+          {/* Barra de navegação inferior com setas */}
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
+              aria-label="Rolar para a esquerda"
+              className="border-[#018942] text-[#018942] hover:bg-[#018942]/10"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
+              aria-label="Rolar para a direita"
+              className="border-[#018942] text-[#018942] hover:bg-[#018942]/10"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </DndContext>
 
