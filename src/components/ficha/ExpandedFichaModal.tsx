@@ -38,6 +38,7 @@ interface ExpandedFichaModalProps {
   onSubmit: (data: ComercialFormValues) => Promise<void>;
   basicInfo: BasicInfoData;
   applicationId?: string;
+  applicantId?: string;
   onStatusChange?: (cardId: string, newStatus: string) => void;
   onRefetch?: () => void;
 }
@@ -48,6 +49,7 @@ export function ExpandedFichaModal({
   onSubmit, 
   basicInfo,
   applicationId,
+  applicantId,
   onStatusChange,
   onRefetch
 }: ExpandedFichaModalProps) {
@@ -67,6 +69,7 @@ export function ExpandedFichaModal({
   // Dev-safe CRUD state (test tables)
   const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
   const { savePersonalData } = usePfFichasTestConnection();
+  const [formApi, setFormApi] = useState<{ getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> } | null>(null);
   // Removido: fluxo applicants_test (legado)
 
   const ensureCommercialFeitas = async (appId?: string) => {
@@ -123,7 +126,59 @@ export function ExpandedFichaModal({
   };
 
   const handleClose = async () => {
-    // Sem drafts: fechar diretamente quando solicitado
+    // Salvar rapidamente (flush do autosave do form) antes de fechar
+    try {
+      if (formApi?.flushAutosave) {
+        await formApi.flushAutosave();
+      }
+      if (formData) {
+        let aid: string | undefined = applicantId;
+        if (!aid && applicationId) {
+          const { data: kc } = await (supabase as any)
+            .from('kanban_cards')
+            .select('applicant_id')
+            .eq('id', applicationId)
+            .maybeSingle();
+          aid = (kc as any)?.applicant_id as string | undefined;
+        }
+        if (aid) {
+          const appUpdates: any = {};
+          if (formData?.cliente?.nome) appUpdates.primary_name = formData.cliente.nome;
+          if (formData?.cliente?.cpf) appUpdates.cpf_cnpj = formData.cliente.cpf;
+          if (formData?.cliente?.tel) appUpdates.phone = formData.cliente.tel;
+          if (formData?.cliente?.email) appUpdates.email = formData.cliente.email;
+          if (formData?.cliente?.whats) appUpdates.whatsapp = formData.cliente.whats;
+          if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+          if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+          if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+          if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+          if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+          if (formData?.outras?.planoEscolhido) appUpdates.plano_acesso = formData.outras.planoEscolhido;
+          if (formData?.outras?.diaVencimento) appUpdates.venc = Number(formData.outras.diaVencimento);
+          if (typeof formData?.outras?.carneImpresso !== 'undefined') {
+            appUpdates.carne_impresso = formData.outras.carneImpresso === 'Sim' ? true : formData.outras.carneImpresso === 'Não' ? false : null;
+          }
+          if (formData?.outras?.svaAvulso) appUpdates.sva_avulso = formData.outras.svaAvulso;
+          if ((formData as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (formData as any).outras.administrativas.quemSolicitou;
+          if ((formData as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (formData as any).outras.administrativas.fone;
+          if ((formData as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (formData as any).outras.administrativas.protocoloMk;
+          if ((formData as any)?.outras?.administrativas?.meio) appUpdates.meio = (formData as any).outras.administrativas.meio;
+          if (formData?.spc) appUpdates.info_spc = formData.spc;
+          if (formData?.pesquisador) appUpdates.info_pesquisador = formData.pesquisador;
+          if (formData?.infoRelevantes?.info) appUpdates.info_relevantes = formData.infoRelevantes.info;
+          if (formData?.infoRelevantes?.infoMk) appUpdates.info_mk = formData.infoRelevantes.infoMk;
+          if (formData?.infoRelevantes?.parecerAnalise) appUpdates.parecer_analise = formData.infoRelevantes.parecerAnalise;
+          if (Object.keys(appUpdates).length > 0) {
+            await (supabase as any).from('applicants').update(appUpdates).eq('id', aid);
+          }
+          try {
+            await savePersonalData(aid, formData as any);
+          } catch (_) { /* silencioso */ }
+        }
+      }
+    } catch (_) {
+      // silencioso para não travar fechamento
+    }
     onClose();
   };
 
@@ -159,12 +214,15 @@ export function ExpandedFichaModal({
           // (removida atualização redundante de title, phone, email, cpf_cnpj)
           // Atualizar applicants com campos canônicos ao confirmar
           try {
-            const { data: kc } = await supabase
-              .from('kanban_cards')
-              .select('applicant_id')
-              .eq('id', applicationId)
-              .maybeSingle();
-            const aid = (kc as any)?.applicant_id as string | undefined;
+            let aid: string | undefined = applicantId;
+            if (!aid && applicationId) {
+              const { data: kc } = await supabase
+                .from('kanban_cards')
+                .select('applicant_id')
+                .eq('id', applicationId)
+                .maybeSingle();
+              aid = (kc as any)?.applicant_id as string | undefined;
+            }
             if (aid) {
               const appUpdates: any = {};
               // Campos principais (Applicants como fonte primária)
@@ -255,24 +313,28 @@ export function ExpandedFichaModal({
     }
   }, [open]);
 
-  // Carregar PF (pf_fichas_test) primeiro e mapear para o form
+  // Carregar Applicants (primário) e PF (pf_fichas_test) e mapear para o form
   useEffect(() => {
     (async () => {
       try {
-        if (!open || !applicationId) return;
-        const { data: kc } = await (supabase as any)
-          .from('kanban_cards')
-          .select('applicant_id')
-          .eq('id', applicationId)
-          .maybeSingle();
-        const applicantId = (kc as any)?.applicant_id as string | undefined;
-        if (!applicantId) return;
+        if (!open) return;
+        // Resolver applicant_id: usar prop se disponível; senão buscar via kanban_cards
+        let finalApplicantId: string | undefined = applicantId;
+        if (!finalApplicantId && applicationId) {
+          const { data: kc } = await (supabase as any)
+            .from('kanban_cards')
+            .select('applicant_id')
+            .eq('id', applicationId)
+            .maybeSingle();
+          finalApplicantId = (kc as any)?.applicant_id as string | undefined;
+        }
+        if (!finalApplicantId) return;
         // 1) Carregar Applicants (PRIMÁRIO)
         try {
           const { data: applicant } = await (supabase as any)
             .from('applicants')
             .select('*')
-            .eq('id', applicantId)
+            .eq('id', finalApplicantId)
             .maybeSingle();
           if (applicant) {
             const vencStr = typeof applicant.venc === 'number' && !isNaN(applicant.venc) ? String(applicant.venc) : undefined;
@@ -320,7 +382,7 @@ export function ExpandedFichaModal({
         const { data: pf } = await (supabase as any)
           .from('pf_fichas_test')
           .select('*')
-          .eq('applicant_id', applicantId)
+          .eq('applicant_id', finalApplicantId)
           .maybeSingle();
         if (!pf) return;
         const toISO = (d?: string | null) => (d ? String(d) : '');
@@ -604,26 +666,25 @@ export function ExpandedFichaModal({
     },
   };
   // Precedência: Applicants (primário) → PF (complementar) → Defaults
-  // Deep merge memoizado para evitar recriar o objeto a cada render (evita "travamento" ao digitar)
+  // Mapeamento direto por seção (sem merge genérico)
   const transformedFormData: Partial<ComercialFormValues> = useMemo(() => {
-    const deepMerge = (target: any, source: any): any => {
-      if (!source) return target;
-      const out: any = Array.isArray(target) ? [...target] : { ...target };
-      for (const key of Object.keys(source)) {
-        const sVal = (source as any)[key];
-        const tVal = (out as any)[key];
-        if (sVal && typeof sVal === 'object' && !Array.isArray(sVal)) {
-          out[key] = deepMerge(tVal && typeof tVal === 'object' ? tVal : {}, sVal);
-        } else {
-          out[key] = sVal;
-        }
-      }
-      return out;
-    };
-    return deepMerge(
-      deepMerge(baseDefaults, applicantInitial || {}),
-      pfInitial || {}
-    );
+    const out: any = JSON.parse(JSON.stringify(baseDefaults));
+    if (applicantInitial) {
+      if (applicantInitial.cliente) out.cliente = { ...out.cliente, ...applicantInitial.cliente };
+      if (applicantInitial.endereco) out.endereco = { ...out.endereco, ...applicantInitial.endereco };
+      if (applicantInitial.outras) out.outras = { ...out.outras, ...applicantInitial.outras };
+      if (applicantInitial.infoRelevantes) out.infoRelevantes = { ...out.infoRelevantes, ...applicantInitial.infoRelevantes };
+    }
+    if (pfInitial) {
+      if (pfInitial.cliente) out.cliente = { ...out.cliente, ...pfInitial.cliente };
+      if (pfInitial.endereco) out.endereco = { ...out.endereco, ...pfInitial.endereco };
+      if (pfInitial.relacoes) out.relacoes = { ...out.relacoes, ...pfInitial.relacoes };
+      if (pfInitial.empregoRenda) out.empregoRenda = { ...out.empregoRenda, ...pfInitial.empregoRenda };
+      if (pfInitial.conjuge) out.conjuge = { ...out.conjuge, ...pfInitial.conjuge };
+      if (pfInitial.filiacao) out.filiacao = { ...out.filiacao, ...pfInitial.filiacao };
+      if (pfInitial.referencias) out.referencias = { ...out.referencias, ...pfInitial.referencias };
+    }
+    return out as Partial<ComercialFormValues>;
   }, [applicantInitial, pfInitial]);
 
   return (
@@ -659,6 +720,8 @@ export function ExpandedFichaModal({
                 initialValues={transformedFormData}
                 onFormChange={handleFormChange}
                 applicationId={applicationId}
+                applicantId={applicantId}
+                onExpose={(api) => setFormApi(api)}
                 onRefetch={onRefetch}
               />
           </div>

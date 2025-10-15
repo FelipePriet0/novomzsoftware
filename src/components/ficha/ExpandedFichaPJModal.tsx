@@ -32,6 +32,7 @@ interface ExpandedFichaPJModalProps {
   companyName?: string;
   applicationId?: string;
   onRefetch?: () => void;
+  applicantId?: string;
 }
 
 type Parecer = {
@@ -50,7 +51,9 @@ type Parecer = {
   is_thread_starter?: boolean;
 };
 
-export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }: ExpandedFichaPJModalProps) {
+import { usePjFichasTestConnection } from '@/hooks/usePjFichasTestConnection';
+
+export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, applicantId: applicantIdProp }: ExpandedFichaPJModalProps) {
   const { profile } = useAuth();
   const { name: currentUserName } = useCurrentUser();
   const [pareceres, setPareceres] = useState<Parecer[]>([]);
@@ -75,11 +78,12 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
   // Removido: estado e hooks de tabelas de teste
 
-  // Descobrir applicant_id e preparar hook de contatos
-  const [applicantId, setApplicantId] = useState<string | null>(null);
+  // Descobrir applicant_id e preparar hook de contatos (preferir prop)
+  const [applicantId, setApplicantId] = useState<string | null>(applicantIdProp || null);
   useEffect(() => {
     (async () => {
-      if (!applicationId) return;
+      if (applicantIdProp) { setApplicantId(applicantIdProp); return; }
+      if (!applicationId) { setApplicantId(null); return; }
       const { data } = await (supabase as any)
         .from('kanban_cards')
         .select('applicant_id')
@@ -87,8 +91,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         .maybeSingle();
       setApplicantId((data as any)?.applicant_id || null);
     })();
-  }, [applicationId]);
+  }, [applicationId, applicantIdProp]);
   const { update: updateApplicantContacts } = useApplicantContacts(applicantId || undefined);
+  const { saveCompanyData } = usePjFichasTestConnection();
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -225,7 +230,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           if ((card as any)?.applicant_id) {
             const { data: appl } = await supabase
               .from('applicants')
-              .select('primary_name, cpf_cnpj, quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email')
+              .select('primary_name, cpf_cnpj, quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email, carne_impresso, venc, plano_acesso, sva_avulso, meio, protocolo_mk, info_spc, info_pesquisador, info_relevantes, info_mk')
               .eq('id', (card as any).applicant_id)
               .maybeSingle();
             if (appl) {
@@ -244,10 +249,20 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                 solicitacao: {
                   quem: (appl as any).quem_solicitou || '',
                   tel: (appl as any).telefone_solicitante || '',
+                  meio: (appl as any).meio || '',
+                  protocolo: (appl as any).protocolo_mk || '',
+                  planoAcesso: (appl as any).plano_acesso || undefined,
+                  svaAvulso: (appl as any).sva_avulso || '',
+                  venc: typeof (appl as any).venc === 'number' ? String((appl as any).venc) : undefined,
+                  carneImpresso: typeof (appl as any).carne_impresso === 'boolean' ? ((appl as any).carne_impresso ? 'Sim' : 'Não') : undefined,
                 },
                 info: {
                   ...(defaults as any).info,
                   parecerAnalise: (appl as any).parecer_analise || (defaults as any)?.info?.parecerAnalise || '',
+                  relevantes: (appl as any).info_relevantes || (defaults as any)?.info?.relevantes || '',
+                  spc: (appl as any).info_spc || (defaults as any)?.info?.spc || '',
+                  outrasPs: (appl as any).info_pesquisador || (defaults as any)?.info?.outrasPs || '',
+                  mk: (appl as any).info_mk || (defaults as any)?.info?.mk || '',
                 },
               } as any;
             }
@@ -718,17 +733,18 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       try {
         await ensureCommercialFeitas(applicationId);
         await saveDraft(draftPayload, applicationId, 'pj', false);
-        // Campos da empresa agora são salvos em applicants, não em kanban_cards
-        // (removida atualização redundante de title, phone, email, cpf_cnpj)
-        // Atualizar applicants com campos do cliente (autosave)
+        // Atualizar applicants + pj_fichas_test (autosave)
         try {
-          const { data: kc } = await supabase
-            .from('kanban_cards')
-            .select('applicant_id')
-            .eq('id', applicationId)
-            .maybeSingle();
-          const aid = (kc as any)?.applicant_id as string | undefined;
+          const aid = applicantId || (await (async () => {
+            const { data: kc } = await supabase
+              .from('kanban_cards')
+              .select('applicant_id')
+              .eq('id', applicationId)
+              .maybeSingle();
+            return (kc as any)?.applicant_id as string | undefined;
+          })());
           if (aid) {
+            // Applicants
             const contactUpdates: any = {};
             if (data?.contatos?.tel) contactUpdates.phone = data.contatos.tel;
             if (data?.contatos?.whats) contactUpdates.whatsapp = data.contatos.whats;
@@ -738,6 +754,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               await updateApplicantContacts(contactUpdates);
             }
             const appUpdates: any = {};
+            // Razão social/CNPJ → Applicants
+            if (data?.empresa?.razao) appUpdates.primary_name = data.empresa.razao;
+            if (data?.empresa?.cnpj) appUpdates.cpf_cnpj = String(data.empresa.cnpj).replace(/\D+/g, '');
             // Outros campos (e-mail/endereço/intake/preferências/infos)
             if (data?.contatos?.email) appUpdates.email = data.contatos.email;
             // Endereço
@@ -753,6 +772,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             if (data?.solicitacao?.planoAcesso) appUpdates.plano_acesso = data.solicitacao.planoAcesso;
             if (data?.solicitacao?.svaAvulso) appUpdates.sva_avulso = data.solicitacao.svaAvulso;
             if (data?.solicitacao?.venc) appUpdates.venc = Number(data.solicitacao.venc);
+            if (typeof data?.solicitacao?.carneImpresso !== 'undefined') {
+              appUpdates.carne_impresso = data.solicitacao.carneImpresso === 'Sim' ? true : data.solicitacao.carneImpresso === 'Não' ? false : null;
+            }
             // Informações
             if (data?.info?.relevantes) appUpdates.info_relevantes = data.info.relevantes;
             if (data?.info?.spc) appUpdates.info_spc = data.info.spc;
@@ -762,6 +784,10 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             if (Object.keys(appUpdates).length > 0) {
               await supabase.from('applicants').update(appUpdates).eq('id', aid);
             }
+            // PJ ficha (pj_fichas_test)
+            try {
+              await saveCompanyData(aid, data as any);
+            } catch (_) {}
           }
         } catch (_) {}
       } catch (_) {
@@ -803,12 +829,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
           
           // Atualizar applicants com campos do cliente (confirm)
           try {
-            const { data: kc } = await supabase
-              .from('kanban_cards')
-              .select('applicant_id')
-              .eq('id', applicationId)
-              .maybeSingle();
-            const aid = (kc as any)?.applicant_id as string | undefined;
+            const aid = applicantId || (await (async () => {
+              const { data: kc } = await supabase
+                .from('kanban_cards')
+                .select('applicant_id')
+                .eq('id', applicationId)
+                .maybeSingle();
+              return (kc as any)?.applicant_id as string | undefined;
+            })());
             if (aid) {
               const contactUpdates: any = {};
               if (formData?.contatos?.tel) contactUpdates.phone = formData.contatos.tel;
@@ -819,6 +847,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
                 await updateApplicantContacts(contactUpdates);
               }
               const appUpdates: any = {};
+              // Razão social/CNPJ → Applicants
+              if (formData?.empresa?.razao) appUpdates.primary_name = formData.empresa.razao;
+              if (formData?.empresa?.cnpj) appUpdates.cpf_cnpj = String(formData.empresa.cnpj).replace(/\D+/g, '');
               if (formData?.contatos?.email) appUpdates.email = formData.contatos.email;
               // Endereço
               if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
@@ -833,6 +864,9 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               if (formData?.solicitacao?.planoAcesso) appUpdates.plano_acesso = formData.solicitacao.planoAcesso;
               if (formData?.solicitacao?.svaAvulso) appUpdates.sva_avulso = formData.solicitacao.svaAvulso;
               if (formData?.solicitacao?.venc) appUpdates.venc = Number(formData.solicitacao.venc);
+              if (typeof formData?.solicitacao?.carneImpresso !== 'undefined') {
+                appUpdates.carne_impresso = formData.solicitacao.carneImpresso === 'Sim' ? true : formData.solicitacao.carneImpresso === 'Não' ? false : null;
+              }
               // Informações
               if (formData?.info?.relevantes) appUpdates.info_relevantes = formData.info.relevantes;
               if (formData?.info?.spc) appUpdates.info_spc = formData.info.spc;
@@ -842,6 +876,10 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               if (Object.keys(appUpdates).length > 0) {
                 await supabase.from('applicants').update(appUpdates).eq('id', aid);
               }
+              // PJ ficha (pj_fichas_test)
+              try {
+                await saveCompanyData(aid, formData as any);
+              } catch (_) {}
             }
           } catch (_) {}
           

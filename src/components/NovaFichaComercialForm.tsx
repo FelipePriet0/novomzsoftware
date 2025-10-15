@@ -190,10 +190,12 @@ interface NovaFichaComercialFormProps {
   initialValues?: Partial<ComercialFormValues>;
   onFormChange?: (data: ComercialFormValues) => void;
   applicationId?: string;
+  applicantId?: string;
   onRefetch?: () => void;
+  onExpose?: (api: { getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> }) => void;
 }
 
-export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, onRefetch }: NovaFichaComercialFormProps) {
+export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, applicantId, onRefetch, onExpose }: NovaFichaComercialFormProps) {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
@@ -225,8 +227,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   
   // Hook para conectar com a tabela applicants_test
   const { saveSolicitacaoDataFor, saveAnaliseDataFor, ensureApplicantExists } = useApplicantsTestConnection();
-  // Hook para conectar com a tabela pf_fichas_test
-  const { savePersonalData } = usePfFichasTestConnection();
+  // Hook para conectar com a tabela pf_fichas_test (usado no autosave mais abaixo)
   const [pareceres, setPareceres] = React.useState<Parecer[]>([]);
   const [newParecerText, setNewParecerText] = React.useState("");
   const [showNewParecerEditor, setShowNewParecerEditor] = React.useState(false);
@@ -320,6 +321,227 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   React.useEffect(() => {
     loadPareceres();
   }, [loadPareceres]);
+
+  // =============================
+  // Autosave (debounced) como Editar Ficha
+  // =============================
+  const [resolvedApplicantId, setResolvedApplicantId] = React.useState<string | null>(applicantId || null);
+  const autosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastApplicantsSavedRef = React.useRef<any>(null);
+  const lastPFSavedRef = React.useRef<string | null>(null);
+  const { savePersonalData } = usePfFichasTestConnection();
+
+  // Resolver applicant_id: preferir prop applicantId; fallback para kanban_cards
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (applicantId) { setResolvedApplicantId(applicantId); return; }
+        if (!applicationId) { setResolvedApplicantId(null); return; }
+        const { data, error } = await (supabase as any)
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        if (error) throw error;
+        if (active) setResolvedApplicantId((data as any)?.applicant_id || null);
+      } catch {
+        if (active) setResolvedApplicantId(null);
+      }
+    })();
+    return () => { active = false; };
+  }, [applicationId, applicantId]);
+
+  // Log de diagnóstico do applicantId efetivo
+  React.useEffect(() => {
+    if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG] resolvedApplicantId =', resolvedApplicantId);
+  }, [resolvedApplicantId]);
+
+  // Helpers: construir objeto de updates para applicants a partir do form
+  const buildApplicantsUpdates = React.useCallback((values: ComercialFormValues) => {
+    const updates: any = {};
+    // Cliente
+    if (values?.cliente?.nome !== undefined) updates.primary_name = values.cliente.nome?.trim() || null;
+    if (values?.cliente?.cpf !== undefined) {
+      const digits = (values.cliente.cpf || '').replace(/\D+/g, '');
+      updates.cpf_cnpj = digits || null;
+    }
+    if (values?.cliente?.tel !== undefined) updates.phone = values.cliente.tel || null;
+    if (values?.cliente?.whats !== undefined) updates.whatsapp = values.cliente.whats || null;
+    if (values?.cliente?.email !== undefined) updates.email = values.cliente.email || null;
+    // Endereço
+    if (values?.endereco?.end !== undefined) updates.address_line = values.endereco.end || null;
+    if (values?.endereco?.n !== undefined) updates.address_number = values.endereco.n || null;
+    if (values?.endereco?.compl !== undefined) updates.address_complement = values.endereco.compl || null;
+    if (values?.endereco?.bairro !== undefined) updates.bairro = values.endereco.bairro || null;
+    if (values?.endereco?.cep !== undefined) updates.cep = values.endereco.cep || null;
+    // Preferências comerciais
+    if (values?.outras?.planoEscolhido !== undefined) updates.plano_acesso = values.outras.planoEscolhido || null;
+    if (values?.outras?.diaVencimento !== undefined) updates.venc = values.outras.diaVencimento ? Number(values.outras.diaVencimento) : null;
+    if (values?.outras?.carneImpresso !== undefined) updates.carne_impresso = values.outras.carneImpresso === 'Sim' ? true : values.outras.carneImpresso === 'Não' ? false : null;
+    if (values?.outras?.svaAvulso !== undefined) updates.sva_avulso = values.outras.svaAvulso || null;
+    // Administrativas
+    const adm = (values as any)?.outras?.administrativas;
+    if (adm) {
+      if (adm.quemSolicitou !== undefined) updates.quem_solicitou = adm.quemSolicitou || null;
+      if (adm.fone !== undefined) updates.telefone_solicitante = adm.fone || null;
+      if (adm.protocoloMk !== undefined) updates.protocolo_mk = adm.protocoloMk || null;
+      if (adm.meio !== undefined) updates.meio = adm.meio || null;
+    }
+    // Informações relevantes
+    if (values?.spc !== undefined) updates.info_spc = values.spc || null;
+    if (values?.pesquisador !== undefined) updates.info_pesquisador = values.pesquisador || null;
+    if (values?.infoRelevantes?.info !== undefined) updates.info_relevantes = values.infoRelevantes.info || null;
+    if (values?.infoRelevantes?.infoMk !== undefined) updates.info_mk = values.infoRelevantes.infoMk || null;
+    return updates;
+  }, []);
+
+  // Helpers: extrair fatia PF relevante para diff
+  const pickPfSlice = React.useCallback((values: ComercialFormValues) => {
+    return {
+      cliente: {
+        nasc: values?.cliente?.nasc || '',
+        naturalidade: values?.cliente?.naturalidade || '',
+        uf: values?.cliente?.uf || '',
+        doPs: values?.cliente?.doPs || '',
+      },
+      endereco: {
+        cond: values?.endereco?.cond || '',
+        tempo: values?.endereco?.tempo || '',
+        tipoMoradia: values?.endereco?.tipoMoradia || '',
+        tipoMoradiaObs: values?.endereco?.tipoMoradiaObs || '',
+        doPs: values?.endereco?.doPs || '',
+      },
+      relacoes: {
+        unicaNoLote: values?.relacoes?.unicaNoLote || '',
+        unicaNoLoteObs: values?.relacoes?.unicaNoLoteObs || '',
+        comQuemReside: values?.relacoes?.comQuemReside || '',
+        nasOutras: values?.relacoes?.nasOutras || '',
+        temContrato: values?.relacoes?.temContrato || '',
+        enviouContrato: values?.relacoes?.enviouContrato || '',
+        nomeDe: values?.relacoes?.nomeDe || '',
+        nomeLocador: values?.relacoes?.nomeLocador || '',
+        telefoneLocador: values?.relacoes?.telefoneLocador || '',
+        enviouComprovante: values?.relacoes?.enviouComprovante || '',
+        tipoComprovante: values?.relacoes?.tipoComprovante || '',
+        nomeComprovante: values?.relacoes?.nomeComprovante || '',
+        temInternetFixa: values?.relacoes?.temInternetFixa || '',
+        empresaInternet: values?.relacoes?.empresaInternet || '',
+        planoInternet: values?.relacoes?.planoInternet || '',
+        valorInternet: values?.relacoes?.valorInternet || '',
+        observacoes: values?.relacoes?.observacoes || '',
+      },
+      empregoRenda: {
+        profissao: values?.empregoRenda?.profissao || '',
+        empresa: values?.empregoRenda?.empresa || '',
+        vinculo: values?.empregoRenda?.vinculo || '',
+        vinculoObs: values?.empregoRenda?.vinculoObs || '',
+        doPs: values?.empregoRenda?.doPs || '',
+      },
+      conjuge: {
+        estadoCivil: values?.conjuge?.estadoCivil || '',
+        obs: values?.conjuge?.obs || '',
+        idade: values?.conjuge?.idade || '',
+        nome: values?.conjuge?.nome || '',
+        telefone: values?.conjuge?.telefone || '',
+        whatsapp: values?.conjuge?.whatsapp || '',
+        cpf: values?.conjuge?.cpf || '',
+        naturalidade: values?.conjuge?.naturalidade || '',
+        uf: values?.conjuge?.uf || '',
+        doPs: values?.conjuge?.doPs || '',
+      },
+      filiacao: {
+        pai: {
+          nome: values?.filiacao?.pai?.nome || '',
+          reside: values?.filiacao?.pai?.reside || '',
+          telefone: values?.filiacao?.pai?.telefone || '',
+        },
+        mae: {
+          nome: values?.filiacao?.mae?.nome || '',
+          reside: values?.filiacao?.mae?.reside || '',
+          telefone: values?.filiacao?.mae?.telefone || '',
+        },
+      },
+      referencias: {
+        ref1: {
+          nome: values?.referencias?.ref1?.nome || '',
+          parentesco: values?.referencias?.ref1?.parentesco || '',
+          reside: values?.referencias?.ref1?.reside || '',
+          telefone: values?.referencias?.ref1?.telefone || '',
+        },
+        ref2: {
+          nome: values?.referencias?.ref2?.nome || '',
+          parentesco: values?.referencias?.ref2?.parentesco || '',
+          reside: values?.referencias?.ref2?.reside || '',
+          telefone: values?.referencias?.ref2?.telefone || '',
+        },
+      },
+    };
+  }, []);
+
+  // Inicializar refs de comparação quando applicantId for resolvido
+  React.useEffect(() => {
+    if (!resolvedApplicantId) return;
+    const current = form.getValues();
+    lastApplicantsSavedRef.current = buildApplicantsUpdates(current as any);
+    lastPFSavedRef.current = JSON.stringify(pickPfSlice(current as any));
+  }, [resolvedApplicantId, buildApplicantsUpdates, pickPfSlice, form]);
+
+  // Função de flush (executa o autosave imediatamente)
+  const flushAutosave = React.useCallback(async () => {
+    if (!resolvedApplicantId) return;
+    try {
+      const v = form.getValues();
+      const candidate = buildApplicantsUpdates(v as any);
+      const last = lastApplicantsSavedRef.current || {};
+      const diff: any = {};
+      for (const k of Object.keys(candidate)) {
+        const prev = last[k];
+        const next = candidate[k];
+        if (prev !== next) diff[k] = next;
+      }
+      if (Object.keys(diff).length > 0) {
+        await (supabase as any).from('applicants').update(diff).eq('id', resolvedApplicantId);
+        lastApplicantsSavedRef.current = { ...last, ...diff };
+        if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] Applicants diff =', diff);
+      }
+      const pfSliceStr = JSON.stringify(pickPfSlice(v as any));
+      if (pfSliceStr !== lastPFSavedRef.current) {
+        try {
+          await savePersonalData(resolvedApplicantId, v as any);
+          lastPFSavedRef.current = pfSliceStr;
+          if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] PF saved for applicant =', resolvedApplicantId);
+        } catch (e) {
+          if (import.meta.env.DEV) console.error('[NovaFicha][DEBUG][FLUSH] PF save error:', e);
+        }
+      }
+    } catch (e) {
+      if (import.meta.env.DEV) console.error('[NovaFicha][DEBUG][FLUSH] error:', e);
+    }
+  }, [resolvedApplicantId, form, buildApplicantsUpdates, pickPfSlice, savePersonalData]);
+
+  // Expor API para o modal (get values + flush)
+  React.useEffect(() => {
+    if (onExpose) {
+      onExpose({
+        getCurrentValues: () => form.getValues(),
+        flushAutosave,
+      });
+    }
+  }, [onExpose, form, flushAutosave]);
+
+  // Watch e autosave (debounced)
+  React.useEffect(() => {
+    const subscription = form.watch(() => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = setTimeout(async () => {
+        await flushAutosave();
+      }, 700);
+    });
+    return () => subscription.unsubscribe();
+  }, [form, flushAutosave]);
+
+  
 
   // 🔴 REALTIME: Sincronizar pareceres quando o card for atualizado
   React.useEffect(() => {

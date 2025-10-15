@@ -132,7 +132,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         {/* Dados cadastrais básicos */}
         <section>
           <h3 className="text-base font-semibold mb-3">Dados cadastrais básicos</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
             <FormField control={form.control} name="empresa.razao" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Razão Social</FormLabel>
@@ -521,6 +521,20 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                   </FormControl>
                   <SelectContent>
                     {['5','10','15','20','25'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="solicitacao.carneImpresso" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Carnê Impresso</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Sim">Sim</SelectItem>
+                    <SelectItem value="Não">Não</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>

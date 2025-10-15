@@ -1655,6 +1655,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           onClose={() => setShowExpandedModal(false)}
           applicationId={card?.id}
           onRefetch={triggerLocalRefetch}
+          applicantId={(card as any)?.applicantId}
         />
       ) : (
         <ExpandedFichaModal
@@ -1663,6 +1664,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           onSubmit={handleExpandedSubmit}
           basicInfo={basicInfo}
           applicationId={card?.id}
+          applicantId={(card as any)?.applicantId}
           onRefetch={triggerLocalRefetch}
         />
       )}
