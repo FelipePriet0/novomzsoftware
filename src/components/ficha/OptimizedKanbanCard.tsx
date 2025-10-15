@@ -411,7 +411,7 @@ export function OptimizedKanbanCard({
                   variant="outline"
                   onClick={() => handleDecisionAction("reanalisar", onReanalisar)}
                   disabled={actionLoading === "Reanalisar"}
-                  className="h-7 text-xs px-2"
+                  className="h-7 text-xs px-2 bg-[#fbbf24] hover:bg-[#f59e0b]/90 text-white border-[#f59e0b] hover:border-[#f59e0b]/90"
                   data-action-button
                 >
                   <RotateCcw className="w-3 h-3 mr-1" />
