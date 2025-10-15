@@ -389,7 +389,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={() => handleDecisionAction("aprovar", onAprovar)}
                   disabled={actionLoading === "Aprovar"}
-                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700"
+                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                   data-action-button
                 >
                   <Check className="w-3 h-3 mr-1" />
@@ -427,7 +427,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={() => handleDecisionAction("aprovar", onAprovar)}
                   disabled={actionLoading === "Aprovar"}
-                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700"
+                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                   data-action-button
                 >
                   <Check className="w-3 h-3 mr-1" />

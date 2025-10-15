@@ -145,9 +145,10 @@ export function ParecerConfirmModal({
 
         <DialogFooter className="gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={onClose}
             disabled={isLoading}
+            className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
           >
             Cancelar
           </Button>
