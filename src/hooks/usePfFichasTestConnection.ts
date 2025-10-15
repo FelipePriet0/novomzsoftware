@@ -257,6 +257,33 @@ export function usePfFichasTestConnection() {
       // Map informacoes relevantes
       // NOTA: info, infoMk, parecerAnalise são salvos em applicants, não em pf_fichas_test
 
+      // 🔍 DEBUG: Ver exatamente o que está sendo enviado ao banco
+      if (import.meta.env.DEV) {
+        console.log('🔍 [DEBUG] updateData que será salvo:', {
+          birth_date: updateData.birth_date,
+          conjuge_whatsapp: updateData.conjuge_whatsapp,
+          conjuge_cpf: updateData.conjuge_cpf,
+          conjuge_naturalidade: updateData.conjuge_naturalidade,
+          conjuge_uf: updateData.conjuge_uf,
+          conjuge_idade: updateData.conjuge_idade,
+          conjuge_do_ps: updateData.conjuge_do_ps,
+          pai_nome: updateData.pai_nome,
+          pai_reside: updateData.pai_reside,
+          pai_telefone: updateData.pai_telefone,
+          mae_nome: updateData.mae_nome,
+          mae_reside: updateData.mae_reside,
+          mae_telefone: updateData.mae_telefone,
+          ref1_nome: updateData.ref1_nome,
+          ref1_parentesco: updateData.ref1_parentesco,
+          ref1_reside: updateData.ref1_reside,
+          ref1_telefone: updateData.ref1_telefone,
+          ref2_nome: updateData.ref2_nome,
+          ref2_parentesco: updateData.ref2_parentesco,
+          ref2_reside: updateData.ref2_reside,
+          ref2_telefone: updateData.ref2_telefone,
+        });
+      }
+
       await updatePfFicha(pfFichaId, updateData);
       console.log('✅ [usePfFichasTestConnection] Dados pessoais salvos');
 
