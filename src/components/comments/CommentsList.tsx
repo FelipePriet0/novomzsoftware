@@ -61,12 +61,6 @@ export function CommentsList({
 
   // Carregar tarefas UMA VEZ para TODOS os comentários (otimização crítica!)
   const { tasks, updateTaskStatus, loadTasks } = useTasks(undefined, cardId);
-  if (import.meta.env.DEV) console.log('📋 [CommentsList] Tarefas carregadas centralizadamente:', tasks.length);
-  
-  // Debug: Mostrar quando as tarefas mudam
-  useEffect(() => {
-    if (import.meta.env.DEV) console.log('🔄 [CommentsList] Lista de tarefas atualizada:', tasks);
-  }, [tasks]);
 
   // Função para lidar com edição de tarefa
   const handleEditTask = (task: any) => {

@@ -790,29 +790,6 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     }
   }, [temContrato, enviouContrato, nomeDe]); // ✅ Removido 'form' das dependências
 
-  // Age < 45 -> show filiacao
-  const nasc = form.watch("cliente.nasc");
-  const showFiliacao = React.useMemo(() => {
-    if (!nasc) {
-      if (import.meta.env.DEV) console.log("🔍 [Filiação] Data de nascimento não preenchida");
-      return false;
-    }
-    const parts = String(nasc).split('/');
-    if (parts.length !== 3) {
-      if (import.meta.env.DEV) console.log("🔍 [Filiação] Formato de data inválido:", nasc);
-      return false;
-    }
-    const [dd, mm, yyyy] = parts;
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
-    if (isNaN(d.getTime())) {
-      if (import.meta.env.DEV) console.log("🔍 [Filiação] Data inválida:", nasc);
-      return false;
-    }
-    const age = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-    if (import.meta.env.DEV) console.log("🔍 [Filiação] Idade calculada:", age, "anos - Mostrar filiação:", age < 45);
-    return age < 45;
-  }, [nasc]);
-
   async function submit(values: ComercialFormValues) {
     // Padronizar: parecer_analise como TEXTO simples
     const lastParecerText = Array.isArray(pareceres) && pareceres.length > 0

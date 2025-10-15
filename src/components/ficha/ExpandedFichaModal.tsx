@@ -223,13 +223,6 @@ export function ExpandedFichaModal({
           }
 
           // Salvar dados específicos de PF em pf_fichas_test
-          if (import.meta.env.DEV) {
-            console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test... applicant_id:', applicantId);
-            console.log('📋 [DEBUG] formData.cliente:', formData.cliente);
-            console.log('📋 [DEBUG] formData.conjuge:', formData.conjuge);
-            console.log('📋 [DEBUG] formData.filiacao:', formData.filiacao);
-            console.log('📋 [DEBUG] formData.referencias:', formData.referencias);
-          }
           savePromises.push(savePersonalData(applicantId, formData));
         }
 
@@ -241,7 +234,7 @@ export function ExpandedFichaModal({
           console.error('❌ [ExpandedFichaModal] Erro no auto-save:', err);
         }
       }
-    }, 1500); // 🚀 OTIMIZAÇÃO: Aumentado de 300ms para 1500ms (reduz saves desnecessários)
+    }, 5000); // 🚀 OTIMIZAÇÃO: Aumentado para 5s (reduz saves excessivos durante digitação)
 
     setAutoSaveTimer(timer);
   };

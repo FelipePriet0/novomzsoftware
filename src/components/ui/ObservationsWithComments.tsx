@@ -40,13 +40,6 @@ export function ObservationsWithComments({
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
-  // Debug: verificar se o profile está sendo carregado
-  if (import.meta.env.DEV) console.log('🔍 ObservationsWithComments - Debug:', { 
-    profile: profile?.full_name, 
-    profileId: profile?.id,
-    cardId 
-  });
-  
   const {
     comments,
     isLoading: isLoadingComments,
