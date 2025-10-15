@@ -337,43 +337,18 @@ export function CommentsList({
 
   // Funções para gerenciar resposta
   const handleReplyClick = (commentId: string) => {
-    console.log('🔍 DEBUG handleReplyClick:', {
-      commentId,
-      allComments: comments.map(c => ({ id: c.id, level: c.level, threadId: c.threadId })),
-      targetComment: comments.find(c => c.id === commentId)
-    });
     setReplyingTo(commentId);
     setReplyContent('');
   };
 
   const handleReplySubmit = async () => {
-    console.log('🔍 DEBUG handleReplySubmit INICIADO:', {
-      replyContent: replyContent.trim(),
-      replyingTo,
-      hasOnReply: !!onReply,
-      contentLength: replyContent.trim().length,
-      hasPendingAttachments: pendingReplyAttachments.length > 0,
-      pendingAttachments: pendingReplyAttachments,
-      targetComment: comments.find(c => c.id === replyingTo),
-      allComments: comments.map(c => ({ id: c.id, level: c.level, threadId: c.threadId, parentId: c.parentId }))
-    });
-    
     // Permitir resposta apenas com anexos, tarefa OU com texto
     const hasContent = replyContent.trim().length > 0;
     const hasAttachments = pendingReplyAttachments.length > 0;
     // Note: tarefas já criam comentário automaticamente via onCommentCreate
     
-    console.log('🔍 DEBUG Validação:', {
-      hasContent,
-      hasAttachments,
-      canSubmit: (hasContent || hasAttachments) && replyingTo && !!onReply
-    });
-    
     if ((hasContent || hasAttachments) && replyingTo && onReply) {
       try {
-        if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando onReply...');
-        const startTime = Date.now();
-        
         // Se não houver texto mas houver anexos, criar um comentário indicando o anexo
         const contentToSend = hasContent 
           ? replyContent.trim() 
@@ -381,19 +356,9 @@ export function CommentsList({
         
         const result = await onReply(replyingTo, contentToSend);
         
-        const endTime = Date.now();
-        if (import.meta.env.DEV) console.log('🔍 DEBUG: onReply executado:', {
-          result,
-          executionTime: `${endTime - startTime}ms`,
-          success: !!result
-        });
-        
         if (result) {
-          if (import.meta.env.DEV) console.log('🔍 DEBUG: Resposta criada com sucesso:', result);
-          
           // Fazer upload dos anexos pendentes após criar o comentário
           if (pendingReplyAttachments.length > 0) {
-            if (import.meta.env.DEV) console.log('🔍 DEBUG: Fazendo upload de anexos pendentes...');
             
             // 🚀 OTIMIZAÇÃO: Paralelizar uploads (antes sequencial)
             const uploadPromises = pendingReplyAttachments.map(async (pendingAttachment) => {
@@ -420,25 +385,14 @@ export function CommentsList({
             // }
           }
           
-          if (import.meta.env.DEV) console.log('🔍 DEBUG: Limpando estado...');
           setReplyingTo(null);
           setReplyContent('');
           setPendingReplyAttachments([]); // Limpar anexos pendentes
           setReplyAttachments([]); // Limpar anexos de resposta
-          if (import.meta.env.DEV) console.log('🔍 DEBUG: Estado limpo com sucesso');
-        } else {
-          if (import.meta.env.DEV) console.error('🚨 ERRO: onReply retornou null/undefined');
         }
       } catch (error) {
         if (import.meta.env.DEV) console.error('🚨 ERRO em handleReplySubmit:', error);
-        if (import.meta.env.DEV) console.error('🚨 Stack trace:', (error as any).stack);
       }
-    } else {
-      console.log('🔍 DEBUG: Condições não atendidas para submit:', {
-        hasContent: !!replyContent.trim(),
-        hasReplyingTo: !!replyingTo,
-        hasOnReply: !!onReply
-      });
     }
   };
 
@@ -457,9 +411,7 @@ export function CommentsList({
   const handleDeleteConfirm = async () => {
     if (deletingComment && onDelete) {
       try {
-        console.log('🔍 DEBUG: Excluindo comentário:', deletingComment);
         const success = await onDelete(deletingComment);
-        console.log('🔍 DEBUG: Resultado da exclusão:', success);
         
         if (success) {
           setDeletingComment(null);
@@ -467,7 +419,6 @@ export function CommentsList({
           // IMPORTANTE: Recarregar comentários após exclusão
           // para garantir sincronização com o banco de dados
           if (onRefetch) {
-            console.log('🔍 DEBUG: Chamando onRefetch após exclusão...');
             setTimeout(() => {
               onRefetch();
             }, 100);
@@ -601,13 +552,6 @@ export function CommentsList({
   const canReplyToComment = (comment: Comment) => {
     const MAX_LEVEL = 7;
     const canReply = comment.level < MAX_LEVEL;
-    console.log('🔍 DEBUG canReplyToComment:', {
-      commentId: comment.id,
-      level: comment.level,
-      maxLevel: MAX_LEVEL,
-      canReply,
-      threadId: comment.threadId
-    });
     return canReply;
   };
 

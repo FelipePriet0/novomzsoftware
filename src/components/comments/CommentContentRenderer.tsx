@@ -67,27 +67,8 @@ export function CommentContentRenderer({
     
     const [, assignedToFromComment, descriptionFromComment, deadlineFromComment] = taskMatch;
     
-    console.log('🔍 [CommentContentRenderer] ===== DEBUG TAREFA =====');
-    console.log('🔍 [CommentContentRenderer] Procurando tarefa para comentário:', {
-      commentId,
-      cardId,
-      assignedToFromComment,
-      descriptionFromComment: descriptionFromComment.trim(),
-      deadlineFromComment,
-      totalTasks: tasks.length,
-      allTasksData: tasks.map(t => ({
-        id: t.id,
-        comment_id: t.comment_id,
-        description: t.description,
-        status: t.status,
-        card_id: t.card_id
-      }))
-    });
-    
     // Encontrar a tarefa relacionada com MÚLTIPLOS critérios de fallback
     let relatedTask = tasks.find(task => task.comment_id === commentId);
-    
-    console.log('🔍 [CommentContentRenderer] Busca 1 (por comment_id):', relatedTask ? 'ENCONTRADA' : 'NÃO ENCONTRADA');
     
     // Fallback 1: Buscar por descrição exata no mesmo card
     if (!relatedTask) {
@@ -95,7 +76,6 @@ export function CommentContentRenderer({
         task.card_id === cardId && 
         task.description.trim() === descriptionFromComment.trim()
       );
-      console.log('🔍 [CommentContentRenderer] Busca 2 (por descrição):', relatedTask ? 'ENCONTRADA' : 'NÃO ENCONTRADA');
     }
     
     // Fallback 2: Buscar por descrição parcial (primeiras 50 chars)
@@ -105,16 +85,7 @@ export function CommentContentRenderer({
         task.card_id === cardId && 
         task.description.trim().startsWith(descShort)
       );
-      console.log('🔍 [CommentContentRenderer] Busca 3 (por descrição parcial):', relatedTask ? 'ENCONTRADA' : 'NÃO ENCONTRADA');
     }
-    
-    console.log('🔍 [CommentContentRenderer] Tarefa final encontrada:', relatedTask ? {
-      id: relatedTask.id,
-      comment_id: relatedTask.comment_id,
-      description: relatedTask.description,
-      status: relatedTask.status
-    } : 'NENHUMA TAREFA ENCONTRADA');
-    console.log('🔍 [CommentContentRenderer] ===========================');
     
     // Usar dados atualizados da tarefa do banco, ou fallback para dados do comentário
     const assignedTo = relatedTask?.assigned_to_name || assignedToFromComment;
@@ -122,22 +93,6 @@ export function CommentContentRenderer({
     const deadline = relatedTask?.deadline || deadlineFromComment;
     
     const isCompleted = relatedTask?.status === 'completed';
-    
-    // Debug: mostrar dados da tarefa
-    console.log('📋 CommentContentRenderer - Dados da tarefa:', {
-      commentId,
-      relatedTask: relatedTask ? {
-        id: relatedTask.id,
-        description: relatedTask.description,
-        assigned_to_name: relatedTask.assigned_to_name,
-        deadline: relatedTask.deadline,
-        status: relatedTask.status
-      } : null,
-      assignedTo,
-      description,
-      deadline,
-      isCompleted
-    });
     
     return {
       relatedTask,
@@ -159,7 +114,6 @@ export function CommentContentRenderer({
   );
   
   if (isAttachmentComment && attachments.length === 0) {
-    console.log('🚫 Comentário de anexo deletado - não renderizando');
     return null; // Não renderizar nada
   }
   
@@ -184,8 +138,6 @@ export function CommentContentRenderer({
         
         // Se não tem relatedTask, buscar tarefa pelo comment_id ou descrição
         if (!taskId && (commentId || cardId)) {
-          console.log('🔍 [handleToggleTask] Tarefa não encontrada no cache, buscando no banco...');
-          
           // Tentar buscar por comment_id
           if (commentId) {
             const { data: foundByComment } = await (supabase as any)
@@ -197,14 +149,12 @@ export function CommentContentRenderer({
               .single();
             
             if (foundByComment?.id) {
-              console.log('✅ [handleToggleTask] Tarefa encontrada por comment_id:', foundByComment.id);
               taskId = foundByComment.id;
             }
           }
           
           // Se ainda não achou, buscar por descrição + card_id
           if (!taskId && descriptionFromComment && cardId) {
-            console.log('🔍 [handleToggleTask] Buscando por descrição...');
             const { data: foundByDescription } = await (supabase as any)
               .from('card_tasks')
               .select('id, status')
@@ -214,7 +164,6 @@ export function CommentContentRenderer({
               .single();
             
             if (foundByDescription?.id) {
-              console.log('✅ [handleToggleTask] Tarefa encontrada por descrição:', foundByDescription.id);
               taskId = foundByDescription.id;
             }
           }
@@ -230,7 +179,6 @@ export function CommentContentRenderer({
           return;
         }
         
-        console.log('📤 [handleToggleTask] Atualizando tarefa:', { taskId, newStatus });
         await onUpdateTaskStatus(taskId, newStatus);
         
         toast({
@@ -239,8 +187,6 @@ export function CommentContentRenderer({
             ? 'A tarefa foi marcada como concluída.' 
             : 'A tarefa foi reaberta.',
         });
-        
-        console.log('✅ [handleToggleTask] Tarefa atualizada com sucesso');
       } catch (error) {
         console.error('❌ [handleToggleTask] Erro ao processar tarefa:', error);
         toast({
@@ -350,29 +296,7 @@ export function CommentContentRenderer({
   const hasAttachmentsFromDB = attachments && attachments.length > 0;
   // isAttachmentComment já foi declarado no início da função (linha 62)
   
-  console.log('🔍 CommentContentRenderer DEBUG:', {
-    content: content?.substring(0, 100) + '...',
-    hasAttachmentsFromDB,
-    isAttachmentComment,
-    attachmentCount: attachments?.length || 0,
-    attachments: attachments?.map(a => ({
-      id: a.id,
-      file_name: a.file_name,
-      file_path: a.file_path,
-      comment_id: a.comment_id
-    }))
-  });
-  
   if (isAttachmentComment && hasAttachmentsFromDB) {
-    console.log('✅ Usando anexos do banco de dados (file_path pelo ID):', {
-      attachmentCount: attachments.length,
-      attachments: attachments.map(a => ({
-        id: a.id,
-        file_name: a.file_name,
-        file_path: a.file_path
-      }))
-    });
-    
     return (
       <div className="space-y-2">
         <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -381,22 +305,14 @@ export function CommentContentRenderer({
             : 'Arquivo anexado:'}
         </div>
         <div className="space-y-2">
-          {attachments.map((attachment) => {
-            console.log('📎 Renderizando anexo do banco:', {
-              id: attachment.id,
-              file_name: attachment.file_name,
-              file_path: attachment.file_path
-            });
-            
-            return (
+          {attachments.map((attachment) => (
               <AttachmentCard
                 key={attachment.id}
                 attachment={attachment}
                 onDownload={onDownloadAttachment}
                 onDelete={onDeleteAttachment}
               />
-            );
-          })}
+          ))}
         </div>
       </div>
     );
@@ -408,9 +324,6 @@ export function CommentContentRenderer({
   
   if (attachmentMatch && !hasAttachmentsFromDB) {
     const [, fileName, cardTitle, fileType, fileSize, fileExtension, authorName, authorRole] = attachmentMatch;
-    
-    // Debug logs reduzidos
-    console.log('Processing attachment comment:', { fileName, cardTitle });
     
     // Criar objeto de anexo a partir do comentário
     // Tentar diferentes variações do caminho baseado nos arquivos que vimos no storage

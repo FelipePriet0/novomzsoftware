@@ -54,21 +54,12 @@ export function ObservationsWithComments({
 
 
   const handleReply = async (parentId: string, content: string) => {
-    if (import.meta.env.DEV) console.log('🔍 DEBUG ObservationsWithComments handleReply:', {
-      parentId,
-      content,
-      profileId: profile?.id,
-      currentUserName,
-      profileRole: profile?.role
-    });
-    
     if (!profile?.id) {
       if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
       return null;
     }
     
     try {
-      if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando replyToComment...');
       const result = await replyToComment(
         parentId,
         content,
@@ -76,7 +67,6 @@ export function ObservationsWithComments({
         currentUserName || profile.full_name || 'Usuário',
         profile.role
       );
-      if (import.meta.env.DEV) console.log('🔍 DEBUG: replyToComment resultado:', result);
       return result; // IMPORTANTE: Retornar o resultado para o CommentsList
     } catch (error) {
       if (import.meta.env.DEV) console.error('🚨 ERRO em handleReply:', error);
@@ -85,22 +75,13 @@ export function ObservationsWithComments({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (import.meta.env.DEV) console.log('🔍 DEBUG ObservationsWithComments handleDelete:', {
-      commentId,
-      profileId: profile?.id,
-      currentUserName,
-      profileRole: profile?.role
-    });
-    
     if (!profile?.id) {
       if (import.meta.env.DEV) console.error('🚨 ERRO: profile.id não encontrado');
       return false;
     }
     
     try {
-      if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando deleteComment...');
       const result = await deleteComment(commentId);
-      if (import.meta.env.DEV) console.log('🔍 DEBUG: deleteComment resultado:', result);
       
       // 🧪 TESTE: Comentado temporariamente - Realtime deve sincronizar automaticamente
       // Se comentários não desaparecerem após deletar, descomentar este bloco
@@ -129,19 +110,12 @@ export function ObservationsWithComments({
           value={value}
           onChange={onChange}
           onKeyDown={async (e) => {
-            console.log('🔍 DEBUG: Tecla pressionada:', e.key);
             if (e.key === 'Enter' && !e.shiftKey) {
-              console.log('🔍 DEBUG: Enter detectado, iniciando criação de comentário...');
               e.preventDefault();
               const text = value.trim();
-              console.log('🔍 DEBUG: Texto:', text);
-              console.log('🔍 DEBUG: hasCommentsError:', hasCommentsError);
-              console.log('🔍 DEBUG: cardId:', cardId);
-              console.log('🔍 DEBUG: profile:', profile);
               
               if (text && !hasCommentsError) {
                 try {
-                  console.log('🔍 DEBUG: Chamando createComment...');
                   const result = await createComment({
                     cardId: cardId,
                     authorId: profile?.id || '',
@@ -151,18 +125,14 @@ export function ObservationsWithComments({
                     level: 0,
                     threadId: `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` // Gerar thread_id único para nova conversa
                   });
-                  console.log('🔍 DEBUG: createComment resultado:', result);
                   
                   // Limpar o campo após criar a conversa
                   onChange({
                     target: { name, value: '' }
                   } as React.ChangeEvent<HTMLTextAreaElement>);
-                  console.log('🔍 DEBUG: Campo limpo com sucesso');
                 } catch (error) {
                   console.error('🚨 ERRO ao criar conversa:', error);
                 }
-              } else {
-                console.log('🔍 DEBUG: Condições não atendidas - text:', !!text, 'hasCommentsError:', hasCommentsError);
               }
             }
           }}
