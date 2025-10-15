@@ -220,9 +220,22 @@ export function ExpandedFichaModal({
 
         // ✅ Salvar dados específicos de PF em pf_fichas_test
         try {
-          console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test...');
-          await savePersonalData(formData, applicationId);
-          console.log('✅ [ExpandedFichaModal] Dados salvos em pf_fichas_test com sucesso!');
+          // Buscar applicant_id do card
+          const { data: cardData } = await supabase
+            .from('kanban_cards')
+            .select('applicant_id')
+            .eq('id', applicationId)
+            .maybeSingle();
+          
+          const applicantId = (cardData as any)?.applicant_id;
+          
+          if (applicantId) {
+            console.log('💾 [ExpandedFichaModal] Salvando em pf_fichas_test... applicant_id:', applicantId);
+            await savePersonalData(applicantId, formData); // ✅ Ordem correta: applicantId primeiro!
+            console.log('✅ [ExpandedFichaModal] Dados salvos em pf_fichas_test com sucesso!');
+          } else {
+            console.warn('⚠️ [ExpandedFichaModal] applicant_id não encontrado, pulando pf_fichas_test');
+          }
         } catch (pfErr) {
           console.error('❌ [ExpandedFichaModal] Erro ao salvar em pf_fichas_test:', pfErr);
         }
