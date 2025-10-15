@@ -887,7 +887,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   return (
     <>
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(submit)} className="space-y-6 max-h-[70vh] overflow-y-auto pr-1 mz-form">
+      <form onSubmit={form.handleSubmit(submit)} autoComplete="off" className="space-y-6 max-h-[70vh] overflow-y-auto pr-1 mz-form">
         {/* 1. Dados do Cliente */}
         <section>
           <h3 className="text-lg font-semibold mb-3">1. Dados do Cliente</h3>
@@ -1224,7 +1224,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormField control={form.control} name="relacoes.nomeDe" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nome de</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><Input {...field} autoComplete="off" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -1263,13 +1263,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.nomeComprovante" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Nome do comprovante</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.nomeLocador" render={({ field }) => (
               <FormItem>
                 <FormLabel>Nome do Locador(a)</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
