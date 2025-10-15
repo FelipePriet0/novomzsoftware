@@ -61,16 +61,16 @@ export function CommentsList({
 
   // Carregar tarefas UMA VEZ para TODOS os comentários (otimização crítica!)
   const { tasks, updateTaskStatus, loadTasks } = useTasks(undefined, cardId);
-  console.log('📋 [CommentsList] Tarefas carregadas centralizadamente:', tasks.length);
+  if (import.meta.env.DEV) console.log('📋 [CommentsList] Tarefas carregadas centralizadamente:', tasks.length);
   
   // Debug: Mostrar quando as tarefas mudam
   useEffect(() => {
-    console.log('🔄 [CommentsList] Lista de tarefas atualizada:', tasks);
+    if (import.meta.env.DEV) console.log('🔄 [CommentsList] Lista de tarefas atualizada:', tasks);
   }, [tasks]);
 
   // Função para lidar com edição de tarefa
   const handleEditTask = (task: any) => {
-    console.log('✏️ handleEditTask - Dados da tarefa recebidos:', task);
+    if (import.meta.env.DEV) console.log('✏️ handleEditTask - Dados da tarefa recebidos:', task);
     setEditingTask(task);
     setShowEditTaskModal(true);
   };
@@ -377,7 +377,7 @@ export function CommentsList({
     
     if ((hasContent || hasAttachments) && replyingTo && onReply) {
       try {
-        console.log('🔍 DEBUG: Chamando onReply...');
+        if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando onReply...');
         const startTime = Date.now();
         
         // Se não houver texto mas houver anexos, criar um comentário indicando o anexo
@@ -388,21 +388,22 @@ export function CommentsList({
         const result = await onReply(replyingTo, contentToSend);
         
         const endTime = Date.now();
-        console.log('🔍 DEBUG: onReply executado:', {
+        if (import.meta.env.DEV) console.log('🔍 DEBUG: onReply executado:', {
           result,
           executionTime: `${endTime - startTime}ms`,
           success: !!result
         });
         
         if (result) {
-          console.log('🔍 DEBUG: Resposta criada com sucesso:', result);
+          if (import.meta.env.DEV) console.log('🔍 DEBUG: Resposta criada com sucesso:', result);
           
           // Fazer upload dos anexos pendentes após criar o comentário
           if (pendingReplyAttachments.length > 0) {
-            console.log('🔍 DEBUG: Fazendo upload de anexos pendentes...');
-            for (const pendingAttachment of pendingReplyAttachments) {
+            if (import.meta.env.DEV) console.log('🔍 DEBUG: Fazendo upload de anexos pendentes...');
+            
+            // 🚀 OTIMIZAÇÃO: Paralelizar uploads (antes sequencial)
+            const uploadPromises = pendingReplyAttachments.map(async (pendingAttachment) => {
               try {
-                // Criar anexo associado ao comentário de resposta
                 const attachmentData = {
                   file: pendingAttachment,
                   commentId: result.id, // Associar ao comentário recém-criado
@@ -410,30 +411,33 @@ export function CommentsList({
                 } as any;
                 await uploadAttachment(attachmentData);
               } catch (error) {
-                console.error('🚨 ERRO ao fazer upload de anexo pendente:', error);
+                if (import.meta.env.DEV) console.error('🚨 ERRO ao fazer upload de anexo pendente:', error);
               }
-            }
+            });
+            
+            await Promise.all(uploadPromises);
             await loadAttachments(); // Recarregar anexos
             
-            // Chamar onRefetch para atualizar comentários instantaneamente
-            if (onRefetch) {
-              console.log('🔍 DEBUG: Chamando onRefetch para atualização instantânea...');
-              onRefetch();
-            }
+            // 🧪 TESTE: Comentado - Realtime deve sincronizar automaticamente
+            // Se anexos não aparecerem em outros modais, descomentar
+            // if (onRefetch) {
+            //   if (import.meta.env.DEV) console.log('🔍 DEBUG: Chamando onRefetch para atualização instantânea...');
+            //   onRefetch();
+            // }
           }
           
-          console.log('🔍 DEBUG: Limpando estado...');
+          if (import.meta.env.DEV) console.log('🔍 DEBUG: Limpando estado...');
           setReplyingTo(null);
           setReplyContent('');
           setPendingReplyAttachments([]); // Limpar anexos pendentes
           setReplyAttachments([]); // Limpar anexos de resposta
-          console.log('🔍 DEBUG: Estado limpo com sucesso');
+          if (import.meta.env.DEV) console.log('🔍 DEBUG: Estado limpo com sucesso');
         } else {
-          console.error('🚨 ERRO: onReply retornou null/undefined');
+          if (import.meta.env.DEV) console.error('🚨 ERRO: onReply retornou null/undefined');
         }
       } catch (error) {
-        console.error('🚨 ERRO em handleReplySubmit:', error);
-        console.error('🚨 Stack trace:', error.stack);
+        if (import.meta.env.DEV) console.error('🚨 ERRO em handleReplySubmit:', error);
+        if (import.meta.env.DEV) console.error('🚨 Stack trace:', (error as any).stack);
       }
     } else {
       console.log('🔍 DEBUG: Condições não atendidas para submit:', {
