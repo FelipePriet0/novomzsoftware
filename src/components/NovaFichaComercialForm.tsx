@@ -779,13 +779,16 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
 
   React.useEffect(() => {
     if (temContrato === "Sim" && enviouContrato === "Sim") {
+      // Sempre setar estes campos
       form.setValue("relacoes.enviouComprovante", "Sim", { shouldValidate: true });
       form.setValue("relacoes.tipoComprovante", "Outro", { shouldValidate: true });
+      
+      // ✅ Espelhar nomeDe → nomeComprovante apenas quando nomeDe mudar
       if (nomeDe) {
         form.setValue("relacoes.nomeComprovante", nomeDe, { shouldValidate: false });
       }
     }
-  }, [temContrato, enviouContrato, nomeDe, form]);
+  }, [temContrato, enviouContrato, nomeDe]); // ✅ Removido 'form' das dependências
 
   // Age < 45 -> show filiacao
   const nasc = form.watch("cliente.nasc");
