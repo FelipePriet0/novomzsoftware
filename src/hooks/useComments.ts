@@ -38,6 +38,7 @@ export function useComments(cardId: string) {
   };
 
   // Enviar notificações (somente: menções)
+  // Estrutura nova: título com autor, corpo com Nome do Card + snippet do conteúdo
   const sendNotifications = async (content: string, authorId: string, parentComment?: Comment) => {
     try {
       const mentions = extractMentions(content);
@@ -45,6 +46,31 @@ export function useComments(cardId: string) {
       // Notificar usuários mencionados via inbox_notifications
       for (const mention of mentions) {
         try {
+          // Resolver autor (nome) e título do card
+          let authorName = 'Colaborador';
+          try {
+            const { data: author } = await (supabase as any)
+              .from('profiles')
+              .select('full_name')
+              .eq('id', authorId)
+              .maybeSingle();
+            if (author?.full_name) authorName = author.full_name;
+          } catch {}
+
+          let cardTitle = 'Cliente';
+          try {
+            const { data: kc } = await (supabase as any)
+              .from('kanban_cards')
+              .select('applicant:applicant_id(primary_name)')
+              .eq('id', cardId)
+              .maybeSingle();
+            cardTitle = kc?.applicant?.primary_name || 'Cliente';
+          } catch {}
+
+          const snippet = String(content || '')
+            .replace(/\s+/g, ' ')
+            .slice(0, 140);
+
           // Encontrar perfil por início do nome (menções usam primeira palavra)
           const { data: profiles } = await (supabase as any)
             .from('profiles')
@@ -60,8 +86,8 @@ export function useComments(cardId: string) {
                 user_id: userId,
                 type: 'mention',
                 priority: 'low',
-                title: 'Você foi mencionado',
-                body: `Você foi mencionado em um comentário (@${mention}).`,
+                title: `${authorName} mencionou você em um comentário`,
+                body: `${cardTitle}\n${snippet}`,
                 meta: { cardId },
                 transient: false,
               });

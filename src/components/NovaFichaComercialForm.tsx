@@ -628,6 +628,17 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         if (import.meta.env.DEV) console.log('✅ [NovaFicha] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
         // 🔔 Notificações de menções: procurar @nome e inserir na inbox de mencionados
         try {
+          // Resolver título do card (nome/razão social)
+          let cardTitle = 'Cliente';
+          try {
+            const { data: kc } = await supabase
+              .from('kanban_cards')
+              .select('applicant:applicant_id(primary_name)')
+              .eq('id', applicationId)
+              .maybeSingle();
+            cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+          } catch (_) {}
+
           const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
           const unique = Array.from(new Set(matches));
           
@@ -653,8 +664,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         user_id: userId,
                         type: 'mention',
                         priority: 'low',
-                        title: 'Você foi mencionado',
-                        body: `Você foi mencionado em um parecer (@${mention}).`,
+                        title: `${currentUserName || profile?.full_name || 'Colaborador'} mencionou você em um Parecer`,
+                        body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
                         meta: { cardId: applicationId, parecerId: newParecer.id },
                         transient: false,
                       })
@@ -887,11 +898,21 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         .eq('id', applicationId);
       
       if (error) throw error;
-      // 🔔 Notificações de menções na resposta
+      // 🔔 Notificações de menções na resposta (Resposta de Parecer)
       try {
         const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
         const unique = Array.from(new Set(matches));
         if (unique.length > 0) {
+          // Resolver título do card
+          let cardTitle = 'Cliente';
+          try {
+            const { data: kc2 } = await (supabase as any)
+              .from('kanban_cards')
+              .select('applicant:applicant_id(primary_name)')
+              .eq('id', applicationId)
+              .maybeSingle();
+            cardTitle = (kc2 as any)?.applicant?.primary_name || 'Cliente';
+          } catch (_) {}
           for (const mention of unique) {
             const { data: profiles } = await (supabase as any)
               .from('profiles')
@@ -907,8 +928,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   user_id: userId,
                   type: 'mention',
                   priority: 'low',
-                  title: 'Você foi mencionado',
-                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
+                  title: `${currentUserName || profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
+                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
                   meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
                   transient: false,
                 });

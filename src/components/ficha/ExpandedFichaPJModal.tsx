@@ -372,14 +372,24 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
             for (const userId of targets) {
               if (userId === (profile?.id || '')) continue;
+              // Resolver título do card
+              let cardTitle = 'Cliente';
+              try {
+                const { data: kc } = await (supabase as any)
+                  .from('kanban_cards')
+                  .select('applicant:applicant_id(primary_name)')
+                  .eq('id', applicationId)
+                  .maybeSingle();
+                cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+              } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
                 .insert({
                   user_id: userId,
                   type: 'mention',
                   priority: 'low',
-                  title: 'Você foi mencionado',
-                  body: `Você foi mencionado em um parecer (@${mention}).`,
+                  title: `${profile?.full_name || 'Colaborador'} mencionou você em um Parecer`,
+                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
                   meta: { cardId: applicationId, parecerId: newP.id },
                   transient: false,
                 });
@@ -533,14 +543,24 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
             for (const userId of targets) {
               if (userId === (profile?.id || '')) continue;
+              // Resolver título do card
+              let cardTitle = 'Cliente';
+              try {
+                const { data: kc } = await (supabase as any)
+                  .from('kanban_cards')
+                  .select('applicant:applicant_id(primary_name)')
+                  .eq('id', applicationId)
+                  .maybeSingle();
+                cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+              } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
                 .insert({
                   user_id: userId,
                   type: 'mention',
                   priority: 'low',
-                  title: 'Você foi mencionado',
-                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
+                  title: `${profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
+                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
                   meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
                   transient: false,
                 });
