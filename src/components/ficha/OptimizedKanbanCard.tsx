@@ -46,6 +46,7 @@ interface OptimizedKanbanCardProps {
   isDragging?: boolean;
   onAttachmentClick?: (cardId: string) => void;
   onCardClick?: (card: CardItem) => void;
+  isFocused?: boolean;
 }
 
 export function OptimizedKanbanCard({ 
@@ -62,6 +63,7 @@ export function OptimizedKanbanCard({
   isDragging = false,
   onAttachmentClick,
   onCardClick,
+  isFocused = false,
 }: OptimizedKanbanCardProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -186,6 +188,7 @@ export function OptimizedKanbanCard({
         console.log('✅ [DEBUG] Clicou no card, abrindo edição');
         onCardClick?.(card);
       }}
+      data-card-id={card.id}
       className={cn(
         // Cursor logic (like Trello):
         // - Default cursor: Normal cursor for clicking
@@ -193,7 +196,8 @@ export function OptimizedKanbanCard({
         isDraggingHook ? "cursor-grabbing" : "",
         "border border-border bg-card hover:shadow-md transition-shadow duration-200",
         isDraggingHook && "opacity-90 shadow-xl rotate-1 z-50",
-        isOverdue && "border-destructive/50 bg-destructive/5"
+        isOverdue && "border-destructive/50 bg-destructive/5",
+        isFocused && "ring-2 ring-[hsl(var(--brand))] ring-offset-2"
       )}
     >
       <CardContent className="p-3 space-y-2">

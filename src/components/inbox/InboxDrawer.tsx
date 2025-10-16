@@ -91,10 +91,34 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
           <div className="space-y-2">
             {filtered.map(item => {
-              const color = item.priority==='high' ? 'border-red-500 bg-red-50' : item.priority==='medium' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 bg-gray-50';
+              // Mantém ícone baseado em prioridade, mas padroniza o fundo para verde primário 45% (estilo WhatsApp)
               const Icon = item.priority==='high'? AlertTriangle : item.priority==='medium'? Clock : ClipboardList;
+              const cardId = (item as any).meta?.cardId as string | undefined;
+              const applicantId = (item as any).meta?.applicantId as string | undefined;
               return (
-                <div key={item.id} className={`rounded-md border ${color} p-2 flex items-start justify-between gap-2`}>
+                <div
+                  key={item.id}
+                  className={`rounded-md border p-2 flex items-start justify-between gap-2 ${cardId ? 'cursor-pointer' : ''}`}
+                  style={{
+                    backgroundColor: 'hsl(var(--brand) / 0.45)',
+                    borderColor: 'hsl(var(--brand))'
+                  }}
+                  role={cardId ? 'button' as any : undefined}
+                  tabIndex={cardId ? 0 : -1}
+                  onClick={() => {
+                    if (cardId) { navigate(`/?openCardId=${cardId}`); onClose(); return; }
+                    if (applicantId) { navigate(`/?openApplicantId=${applicantId}`); onClose(); }
+                  }}
+                  onKeyDown={(e) => {
+                    if (!applicantId && !cardId) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (cardId) navigate(`/?openCardId=${cardId}`);
+                      else if (applicantId) navigate(`/?openApplicantId=${applicantId}`);
+                      onClose();
+                    }
+                  }}
+                >
                   <div className="flex items-start gap-2">
                     <Icon className="h-4 w-4 mt-1" />
                     <div>
@@ -103,14 +127,11 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {(item as any).meta?.cardId && (
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { navigate(`/?openCardId=${(item as any).meta.cardId}`); onClose(); }}>Abrir Card</Button>
-                    )}
                     {!item.read_at && (
-                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={()=>markRead(item.id)}><Check className="h-4 w-4" /> Lida</Button>
+                      <Button size="sm" variant="outline" className="h-7 px-2" onClick={(e)=>{ e.stopPropagation(); markRead(item.id); }}><Check className="h-4 w-4" /> Lida</Button>
                     )}
                     {item.transient && (
-                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={()=>remove(item.id)}>Descartar</Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={(e)=>{ e.stopPropagation(); remove(item.id); }}>Descartar</Button>
                     )}
                   </div>
                 </div>

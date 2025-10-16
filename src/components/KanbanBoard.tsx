@@ -222,6 +222,8 @@ export default function KanbanBoard() {
     action: 'aprovar' | 'negar' | 'reanalisar';
     card: CardItem;
   } | null>(null);
+  // Focus/highlight card without opening modal (via query param)
+  const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
   const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
   
   // Estado para feedback visual do drag and drop
@@ -427,12 +429,85 @@ export default function KanbanBoard() {
             area: ((data as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
-          setAutoOpenExpandedNext(true);
+          setAutoOpenExpandedNext(false);
         }
       } catch {}
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  // Abrir card por applicant (?openApplicantId=...)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const openApplicantId = params.get('openApplicantId');
+    if (!openApplicantId) return;
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('kanban_cards')
+          .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
+          .eq('applicant_id', openApplicantId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && data) {
+          const nc: CardItem = {
+            id: data.id,
+            nome: data.applicant?.primary_name || 'Cliente',
+            cpf: data.applicant?.cpf_cnpj || '',
+            receivedAt: data.received_at || new Date().toISOString(),
+            deadline: data.received_at || new Date().toISOString(),
+            responsavel: undefined,
+            responsavelId: undefined,
+            telefone: data.applicant?.phone || undefined,
+            email: data.applicant?.email || undefined,
+            naturalidade: undefined,
+            uf: undefined,
+            applicantId: data.applicant?.id,
+            personType: (data as any)?.person_type || undefined,
+            parecer: '',
+            columnId: ((data as any)?.area === 'comercial') ? ((): any => {
+              const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
+              return stageMap[(data as any)?.stage] || 'com_entrada';
+            })() : 'recebido',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastMovedAt: new Date().toISOString(),
+            labels: [],
+            area: ((data as any)?.area || 'analise') as any,
+          } as any;
+          setMockCard(nc);
+          setAutoOpenExpandedNext(false);
+        }
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  // Focar card por applicantId ou cardId sem abrir modal
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const focusApplicantId = params.get('focusApplicantId');
+    const focusCardId = params.get('focusCardId');
+    if (!focusApplicantId && !focusCardId) return;
+
+    // Aguarda carregamento dos cards
+    const id = focusCardId || cards.find(c => c.applicantId === focusApplicantId)?.id || null;
+    if (id) {
+      setFocusedCardId(id);
+      // Tentar rolar até o card
+      setTimeout(() => {
+        const el = document.querySelector(`[data-card-id="${id}"]`);
+        if (el && 'scrollIntoView' in el) {
+          (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+      }, 100);
+      // Remover destaque após alguns segundos
+      const t = setTimeout(() => setFocusedCardId(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [location.search, cards]);
 
   // Função para atualizar o estado local em tempo real
   const handleStatusChange = (cardId: string, newStatus: string) => {
@@ -1737,6 +1812,7 @@ useEffect(() => {
                                      isDragging={activeId === card.id}
                                      onAttachmentClick={handleAttachmentClick}
                                      onCardClick={handleCardClick}
+                                     isFocused={focusedCardId === card.id}
                                    />
                                ))}
                           </div>
