@@ -315,6 +315,7 @@ export default function KanbanBoard() {
   // Load cards from Supabase (kanban_cards + applicants)
   const loadApplications = async () => {
     try {
+      // Primeira tentativa: consulta com relacionamentos (se DB suportar)
       const { data, error } = await (supabase as any)
         .from("kanban_cards")
         .select(`
@@ -332,15 +333,17 @@ export default function KanbanBoard() {
         `)
         .is('deleted_at', null)
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       if (!data) return;
+
       const mapped: CardItem[] = (data as any[]).map((row: any) => {
         const receivedAt = row.received_at ? new Date(row.received_at).toISOString() : new Date().toISOString();
-      const hasDueAt = !!row.due_at;
-      const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
-      return {
-        id: row.id,
-        nome: row.applicant?.primary_name ?? 'Cliente',
+        const hasDueAt = !!row.due_at;
+        const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
+        return {
+          id: row.id,
+          nome: row.applicant?.primary_name ?? 'Cliente',
           cpf: row.applicant?.cpf_cnpj ?? '',
           receivedAt,
           deadline,
@@ -349,8 +352,8 @@ export default function KanbanBoard() {
           responsavelId: row.assignee_id ?? undefined,
           telefone: row.applicant?.phone ?? undefined,
           email: row.applicant?.email ?? undefined,
-          naturalidade: undefined, // Será carregado de pf_fichas_test se necessário
-          uf: undefined, // Será carregado de pf_fichas_test se necessário
+          naturalidade: undefined,
+          uf: undefined,
           applicantId: row.applicant?.id ?? undefined,
           personType: row.person_type ?? undefined,
           parecer: '',
@@ -386,8 +389,79 @@ export default function KanbanBoard() {
       if (import.meta.env.DEV) console.log('Cards by column:', mapped.map(c => ({ id: c.id, nome: c.nome, columnId: c.columnId })));
       setCards(mapped);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[Kanban] Falha ao carregar aplicações", e);
+      // Fallback: remover relacionamentos para evitar 500 quando FKs não existem
+      console.warn('[Kanban] Relações ausentes ou indisponíveis; usando fallback simples.', e);
+      try {
+        const { data: baseRows, error: baseErr } = await (supabase as any)
+          .from('kanban_cards')
+          .select('id, area, stage, person_type, assignee_id, created_by, received_at, due_at, applicant_id')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
+        if (baseErr) throw baseErr;
+        const applicantIds = Array.from(new Set((baseRows || []).map((r: any) => r.applicant_id).filter(Boolean)));
+        let applicantsById: Record<string, any> = {};
+        if (applicantIds.length > 0) {
+          const { data: apps, error: appsErr } = await (supabase as any)
+            .from('applicants')
+            .select('id, primary_name, cpf_cnpj, phone, email')
+            .in('id', applicantIds);
+          if (!appsErr && Array.isArray(apps)) {
+            applicantsById = Object.fromEntries(apps.map((a: any) => [a.id, a]));
+          }
+        }
+        const mapped: CardItem[] = (baseRows || []).map((row: any) => {
+          const receivedAt = row.received_at ? new Date(row.received_at).toISOString() : new Date().toISOString();
+          const hasDueAt = !!row.due_at;
+          const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
+          const app = row.applicant_id ? applicantsById[row.applicant_id] : null;
+          return {
+            id: row.id,
+            nome: app?.primary_name || 'Cliente',
+            cpf: app?.cpf_cnpj || '',
+            receivedAt,
+            deadline,
+            hasDueAt,
+            responsavel: undefined,
+            responsavelId: row.assignee_id || undefined,
+            telefone: app?.phone || undefined,
+            email: app?.email || undefined,
+            naturalidade: undefined,
+            uf: undefined,
+            applicantId: row.applicant_id || undefined,
+            personType: row.person_type || undefined,
+            parecer: '',
+            vendedorNome: undefined,
+            analystName: undefined,
+            createdById: row.created_by || undefined,
+            columnId: ((): ColumnId => {
+              if (row.area === 'comercial') {
+                const stageMap: Record<string, ColumnId> = {
+                  'entrada': 'com_entrada',
+                  'feitas': 'com_feitas',
+                  'aguardando_doc': 'com_aguardando',
+                  'canceladas': 'com_canceladas',
+                  'concluidas': 'com_concluidas'
+                };
+                return stageMap[row.stage] || 'com_entrada';
+              } else {
+                return (row.stage as ColumnId) || 'recebido';
+              }
+            })(),
+            createdAt: receivedAt,
+            updatedAt: receivedAt,
+            lastMovedAt: receivedAt,
+            labels: [],
+            commercialStage: row.area === 'comercial' ? ((): any => {
+              const m: any = { entrada: 'entrada', feitas: 'feitas', aguardando_doc: 'aguardando', canceladas: 'canceladas', concluidas: 'concluidas' };
+              return m[row.stage] ?? 'entrada';
+            })() : undefined,
+            area: row.area as 'comercial' | 'analise',
+          } as CardItem;
+        });
+        setCards(mapped);
+      } catch (e2) {
+        console.error('[Kanban] Falha no fallback ao carregar aplicações', e2);
+      }
     }
   };
 
@@ -401,40 +475,61 @@ export default function KanbanBoard() {
     if (!openId) return;
     (async () => {
       try {
+        // Primeira tentativa com relacionamento
         const { data, error } = await (supabase as any)
           .from('kanban_cards')
           .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
           .eq('id', openId)
           .maybeSingle();
-        if (!error && data) {
+        let cardRow: any = data;
+        let applicant: any = data?.applicant;
+        if (error) throw error;
+        // Se relacionamento indisponível, tentar fallback
+        if (!data || !applicant) {
+          const { data: base, error: baseErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, person_type, area, stage, applicant_id')
+            .eq('id', openId)
+            .maybeSingle();
+          if (baseErr) throw baseErr;
+          cardRow = base;
+          if (base?.applicant_id) {
+            const { data: a } = await (supabase as any)
+              .from('applicants')
+              .select('id, primary_name, cpf_cnpj, phone, email')
+              .eq('id', base.applicant_id)
+              .maybeSingle();
+            applicant = a;
+          }
+        }
+        if (cardRow) {
           const nc: CardItem = {
-            id: data.id,
-            nome: data.applicant?.primary_name || 'Cliente',
-            cpf: data.applicant?.cpf_cnpj || '',
-            receivedAt: data.received_at || new Date().toISOString(),
-            deadline: data.received_at || new Date().toISOString(),
+            id: cardRow.id,
+            nome: applicant?.primary_name || 'Cliente',
+            cpf: applicant?.cpf_cnpj || '',
+            receivedAt: cardRow.received_at || new Date().toISOString(),
+            deadline: cardRow.received_at || new Date().toISOString(),
             responsavel: undefined,
             responsavelId: undefined,
-            telefone: data.applicant?.phone || undefined,
-            email: data.applicant?.email || undefined,
+            telefone: applicant?.phone || undefined,
+            email: applicant?.email || undefined,
             naturalidade: undefined,
             uf: undefined,
-            applicantId: undefined,
-            personType: (data as any)?.person_type || undefined,
+            applicantId: applicant?.id || undefined,
+            personType: (cardRow as any)?.person_type || undefined,
             parecer: '',
-            columnId: ((data as any)?.area === 'comercial') ? ((): any => {
+            columnId: ((cardRow as any)?.area === 'comercial') ? ((): any => {
               const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
-              return stageMap[(data as any)?.stage] || 'com_entrada';
+              return stageMap[(cardRow as any)?.stage] || 'com_entrada';
             })() : 'recebido',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastMovedAt: new Date().toISOString(),
             labels: [],
-            area: ((data as any)?.area || 'analise') as any,
+            area: ((cardRow as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
           setAutoOpenExpandedNext(true);
-          // Limpa o query param para permitir abrir novamente em cliques futuros
           const next = new URLSearchParams(routeLocation.search);
           next.delete('openCardId');
           navigate({ pathname: (routeLocation as any).pathname || '/', search: next.toString() ? `?${next.toString()}` : '' }, { replace: true });
@@ -451,6 +546,7 @@ export default function KanbanBoard() {
     if (!openApplicantId) return;
     (async () => {
       try {
+        // Tentar com relacionamento
         const { data, error } = await (supabase as any)
           .from('kanban_cards')
           .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
@@ -459,31 +555,55 @@ export default function KanbanBoard() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (!error && data) {
+        let cardRow: any = data;
+        let applicant: any = data?.applicant;
+        if (error) throw error;
+        // Fallback sem relacionamento
+        if (!cardRow) {
+          const { data: base, error: baseErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, person_type, area, stage, applicant_id')
+            .eq('applicant_id', openApplicantId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (baseErr) throw baseErr;
+          cardRow = base;
+          if (base?.applicant_id) {
+            const { data: a } = await (supabase as any)
+              .from('applicants')
+              .select('id, primary_name, cpf_cnpj, phone, email')
+              .eq('id', base.applicant_id)
+              .maybeSingle();
+            applicant = a;
+          }
+        }
+        if (cardRow) {
           const nc: CardItem = {
-            id: data.id,
-            nome: data.applicant?.primary_name || 'Cliente',
-            cpf: data.applicant?.cpf_cnpj || '',
-            receivedAt: data.received_at || new Date().toISOString(),
-            deadline: data.received_at || new Date().toISOString(),
+            id: cardRow.id,
+            nome: applicant?.primary_name || 'Cliente',
+            cpf: applicant?.cpf_cnpj || '',
+            receivedAt: cardRow.received_at || new Date().toISOString(),
+            deadline: cardRow.received_at || new Date().toISOString(),
             responsavel: undefined,
             responsavelId: undefined,
-            telefone: data.applicant?.phone || undefined,
-            email: data.applicant?.email || undefined,
+            telefone: applicant?.phone || undefined,
+            email: applicant?.email || undefined,
             naturalidade: undefined,
             uf: undefined,
-            applicantId: data.applicant?.id,
-            personType: (data as any)?.person_type || undefined,
+            applicantId: applicant?.id,
+            personType: (cardRow as any)?.person_type || undefined,
             parecer: '',
-            columnId: ((data as any)?.area === 'comercial') ? ((): any => {
+            columnId: ((cardRow as any)?.area === 'comercial') ? ((): any => {
               const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
-              return stageMap[(data as any)?.stage] || 'com_entrada';
+              return stageMap[(cardRow as any)?.stage] || 'com_entrada';
             })() : 'recebido',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastMovedAt: new Date().toISOString(),
             labels: [],
-            area: ((data as any)?.area || 'analise') as any,
+            area: ((cardRow as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
           setAutoOpenExpandedNext(true);
@@ -1573,52 +1693,86 @@ useEffect(() => {
 
   return (
     <section className="space-y-6 animate-fade-in kanban-container">
-      <Card className="shadow-md bg-white text-[#018942]" style={{ boxShadow: "var(--shadow-elegant)" }}>
-        <CardHeader />
-        <CardContent>
-          {/* Linha 1: Filtros */}
-          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-            {/* Barra de pesquisar */}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#018942]" />
+      {/* Header com gradiente e melhor hierarquia visual */}
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white shadow-xl">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.05"%3E%3Ccircle cx="30" cy="30" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-20"></div>
+        <div className="relative p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-2">Kanban Board</h1>
+              <p className="text-green-100 text-sm">
+                {kanbanArea === 'comercial' 
+                  ? 'Gestão do fluxo comercial e vendas' 
+                  : 'Análise e aprovação de fichas'
+                }
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
+                <span className="text-sm text-green-100">Total de fichas</span>
+                <div className="text-xl font-bold">{cards.length}</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Filtros com design melhorado */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {/* Barra de pesquisar com design moderno */}
+            <div className="relative group">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within:text-white transition-colors" />
               <Input
                 placeholder="Buscar titular (nome da ficha)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942] w-full h-10"
+                className="pl-9 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200"
               />
             </div>
             
-            {/* Área */}
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap text-sm">Área</Label>
+            {/* Área com design melhorado */}
+            <div className="space-y-2">
+              <Label className="text-white/90 text-sm font-medium">Área</Label>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Área" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="comercial">Comercial</SelectItem>
-                  <SelectItem value="analise">Análise</SelectItem>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="comercial" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      Comercial
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="analise" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      Análise
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            {/* Responsável */}
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap text-sm">Responsável</Label>
+            {/* Responsável com design melhorado */}
+            <div className="space-y-2">
+              <Label className="text-white/90 text-sm font-medium">Responsável</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="bg-white text-[#018942] border-[#018942] w-full h-10 justify-between">
+                  <Button variant="outline" className="bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20 hover:border-white/40 w-full h-11 justify-between transition-all duration-200">
                     <span className="truncate">{responsavelFiltro.length === 0 ? 'Todos' : responsavelFiltro.join(', ')}</span>
                     <ChevronDown className="ml-2 h-4 w-4 opacity-70 shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-[260px] max-w-[90vw]">
-                  <DropdownMenuItem className="pl-8" onClick={() => setResponsavelFiltro([])}>Todos</DropdownMenuItem>
+                <DropdownMenuContent className="w-[260px] max-w-[90vw] bg-white border-gray-200">
+                  <DropdownMenuItem className="pl-8 hover:bg-green-50" onClick={() => setResponsavelFiltro([])}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      Todos
+                    </div>
+                  </DropdownMenuItem>
                   {responsaveisOptions.map((r) => (
                     <DropdownMenuCheckboxItem
                       key={r}
-                      className="truncate"
+                      className="truncate hover:bg-green-50"
                       checked={responsavelFiltro.includes(r)}
                       onCheckedChange={(checked) => {
                         setResponsavelFiltro((prev) => {
@@ -1628,46 +1782,89 @@ useEffect(() => {
                         });
                       }}
                     >
-                      {r}
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        {r}
+                      </div>
                     </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
             
-            {/* Prazo */}
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap text-sm">Prazo</Label>
+            {/* Prazo com design melhorado */}
+            <div className="space-y-2">
+              <Label className="text-white/90 text-sm font-medium">Prazo</Label>
               <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
                 setPrazoFiltro(v);
                 if (v === 'data') {
                   setTimeout(() => setPrazoOpenTick((t) => t + 1), 0);
                 }
               }}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="hoje">Agendada para hoje</SelectItem>
-                  <SelectItem value="amanha">Agendada para amanhã</SelectItem>
-                  <SelectItem value="atrasados">Atrasado</SelectItem>
-                  <SelectItem value="data">Escolher Data…</SelectItem>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="todos" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      Todos
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hoje" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      Agendada para hoje
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="amanha" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      Agendada para amanhã
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="atrasados" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      Atrasado
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="data" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      Escolher Data…
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
-            {/* Atribuídas */}
-            <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap text-sm">Atribuídas</Label>
+            {/* Atribuídas com design melhorado */}
+            <div className="space-y-2">
+              <Label className="text-white/90 text-sm font-medium">Atribuídas</Label>
               <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Escolha" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="none">—</SelectItem>
-                  <SelectItem value="mentions">Minhas menções</SelectItem>
-                  <SelectItem value="tasks">Minhas tarefas</SelectItem>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="none" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      —
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="mentions" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      Minhas menções
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="tasks" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      Minhas tarefas
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1675,7 +1872,7 @@ useEffect(() => {
           
           {/* DatePicker condicional para Prazo */}
           {prazoFiltro === 'data' && (
-            <div className="mt-3 rounded-md border border-[#018942]/40 p-2 bg-white max-w-[280px]">
+            <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4 max-w-[280px]">
               <DatePicker
                 key={prazoOpenTick}
                 value={(() => {
@@ -1701,20 +1898,20 @@ useEffect(() => {
             </div>
           )}
 
-          {/* Linha 2: CTA Nova Ficha */}
-          <div className="mt-4 flex items-center justify-end">
+          {/* CTA Nova Ficha com design moderno */}
+          <div className="mt-6 flex items-center justify-end">
             <Button 
               variant="pill" 
               size="xl" 
-              className="hover-scale bg-[hsl(var(--brand))] text-white hover:bg-[hsl(var(--brand))/0.9] border border-transparent" 
+              className="hover-scale bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30 hover:border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 group" 
               onClick={() => setShowConfirmCreate(true)}
             >
-              <UserPlus className="mr-2 h-4 w-4" />
+              <UserPlus className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
               Nova ficha
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Legacy dialog removido para backend enxuto */}
 
@@ -1759,36 +1956,50 @@ useEffect(() => {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        {/* Contêiner horizontal de colunas estilo Trello */}
+        {/* Contêiner horizontal de colunas com design moderno */}
         <div className="relative">
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-visible"
+            className="overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
           >
-            <div className="flex items-start gap-4 min-h-[200px] w-max pr-4">
+            <div className="flex items-start gap-6 min-h-[200px] w-max pr-6 pb-4">
           {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
-                <div key={col.id} className="min-w-[320px] w-[320px] max-w-[340px]">
+                <div key={col.id} className="min-w-[340px] w-[340px] max-w-[360px]">
             <ColumnDropArea 
               columnId={col.id}
               isDragOver={dragOverColumn === col.id}
               activeId={activeId}
             >
-                    <div className="rounded-xl border bg-card h-full">
-                <div
-                        className="px-4 py-3 border-b flex items-center justify-between sticky top-0 z-10"
-                  style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
-                >
-                        <h2 className="font-semibold truncate">{col.title}</h2>
-                  <Badge variant="secondary" className="bg-white text-[#018942]">
-                    {getCardsWithPlaceholder(
-                      kanbanArea === 'comercial'
-                        ? (commercialByColumn.get(col.id) || [])
-                        : (analysisByColumn.get(col.id) || []),
-                      col.id
-                    ).length}
-                  </Badge>
+                    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 h-full">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-2xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              col.id.includes('entrada') ? 'bg-blue-500' :
+                              col.id.includes('feitas') ? 'bg-green-500' :
+                              col.id.includes('aguardando') ? 'bg-yellow-500' :
+                              col.id.includes('canceladas') ? 'bg-red-500' :
+                              col.id.includes('concluidas') ? 'bg-purple-500' :
+                              col.id.includes('recebido') ? 'bg-blue-500' :
+                              col.id.includes('analise') ? 'bg-orange-500' :
+                              col.id.includes('aprovado') ? 'bg-green-500' :
+                              col.id.includes('negado') ? 'bg-red-500' :
+                              col.id.includes('finalizado') ? 'bg-purple-500' :
+                              'bg-gray-500'
+                            }`}></div>
+                            <h2 className="font-semibold text-gray-800 truncate">{col.title}</h2>
+                          </div>
+                          <Badge variant="secondary" className="bg-white text-gray-700 border border-gray-200 shadow-sm">
+                            {getCardsWithPlaceholder(
+                              kanbanArea === 'comercial'
+                                ? (commercialByColumn.get(col.id) || [])
+                                : (analysisByColumn.get(col.id) || []),
+                              col.id
+                            ).length}
+                          </Badge>
+                        </div>
                 </div>
-                <div className="p-3">
+                <div className="p-4 bg-gray-50/50">
                   <SortableContext
                     items={getCardsWithPlaceholder(
                       kanbanArea === 'comercial'
@@ -1798,14 +2009,27 @@ useEffect(() => {
                     ).map((c) => c.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="min-h-[120px] space-y-3">
+                    <div className="min-h-[140px] space-y-3">
                       {getCardsWithPlaceholder(
                         kanbanArea === 'comercial'
                           ? (commercialByColumn.get(col.id) || [])
                           : (analysisByColumn.get(col.id) || []),
                         col.id
-                      )
-                         .map((card) => (
+                      ).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mb-3">
+                            <div className="w-6 h-6 bg-gray-300 rounded"></div>
+                          </div>
+                          <p className="text-sm font-medium">Nenhuma ficha</p>
+                          <p className="text-xs text-gray-400">Arraste fichas aqui</p>
+                        </div>
+                      ) : (
+                        getCardsWithPlaceholder(
+                          kanbanArea === 'comercial'
+                            ? (commercialByColumn.get(col.id) || [])
+                            : (analysisByColumn.get(col.id) || []),
+                          col.id
+                        ).map((card) => (
                              <OptimizedKanbanCard
                                key={card.id}
                                card={card}
@@ -1826,7 +2050,8 @@ useEffect(() => {
                                onCardClick={handleCardClick}
                                      isFocused={focusedCardId === card.id}
                              />
-                         ))}
+                         ))
+                      )}
                     </div>
                   </SortableContext>
                 </div>

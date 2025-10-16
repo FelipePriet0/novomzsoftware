@@ -30,7 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canIngressar, canChangeStatus } from "@/lib/access";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { CardItem } from "@/components/KanbanBoard";
+import type { CardItem } from "@/components/KanbanBoard";
 
 interface OptimizedKanbanCardProps {
   card: CardItem;
