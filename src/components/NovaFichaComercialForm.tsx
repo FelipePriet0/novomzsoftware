@@ -1126,11 +1126,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   return (
     <>
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(submit)} autoComplete="off" className="space-y-6 max-h-[70vh] overflow-y-auto pr-1 mz-form">
+      <form onSubmit={form.handleSubmit(submit)} autoComplete="off" className="space-y-6 sm:space-y-8 max-h-[70vh] overflow-y-auto mz-form">
         {/* 1. Dados do Cliente */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">1. Dados do Cliente</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">1. Dados do Cliente</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="cliente.nome" render={({ field }) => (
               <FormItem className="md:col-span-3">
                 <FormLabel>Nome</FormLabel>
@@ -1265,9 +1265,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 2. Endereço */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">2. Endereço</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">2. Endereço</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="endereco.end" render={({ field }) => (
               <FormItem>
                 <FormLabel>Endereço (logradouro)</FormLabel>
@@ -1384,9 +1384,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 3. Relações de residência */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">3. Relações de residência</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">3. Relações de residência</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="relacoes.unicaNoLote" render={({ field }) => (
               <FormItem>
                 <FormLabel>Única no lote</FormLabel>
@@ -1585,9 +1585,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 4. Emprego e Renda */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">4. Emprego e Renda</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">4. Emprego e Renda</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FormField control={form.control} name="empregoRenda.profissao" render={({ field }) => (
               <FormItem>
                 <FormLabel>Profissão</FormLabel>
@@ -1640,9 +1640,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 5. Cônjuge */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">5. Cônjuge</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">5. Cônjuge</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {/* Linha 1: Estado civil + Obs (Obs com estilo Do PS) */}
             <FormField control={form.control} name="conjuge.estadoCivil" render={({ field }) => (
               <FormItem className="md:col-span-1">
@@ -1733,8 +1733,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 6. Informações SPC */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">6. Informações SPC</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">6. Informações SPC</h3>
           <FormField control={form.control} name="spc" render={({ field }) => (
             <FormItem>
               <FormControl>
@@ -1745,8 +1745,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 7. Informações do Pesquisador */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">7. Informações do Pesquisador</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">7. Informações do Pesquisador</h3>
           <FormField control={form.control} name="pesquisador" render={({ field }) => (
             <FormItem>
               <FormControl>
@@ -1757,9 +1757,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         </section>
 
         {/* 8. Filiação */}
-        <section>
-            <h3 className="text-lg font-semibold mb-3">8. Filiação</h3>
-            <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">8. Filiação</h3>
+            <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
               <FormField control={form.control} name="filiacao.pai.nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pai – Nome</FormLabel>
@@ -1800,9 +1800,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           </section>
 
         {/* 9. Referências pessoais */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">9. Referências pessoais</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">9. Referências pessoais</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FormField control={form.control} name="referencias.ref1.nome" render={({ field }) => (
               <FormItem>
                 <FormLabel>Ref. 1 – Nome</FormLabel>

@@ -128,19 +128,19 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="pj-form space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="pj-form space-y-6 sm:space-y-8 max-h-[70vh] overflow-y-auto">
         {/* Dados cadastrais básicos */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Dados cadastrais básicos</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Dados cadastrais básicos</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FormField control={form.control} name="empresa.razao" render={({ field }) => (
               <FormItem className="md:col-span-2">
-                <FormLabel>Razão Social</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700 mb-1">Razão Social</FormLabel>
                 <FormControl>
                   <Input 
                     {...field} 
                     placeholder="Nome completo da empresa"
-                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                    className="h-10 placeholder:text-[#018942] placeholder:opacity-70 border-gray-200 focus:border-[#018942] focus:ring-[#018942]"
                   />
                 </FormControl>
                 <FormMessage />
@@ -196,9 +196,9 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         </section>
 
         {/* Endereço */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Endereço</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Endereço</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="endereco.end" render={({ field }) => (
               <FormItem className="md:col-span-2"><FormLabel>End</FormLabel><FormControl><Input {...field} placeholder="Ex: Rua das Flores" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
             )} />
@@ -265,9 +265,9 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         </section>
 
         {/* Contatos e Documentos */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Contatos & Documentos</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Contatos & Documentos</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="contatos.tel" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tel</FormLabel>
@@ -359,10 +359,10 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         </section>
 
         {/* Sócios */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Sócios</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Sócios</h3>
           {[0,1,2].map((idx) => (
-            <div key={idx} className="grid gap-3 grid-cols-1 md:grid-cols-3 mb-2">
+            <div key={idx} className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mb-4 sm:mb-6">
               <FormField control={form.control} name={`socios.${idx}.nome` as const} render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>
@@ -401,9 +401,9 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         </section>
 
         {/* Solicitação */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Solicitação</h3>
-          <div className="grid gap-3 grid-cols-1 md:grid-cols-4">
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Solicitação</h3>
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <FormField control={form.control} name="solicitacao.quem" render={({ field }) => (
               <FormItem>
                 <FormLabel>Quem solicitou</FormLabel>
@@ -543,40 +543,44 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
         </section>
 
         {/* Text Areas equivalentes PF */}
-        <section>
-          <h3 className="text-base font-semibold mb-3">Informações relevantes da solicitação</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Informações relevantes da solicitação</h3>
           <FormField control={form.control} name="info.relevantes" render={({ field }) => (
             <FormItem>
-              <FormControl><Textarea rows={4} {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+              <FormLabel className="text-sm font-medium text-gray-700 mb-2">Informações relevantes da solicitação</FormLabel>
+              <FormControl><Textarea rows={4} {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70 border-gray-200 focus:border-[#018942] focus:ring-[#018942]"/></FormControl>
             </FormItem>
           )} />
         </section>
-        <section>
-          <h3 className="text-base font-semibold mb-3">Consulta SPC/Serasa</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Consulta SPC/Serasa</h3>
           <FormField control={form.control} name="info.spc" render={({ field }) => (
             <FormItem>
+              <FormLabel className="text-sm font-medium text-gray-700 mb-2">Consulta SPC/Serasa</FormLabel>
               <FormControl>
-                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70 focus:border-[#018942] focus:ring-[#018942]" />
               </FormControl>
             </FormItem>
           )} />
         </section>
-        <section>
-          <h3 className="text-base font-semibold mb-3">Outras informações relevantes do PS</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Outras informações relevantes do PS</h3>
           <FormField control={form.control} name="info.outrasPs" render={({ field }) => (
             <FormItem>
+              <FormLabel className="text-sm font-medium text-gray-700 mb-2">Outras informações relevantes do PS</FormLabel>
               <FormControl>
-                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70 focus:border-[#018942] focus:ring-[#018942]" />
               </FormControl>
             </FormItem>
           )} />
         </section>
-        <section>
-          <h3 className="text-base font-semibold mb-3">Informações relevantes do MK</h3>
+        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Informações relevantes do MK</h3>
           <FormField control={form.control} name="info.mk" render={({ field }) => (
             <FormItem>
+              <FormLabel className="text-sm font-medium text-gray-700 mb-2">Informações relevantes do MK</FormLabel>
               <FormControl>
-                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70 focus:border-[#018942] focus:ring-[#018942]" />
               </FormControl>
             </FormItem>
           )} />

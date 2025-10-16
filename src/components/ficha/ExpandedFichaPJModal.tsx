@@ -955,13 +955,19 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <DialogContent
         aria-describedby={undefined}
-        className={expanded ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none p-0 overflow-hidden" : "max-w-[1200px] max-h-[95vh] overflow-hidden"}
+        className={expanded 
+          ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none overflow-hidden gap-0" 
+          : "max-w-[1200px] max-h-[95vh] overflow-hidden gap-0"
+        }
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <DialogHeader className="pb-2">
+        {/* Header com espaçamento otimizado */}
+        <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100" : "px-6 py-4 border-b border-gray-100"}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <DialogTitle className="text-xl">Ficha Comercial — Pessoa Jurídica</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl font-semibold text-gray-900">
+                Ficha Comercial — Pessoa Jurídica
+              </DialogTitle>
               {hasChanges && (
                 <div className="flex items-center gap-2 text-sm text-amber-600">
                   <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
@@ -992,8 +998,13 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             </div>
           </div>
         </DialogHeader>
+        
+        {/* Container principal com espaçamento responsivo otimizado */}
         <div
-          className={expanded ? "flex-1 overflow-hidden space-y-6 p-3 sm:p-4 md:p-6" : "flex-1 overflow-hidden space-y-6"}
+          className={expanded 
+            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" 
+            : "flex-1 overflow-hidden space-y-6 px-6 py-6"
+          }
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;
             try {

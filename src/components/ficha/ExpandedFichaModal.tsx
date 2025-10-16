@@ -693,12 +693,16 @@ export function ExpandedFichaModal({
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
         <DialogContent 
           aria-describedby={undefined}
-          className={expanded ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none p-0 overflow-hidden" : "max-w-[1200px] max-h-[95vh] overflow-hidden"}
+          className={expanded 
+            ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none overflow-hidden gap-0" 
+            : "max-w-[1200px] max-h-[95vh] overflow-hidden gap-0"
+          }
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
         >
-          <DialogHeader className="pb-2">
+          {/* Header com espaçamento otimizado */}
+          <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100" : "px-6 py-4 border-b border-gray-100"}>
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-xl">
+              <DialogTitle className="text-lg sm:text-xl font-semibold text-gray-900">
                 Ficha Comercial - {basicInfo.nome}
               </DialogTitle>
               <div className="flex items-center gap-2">
@@ -724,8 +728,12 @@ export function ExpandedFichaModal({
               </div>
             </div>
           </DialogHeader>
-
-          <div className={expanded ? "flex-1 overflow-hidden p-3 sm:p-4 md:p-6" : "flex-1 overflow-hidden"}>
+          
+          {/* Container principal com espaçamento responsivo otimizado */}
+          <div className={expanded 
+            ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" 
+            : "flex-1 overflow-hidden px-6 py-6"
+          }>
             <NovaFichaComercialForm
                 onSubmit={handleSubmitWrapper}
                 initialValues={transformedFormData}
