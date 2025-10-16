@@ -1045,121 +1045,152 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => e.preventDefault()}>
         <div
-          className="bg-background text-foreground p-8 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          className="bg-white text-gray-900 p-0 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden border border-gray-200"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between mb-4">
-            <img 
-              src="/src/assets/Logo MZNET (1).png" 
-              alt="MZNET Logo" 
-              className="h-6 w-auto"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
-              aria-label="Fechar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-2">
-                <Label>Nome do Cliente</Label>
-                <Input
-                  name="nome"
-                  value={form.nome}
-                  onChange={handleChange}
-                  placeholder="Nome completo"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
-              </div>
-              <div>
-                <Label>{card?.personType === 'PJ' ? 'CNPJ' : 'CPF'}</Label>
-                <InputMask
-                  mask={card?.personType === 'PJ' ? "99.999.999/9999-99" : "999.999.999-99"}
-                  value={form.cpf || ""}
-                  onChange={(e) => handleMaskChange('cpf', e.target.value)}
-                  maskChar={null}
-                  alwaysShowMask={false}
+          {/* Header com gradiente moderno */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
+            <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+            <div className="relative px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img 
+                    src="/src/assets/Logo MZNET (1).png" 
+                    alt="MZNET Logo" 
+                    className="h-8 w-auto filter brightness-0 invert"
+                  />
+                  <div>
+                    <h2 className="text-lg font-semibold">Editar Ficha</h2>
+                    <p className="text-green-100 text-sm">{card?.nome || 'Cliente'}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClose}
+                  className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                  aria-label="Fechar"
                 >
-                  {(inputProps) => (
-                    <Input
-                      {...inputProps}
-                      placeholder={card?.personType === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"}
-                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                    />
-                  )}
-                </InputMask>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Conteúdo do modal */}
+          <div className="p-6 max-h-[calc(95vh-80px)] overflow-y-auto">
+
+        <div className="space-y-6">
+          {/* Seção de Informações Pessoais */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              Informações Pessoais
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <Label className="text-sm font-medium text-gray-700">Nome do Cliente</Label>
+                  <Input
+                    name="nome"
+                    value={form.nome}
+                    onChange={handleChange}
+                    placeholder="Nome completo"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">{card?.personType === 'PJ' ? 'CNPJ' : 'CPF'}</Label>
+                  <InputMask
+                    mask={card?.personType === 'PJ' ? "99.999.999/9999-99" : "999.999.999-99"}
+                    value={form.cpf || ""}
+                    onChange={(e) => handleMaskChange('cpf', e.target.value)}
+                    maskChar={null}
+                    alwaysShowMask={false}
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder={card?.personType === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"}
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    )}
+                  </InputMask>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <Label>Telefone</Label>
-                <InputMask
-                  mask="(99) 99999-9999"
-                  value={form.telefone || ""}
-                  onChange={(e) => handleMaskChange('telefone', e.target.value)}
-                  maskChar={null}
-                  alwaysShowMask={false}
-                >
-                  {(inputProps) => (
-                    <Input
-                      {...inputProps}
-                      inputMode="tel"
-                      type="tel"
-                      placeholder="(11) 99999-9999"
-                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                    />
-                  )}
-                </InputMask>
-              </div>
-              <div>
-                <Label>WhatsApp</Label>
-                <InputMask
-                  mask="(99) 99999-9999"
-                  value={form.whatsapp || ""}
-                  onChange={(e) => handleMaskChange('whatsapp', e.target.value)}
-                  maskChar={null}
-                  alwaysShowMask={false}
-                >
-                  {(inputProps) => (
-                    <Input
-                      {...inputProps}
-                      inputMode="tel"
-                      type="tel"
-                      placeholder="(11) 99999-9999"
-                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                    />
-                  )}
-                </InputMask>
+          {/* Seção de Contato */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              Informações de Contato
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Telefone</Label>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={form.telefone || ""}
+                    onChange={(e) => handleMaskChange('telefone', e.target.value)}
+                    maskChar={null}
+                    alwaysShowMask={false}
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        inputMode="tel"
+                        type="tel"
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    )}
+                  </InputMask>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">WhatsApp</Label>
+                  <InputMask
+                    mask="(99) 99999-9999"
+                    value={form.whatsapp || ""}
+                    onChange={(e) => handleMaskChange('whatsapp', e.target.value)}
+                    maskChar={null}
+                    alwaysShowMask={false}
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        inputMode="tel"
+                        type="tel"
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    )}
+                  </InputMask>
+                </div>
               </div>
             </div>
           </div>
           {/* E-mail abaixo de Telefone e WhatsApp */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 gap-2">
-              <div>
-                <Label>E-mail</Label>
-                <Input
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="cliente@exemplo.com"
-                  autoComplete="off"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
-              </div>
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+              Email
+            </h3>
+            <div>
+              <Label className="text-sm font-medium text-gray-700">E-mail</Label>
+              <Input
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="cliente@exemplo.com"
+                autoComplete="off"
+                className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+              />
             </div>
           </div>
 
