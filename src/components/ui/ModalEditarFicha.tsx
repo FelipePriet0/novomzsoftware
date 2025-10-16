@@ -1044,7 +1044,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   const isPJ = (card?.personType === 'PJ') || (card?.person_type === 'PJ');
 
   return (
-    <>
+    <div>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => e.preventDefault()}>
         <div
           className="bg-white text-gray-900 p-0 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden border border-gray-200"
@@ -1052,7 +1052,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         >
           {/* Header com gradiente moderno */}
           <div className="relative overflow-hidden bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
-            <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+            <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
             <div className="relative px-6 py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1194,220 +1194,242 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
             </div>
           </div>
 
-          {/* Novos campos de endereço PF */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-2">
-                <Label>Endereço</Label>
-                <Input
-                  name="endereco"
-                  value={form.endereco}
-                  onChange={handleChange}
-                  placeholder="Ex: Rua das Flores"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
+          {/* Seção: Endereço */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+              Endereço
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2">
+                  <Label className="text-sm font-medium text-gray-700">Logradouro</Label>
+                  <Input
+                    name="endereco"
+                    value={form.endereco}
+                    onChange={handleChange}
+                    placeholder="Ex: Rua das Flores"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Número</Label>
+                  <Input
+                    name="numero"
+                    value={form.numero}
+                    onChange={handleChange}
+                    placeholder="123"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                  />
+                </div>
               </div>
-              <div>
-                <Label>Número</Label>
-                <Input
-                  name="numero"
-                  value={form.numero}
-                  onChange={handleChange}
-                  placeholder="123"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <Label>Complemento</Label>
-                <Input
-                  name="complemento"
-                  value={form.complemento}
-                  onChange={handleChange}
-                  placeholder="Apto 45"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
-              </div>
-              <div className="sm:col-span-2"></div>
-            </div>
-          </div>
-
-          {/* CEP / Bairro (mover acima de Planos) */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <Label>CEP</Label>
-                <InputMask
-                  mask="99999-999"
-                  value={form.cep || ""}
-                  onChange={(e) => handleMaskChange('cep', e.target.value)}
-                  maskChar={null}
-                  alwaysShowMask={false}
-                >
-                  {(inputProps) => (
-                    <Input
-                      {...inputProps}
-                      placeholder="12345-678"
-                      className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                    />
-                  )}
-                </InputMask>
-              </div>
-              <div>
-                <Label>Bairro</Label>
-                <Input
-                  name="bairro"
-                  value={form.bairro}
-                  onChange={handleChange}
-                  placeholder="Centro"
-                  className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                />
-              </div>
-            </div>
-          </div>
-          {/* Plano / Vencimento ao lado & SVA Avulso no lugar do Vencimento */}
-          <div className="mt-4 space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <Label>Plano</Label>
-                <Select
-                  onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
-                  value={form.plano_acesso}
-                >
-                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
-                    <SelectValue placeholder="Selecionar plano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <div className="flex gap-2 px-2 py-1 sticky top-0 bg-white/95 border-b">
-                      {([
-                        { key: 'CGNAT', label: 'CGNAT' },
-                        { key: 'DIN', label: 'DINÂMICO' },
-                        { key: 'FIXO', label: 'FIXO' },
-                      ] as const).map(({ key, label }) => {
-                        const active = planCTA === key;
-                        return (
-                          <Button
-                            key={key}
-                            type="button"
-                            variant="outline"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
-                            className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-2 text-xs rounded-[30px]'}
-                            size="sm"
-                          >
-                            {label}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                    {planOptions.map((p) => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Dia de vencimento</Label>
-                <Select
-                  onValueChange={(v) => setForm((p) => ({ ...p, venc: v }))}
-                  value={form.venc}
-                >
-                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
-                    <SelectValue placeholder="Selecionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['5','10','15','20','25'].map(v => (
-                      <SelectItem key={v} value={v}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <Label>SVA Avulso</Label>
-                <Select
-                  onValueChange={(v) => setForm((p) => ({ ...p, sva_avulso: v }))}
-                  value={form.sva_avulso}
-                >
-                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
-                    <SelectValue placeholder="Selecionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)">MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)</SelectItem>
-                    <SelectItem value="DEZZER: R$15,00">DEZZER: R$15,00</SelectItem>
-                    <SelectItem value="MZ CINE-PLAY: R$19,90">MZ CINE-PLAY: R$19,90</SelectItem>
-                    <SelectItem value="SETUP BOX MZNET: R$100,00">SETUP BOX MZNET: R$100,00</SelectItem>
-                    <SelectItem value="01 WI-FI EXTEND (SEM FIO): R$25,90">01 WI-FI EXTEND (SEM FIO): R$25,90</SelectItem>
-                    <SelectItem value="02 WI-FI EXTEND (SEM FIO): R$49,90">02 WI-FI EXTEND (SEM FIO): R$49,90</SelectItem>
-                    <SelectItem value="03 WI-FI EXTEND (SEM FIO): R$74,90">03 WI-FI EXTEND (SEM FIO): R$74,90</SelectItem>
-                    <SelectItem value="01 WI-FI EXTEND (CABEADO): R$35,90">01 WI-FI EXTEND (CABEADO): R$35,90</SelectItem>
-                    <SelectItem value="02 WI-FI EXTEND (CABEADO): R$69,90">02 WI-FI EXTEND (CABEADO): R$69,90</SelectItem>
-                    <SelectItem value="03 WI-FI EXTEND (CABEADO): R$100,00">03 WI-FI EXTEND (CABEADO): R$100,00</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Carnê impresso</Label>
-                <Select
-                  onValueChange={(v) => setForm((p) => ({ ...p, carne_impresso: v }))}
-                  value={form.carne_impresso}
-                >
-                  <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
-                    <SelectValue placeholder="Selecionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Sim">Sim</SelectItem>
-                    <SelectItem value="Não">Não</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Complemento</Label>
+                  <Input
+                    name="complemento"
+                    value={form.complemento}
+                    onChange={handleChange}
+                    placeholder="Apto 45"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">CEP</Label>
+                  <InputMask
+                    mask="99999-999"
+                    value={form.cep || ""}
+                    onChange={(e) => handleMaskChange('cep', e.target.value)}
+                    maskChar={null}
+                    alwaysShowMask={false}
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="12345-678"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    )}
+                  </InputMask>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Bairro</Label>
+                  <Input
+                    name="bairro"
+                    value={form.bairro}
+                    onChange={handleChange}
+                    placeholder="Centro"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                  />
+                </div>
               </div>
             </div>
           </div>
-
-          
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Feito em</Label>
-              <DatePicker
-                name="feito_em"
-                value={feitoEm}
-                disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Instalação agendada para</Label>
-              <DatePicker
-                name="agendamento"
-                value={form.agendamento}
-                onChange={(v) => setForm((prev) => ({ ...prev, agendamento: v }))}
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-                allowTyping={false}
-                showIcon={true}
-                forceFlatpickr={true}
-              />
+          {/* Seção: Planos e Serviços */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
+              Planos e Serviços
+            </h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Plano de Internet</Label>
+                  <Select
+                    onValueChange={(v) => setForm((p) => ({ ...p, plano_acesso: v }))}
+                    value={form.plano_acesso}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900">
+                      <SelectValue placeholder="Selecionar plano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="flex gap-2 px-2 py-2 sticky top-0 bg-white/95 border-b">
+                        {([
+                          { key: 'CGNAT', label: 'CGNAT' },
+                          { key: 'DIN', label: 'DINÂMICO' },
+                          { key: 'FIXO', label: 'FIXO' },
+                        ] as const).map(({ key, label }) => {
+                          const active = planCTA === key;
+                          return (
+                            <Button
+                              key={key}
+                              type="button"
+                              variant="outline"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={(e) => { e.stopPropagation(); setPlanCTA(key); setForm((p)=>({...p, plano_acesso: ''})); }}
+                              className={(active ? 'bg-[#018942] text-white border-[#018942] hover:bg-[#018942]/90 ' : 'border-[#018942] text-[#018942] hover:bg-[#018942]/10 ') + 'h-7 px-3 text-xs rounded-lg transition-all duration-200'}
+                              size="sm"
+                            >
+                              {label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      {planOptions.map((p) => (
+                        <SelectItem key={p} value={p} className="hover:bg-green-50">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
+                            {p}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Dia de vencimento</Label>
+                  <Select
+                    onValueChange={(v) => setForm((p) => ({ ...p, venc: v }))}
+                    value={form.venc}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900">
+                      <SelectValue placeholder="Selecionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['5','10','15','20','25'].map(v => (
+                        <SelectItem key={v} value={v} className="hover:bg-green-50">Dia {v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">SVA Avulso</Label>
+                  <Select
+                    onValueChange={(v) => setForm((p) => ({ ...p, sva_avulso: v }))}
+                    value={form.sva_avulso}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900">
+                      <SelectValue placeholder="Selecionar serviço adicional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)" className="hover:bg-green-50">MZ TV+ (MZPLAY PLUS - ITTV): R$29,90 (01 TELA)</SelectItem>
+                      <SelectItem value="DEZZER: R$15,00" className="hover:bg-green-50">DEZZER: R$15,00</SelectItem>
+                      <SelectItem value="MZ CINE-PLAY: R$19,90" className="hover:bg-green-50">MZ CINE-PLAY: R$19,90</SelectItem>
+                      <SelectItem value="SETUP BOX MZNET: R$100,00" className="hover:bg-green-50">SETUP BOX MZNET: R$100,00</SelectItem>
+                      <SelectItem value="01 WI-FI EXTEND (SEM FIO): R$25,90" className="hover:bg-green-50">01 WI-FI EXTEND (SEM FIO): R$25,90</SelectItem>
+                      <SelectItem value="02 WI-FI EXTEND (SEM FIO): R$49,90" className="hover:bg-green-50">02 WI-FI EXTEND (SEM FIO): R$49,90</SelectItem>
+                      <SelectItem value="03 WI-FI EXTEND (SEM FIO): R$74,90" className="hover:bg-green-50">03 WI-FI EXTEND (SEM FIO): R$74,90</SelectItem>
+                      <SelectItem value="01 WI-FI EXTEND (CABEADO): R$35,90" className="hover:bg-green-50">01 WI-FI EXTEND (CABEADO): R$35,90</SelectItem>
+                      <SelectItem value="02 WI-FI EXTEND (CABEADO): R$69,90" className="hover:bg-green-50">02 WI-FI EXTEND (CABEADO): R$69,90</SelectItem>
+                      <SelectItem value="03 WI-FI EXTEND (CABEADO): R$100,00" className="hover:bg-green-50">03 WI-FI EXTEND (CABEADO): R$100,00</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Carnê impresso</Label>
+                  <Select
+                    onValueChange={(v) => setForm((p) => ({ ...p, carne_impresso: v }))}
+                    value={form.carne_impresso}
+                  >
+                    <SelectTrigger className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900">
+                      <SelectValue placeholder="Selecionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Sim" className="hover:bg-green-50">Sim</SelectItem>
+                      <SelectItem value="Não" className="hover:bg-green-50">Não</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label>Vendedor</Label>
-              <Input
-                value={vendedorNome || "—"}
-                disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-              />
+          {/* Seção: Datas */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+              Agendamento
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Feito em</Label>
+                <DatePicker
+                  name="feito_em"
+                  value={feitoEm}
+                  disabled
+                  className="mt-1 rounded-lg border-gray-300 bg-gray-100 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Instalação agendada para</Label>
+                <DatePicker
+                  name="agendamento"
+                  value={form.agendamento}
+                  onChange={(v) => setForm((prev) => ({ ...prev, agendamento: v }))}
+                  className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900"
+                  allowTyping={false}
+                  showIcon={true}
+                  forceFlatpickr={true}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label>Analista</Label>
-              <Input
-                value={analistaNome || "—"}
-                disabled
-                className="rounded-[12px] text-[#018942] placeholder-[#018942]"
-              />
+          </div>
+
+          {/* Seção: Equipe Responsável */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+              Equipe Responsável
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Vendedor</Label>
+                <Input
+                  value={vendedorNome || "—"}
+                  disabled
+                  className="mt-1 rounded-lg border-gray-300 bg-gray-100 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Analista</Label>
+                <Input
+                  value={analistaNome || "—"}
+                  disabled
+                  className="mt-1 rounded-lg border-gray-300 bg-gray-100 text-gray-700 cursor-not-allowed"
+                />
+              </div>
             </div>
           </div>
 
@@ -1738,6 +1760,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+      {/* Fecha o backdrop (fixed inset-0) */}
+      </div>
+    </div>
   );
 }

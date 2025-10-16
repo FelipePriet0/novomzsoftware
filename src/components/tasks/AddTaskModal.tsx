@@ -364,7 +364,7 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
         {/* Header com gradiente moderno */}
         <SheetHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
-          <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+        <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
           <div className="relative">
             <SheetTitle className="text-xl font-semibold text-white">
               {editingTask ? 'Editar Tarefa' : 'Adicionar Tarefa'}
@@ -545,4 +545,3 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
     </Sheet>
   );
 }
-

@@ -962,46 +962,18 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         }
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* Header com gradiente moderno */}
-        <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white" : "px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white"}>
-          <div className="relative overflow-hidden">
-            <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
-            <div className="relative flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img 
-                  src="/src/assets/Logo MZNET (1).png" 
-                  alt="MZNET Logo" 
-                  className="h-8 w-auto filter brightness-0 invert"
-                />
-                <div>
-                  <DialogTitle className="text-lg sm:text-xl font-semibold text-white">
-                    Ficha Comercial — Pessoa Jurídica
-                  </DialogTitle>
-                  <p className="text-green-100 text-sm">Formulário completo de análise PJ</p>
-                </div>
-                {hasChanges && (
-                  <div className="flex items-center gap-2 text-sm text-amber-200">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></div>
-                    Alterações não salvas
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setExpanded(e => !e)}
-                  className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
-                  aria-label={expanded ? "Minimizar" : "Expandir"}
-                  title={expanded ? "Minimizar" : "Expandir"}
-                >
-                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
+        {/* Header simplificado para robustez do parser */}
+        <DialogHeader className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-lg sm:text-xl font-semibold text-white">
+              Ficha Comercial — Pessoa Jurídica
+            </DialogTitle>
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleClose}
-                className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
                 aria-label="Fechar"
               >
                 <X className="h-4 w-4" />
@@ -1009,8 +981,6 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             </div>
           </div>
         </DialogHeader>
-        
-        {/* Container principal com espaçamento responsivo otimizado */}
         <div
           className={expanded 
             ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
