@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, X, Loader2, ArrowLeft } from "lucide-react";
+import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,6 +94,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
   }, [applicationId, applicantIdProp]);
   const { update: updateApplicantContacts } = useApplicantContacts(applicantId || undefined);
   const { saveCompanyData } = usePjFichasTestConnection();
+  const [expanded, setExpanded] = useState(false);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -952,7 +953,11 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
-      <DialogContent aria-describedby={undefined} className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
+      <DialogContent
+        aria-describedby={undefined}
+        className={expanded ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none p-0 overflow-hidden bg-[#018942]/10" : "max-w-[1200px] max-h-[95vh] overflow-hidden bg-[#018942]/10"}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -964,19 +969,31 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
                 </div>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
-              aria-label="Fechar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(e => !e)}
+                className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
+                aria-label={expanded ? "Minimizar" : "Expandir"}
+                title={expanded ? "Minimizar" : "Expandir"}
+              >
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </DialogHeader>
         <div
-          className="flex-1 overflow-hidden space-y-6"
+          className={expanded ? "flex-1 overflow-hidden space-y-6 p-3 sm:p-4 md:p-6" : "flex-1 overflow-hidden space-y-6"}
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;
             try {
