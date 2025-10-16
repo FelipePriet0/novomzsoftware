@@ -95,6 +95,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
   const { update: updateApplicantContacts } = useApplicantContacts(applicantId || undefined);
   const { saveCompanyData } = usePjFichasTestConnection();
   const [expanded, setExpanded] = useState(false);
+  const [pjSubmit, setPjSubmit] = useState<(() => void) | null>(null);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -1026,6 +1027,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
               onCancel={handleClose}
               onFormChange={handleFormChange}
               applicationId={applicationId}
+              onExpose={(api) => setPjSubmit(() => api.submit)}
+              hideInternalActions={expanded}
               afterMkSlot={(
               <section>
                 <div className="flex items-center justify-between mb-2">
@@ -1189,6 +1192,23 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             />
           )}
         </div>
+        {expanded && (
+          <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              className="text-gray-700"
+              onClick={handleClose}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+              onClick={() => pjSubmit?.()}
+            >
+              Salvar ficha PJ
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
     

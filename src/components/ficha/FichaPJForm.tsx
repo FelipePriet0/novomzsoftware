@@ -56,9 +56,11 @@ interface FichaPJFormProps {
   afterMkSlot?: React.ReactNode;
   onFormChange?: (values: PJFormValues) => void;
   applicationId?: string;
+  onExpose?: (api: { submit: () => void }) => void;
+  hideInternalActions?: boolean;
 }
 
-export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, onFormChange, applicationId }: FichaPJFormProps) {
+export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, onFormChange, applicationId, onExpose, hideInternalActions }: FichaPJFormProps) {
   const form = useForm<PJFormValues>({ resolver: zodResolver(pjSchema), defaultValues });
   const changeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -109,6 +111,13 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
       }
     };
   }, [form, onFormChange]);
+
+  // Expose submit API to parent (for external CTA in sticky footer)
+  useEffect(() => {
+    if (!onExpose) return;
+    const api = { submit: () => form.handleSubmit(onSubmit)() };
+    onExpose(api);
+  }, [onExpose, form, onSubmit]);
   const formatDateMaskAA = (value: string) => {
     const digits = String(value || '').replace(/\D/g, '').slice(0, 6);
     const d = digits.slice(0, 2);
@@ -590,10 +599,12 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
 
         {afterMkSlot}
 
-        <div className="flex justify-end gap-2 pt-4">
-          {onCancel && <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>}
-          <Button type="submit" className="bg-[#018942] text-white">Salvar ficha PJ</Button>
-        </div>
+        {!hideInternalActions && (
+          <div className="flex justify-end gap-2 pt-4">
+            {onCancel && <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>}
+            <Button type="submit" className="bg-[#018942] text-white">Salvar ficha PJ</Button>
+          </div>
+        )}
       </form>
     </Form>
   );

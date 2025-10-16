@@ -193,9 +193,10 @@ interface NovaFichaComercialFormProps {
   applicantId?: string;
   onRefetch?: () => void;
   onExpose?: (api: { getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> }) => void;
+  hideInternalActions?: boolean;
 }
 
-export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, applicantId, onRefetch, onExpose }: NovaFichaComercialFormProps) {
+export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, applicantId, onRefetch, onExpose, hideInternalActions }: NovaFichaComercialFormProps) {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
@@ -2212,11 +2213,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           </div>
         </section>
 
-        <div className="flex justify-end pt-6">
-          <Button type="submit" className="bg-[#018942] text-white hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(0,0,0,0.25)]">
-            {applicationId ? 'Salvar alterações' : 'Criar ficha'}
-          </Button>
-        </div>
+        {!hideInternalActions && (
+          <div className="flex justify-end pt-6">
+            <Button type="submit" className="bg-[#018942] text-white hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(0,0,0,0.25)]">
+              {applicationId ? 'Salvar alterações' : 'Criar ficha'}
+            </Button>
+          </div>
+        )}
       </form>
     </Form>
 

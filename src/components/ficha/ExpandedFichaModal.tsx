@@ -742,8 +742,26 @@ export function ExpandedFichaModal({
                 applicantId={applicantId}
                 onExpose={(api) => setFormApi(api)}
                 onRefetch={onRefetch}
+                hideInternalActions={expanded}
               />
           </div>
+          {expanded && (
+            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
+              <Button
+                className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+                onClick={async () => {
+                  try {
+                    if (!formApi) return;
+                    await formApi.flushAutosave?.();
+                    const values = formApi.getCurrentValues();
+                    await handleSubmitWrapper(values);
+                  } catch (_) {}
+                }}
+              >
+                Salvar Alterações
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
