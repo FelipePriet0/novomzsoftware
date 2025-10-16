@@ -10,7 +10,7 @@ import { BasicInfoData } from './BasicInfoModal';
 import { Button } from "@/components/ui/button";
 // Drafts desativados temporariamente
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
@@ -71,7 +71,6 @@ export function ExpandedFichaModal({
   const { savePersonalData } = usePfFichasTestConnection();
   const [formApi, setFormApi] = useState<{ getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> } | null>(null);
   // Removido: fluxo applicants_test (legado)
-  const [expanded, setExpanded] = useState(false);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -693,7 +692,7 @@ export function ExpandedFichaModal({
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
         <DialogContent 
           aria-describedby={undefined}
-          className={expanded ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none p-0 overflow-hidden bg-[#018942]/10" : "max-w-[1200px] max-h-[95vh] overflow-hidden bg-[#018942]/10"}
+          className="max-w-[1200px] max-h-[95vh] overflow-hidden"
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
         >
           <DialogHeader className="pb-2">
@@ -705,18 +704,8 @@ export function ExpandedFichaModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setExpanded(e => !e)}
-                  className="h-8 w-8 p-0 text-[#018942] hover:bg-[#018942]/10"
-                  aria-label={expanded ? 'Minimizar' : 'Expandir'}
-                  title={expanded ? 'Minimizar' : 'Expandir'}
-                >
-                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
                   onClick={handleClose}
-                  className="h-8 w-8 p-0 text-[#018942] hover:bg-[#018942]/10"
+                  className="h-8 w-8 p-0 text-[#018942] hover:bg-[#018942]/0.08"
                   aria-label="Fechar"
                 >
                   <X className="h-4 w-4" />
@@ -725,7 +714,7 @@ export function ExpandedFichaModal({
             </div>
           </DialogHeader>
 
-          <div className={expanded ? "flex-1 overflow-hidden p-3 sm:p-4 md:p-6" : "flex-1 overflow-hidden"}>
+          <div className="flex-1 overflow-hidden">
             <NovaFichaComercialForm
                 onSubmit={handleSubmitWrapper}
                 initialValues={transformedFormData}
