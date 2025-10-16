@@ -193,13 +193,13 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="empresa.fantasia" render={({ field }) => (
-              <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Nome Fantasia</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="empresa.fachada" render={({ field }) => (
-              <FormItem><FormLabel>Nome na Fachada</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Nome na Fachada</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="empresa.area" render={({ field }) => (
-              <FormItem className="md:col-span-3"><FormLabel>Área de Atuação</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem className="md:col-span-3"><FormLabel>Área de Atuação</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
           </div>
         </section>
@@ -209,13 +209,13 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
           <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">Endereço</h3>
           <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             <FormField control={form.control} name="endereco.end" render={({ field }) => (
-              <FormItem className="md:col-span-2"><FormLabel>End</FormLabel><FormControl><Input {...field} placeholder="Ex: Rua das Flores" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem className="md:col-span-2"><FormLabel>End</FormLabel><FormControl><Input {...field} placeholder="Ex: Rua das Flores" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.n" render={({ field }) => (
-              <FormItem><FormLabel>Nº</FormLabel><FormControl><Input {...field} placeholder="123" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Nº</FormLabel><FormControl><Input {...field} placeholder="123" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.compl" render={({ field }) => (
-              <FormItem><FormLabel>Compl</FormLabel><FormControl><Input {...field} placeholder="Ex: Apt. 301" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Compl</FormLabel><FormControl><Input {...field} placeholder="Ex: Apt. 301" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.tipo" render={({ field }) => (
               <FormItem className="md:col-span-2">
@@ -231,17 +231,17 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.obsTipo" render={({ field }) => (
-              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.cep" render={({ field }) => (
-              <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="Ex: 12345-678" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>CEP</FormLabel><FormControl><Input {...field} placeholder="Ex: 12345-678" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.bairro" render={({ field }) => (
-              <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} placeholder="Bairro" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Bairro</FormLabel><FormControl><Input {...field} placeholder="Bairro" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
             <FormField control={form.control} name="endereco.tempo" render={({ field }) => (
-              <FormItem><FormLabel>Tempo</FormLabel><FormControl><Input {...field} placeholder="Ex: 2 anos" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Tempo</FormLabel><FormControl><Input {...field} placeholder="Ex: 2 anos" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.estab" render={({ field }) => (
@@ -259,7 +259,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.obsEstab" render={({ field }) => (
-              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>
+              <FormItem><FormLabel>Observações</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>
             )} />
 
             <FormField control={form.control} name="endereco.endPs" render={({ field }) => (
@@ -351,14 +351,14 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="docs.tipo" render={({ field }) => (
               <FormItem><FormLabel>Tipo</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Energia">Energia</SelectItem><SelectItem value="Agua">Água</SelectItem><SelectItem value="Internet">Internet</SelectItem><SelectItem value="Outro">Outro</SelectItem><SelectItem value="XXX">XXX</SelectItem></SelectContent></Select></FormItem>
             )} />
-            <FormField control={form.control} name="docs.emNomeDe" render={({ field }) => (<FormItem><FormLabel>Em nome de</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.emNomeDe" render={({ field }) => (<FormItem><FormLabel>Em nome de</FormLabel><FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>)} />
 
             <FormField control={form.control} name="docs.possuiInternet" render={({ field }) => (
               <FormItem><FormLabel>Possui Internet</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select></FormItem>
             )} />
-            <FormField control={form.control} name="docs.operadora" render={({ field }) => (<FormItem><FormLabel>Operadora</FormLabel><FormControl><Input {...field} placeholder="Ex: Vivo" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
-            <FormField control={form.control} name="docs.plano" render={({ field }) => (<FormItem><FormLabel>Plano</FormLabel><FormControl><Input {...field} placeholder="Ex: 300MB" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
-            <FormField control={form.control} name="docs.valor" render={({ field }) => (<FormItem><FormLabel>Valor</FormLabel><FormControl><Input {...field} placeholder="Ex: R$ 99,90" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.operadora" render={({ field }) => (<FormItem><FormLabel>Operadora</FormLabel><FormControl><Input {...field} placeholder="Ex: Vivo" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.plano" render={({ field }) => (<FormItem><FormLabel>Plano</FormLabel><FormControl><Input {...field} placeholder="Ex: 300MB" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>)} />
+            <FormField control={form.control} name="docs.valor" render={({ field }) => (<FormItem><FormLabel>Valor</FormLabel><FormControl><Input {...field} placeholder="Ex: R$ 99,90" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl></FormItem>)} />
 
             <FormField control={form.control} name="docs.contratoSocial" render={({ field }) => (
               <FormItem className="md:col-span-2"><FormLabel>Contrato Social</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Sim">Sim</SelectItem><SelectItem value="Não">Não</SelectItem></SelectContent></Select></FormItem>
@@ -375,7 +375,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               <FormField control={form.control} name={`socios.${idx}.nome` as const} render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>
-                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name={`socios.${idx}.cpf` as const} render={({ field }) => (
@@ -402,7 +402,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               <FormField control={form.control} name={`socios.${idx}.tel` as const} render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tel</FormLabel>
-                  <FormControl><Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/></FormControl>
+                  <FormControl><Input {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/></FormControl>
                 </FormItem>
               )} />
             </div>
@@ -417,7 +417,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               <FormItem>
                 <FormLabel>Quem solicitou</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                  <Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/>
                 </FormControl>
               </FormItem>
             )} />
@@ -441,7 +441,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               <FormItem>
                 <FormLabel>Tel</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                  <Input {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/>
                 </FormControl>
               </FormItem>
             )} />
@@ -449,7 +449,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
               <FormItem>
                 <FormLabel>Protocolo MK</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Número do protocolo" className="placeholder:text-[#018942] placeholder:opacity-70"/>
+                  <Input {...field} placeholder="Número do protocolo" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"/>
                 </FormControl>
               </FormItem>
             )} />
@@ -458,7 +458,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                 <FormLabel>Plano de Acesso</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar plano" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar plano" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {/* CTAs verdes dentro do dropdown */}
@@ -526,7 +526,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                 <FormLabel>Venc</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     {['5','10','15','20','25'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
@@ -539,7 +539,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
                 <FormLabel>Carnê Impresso</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>

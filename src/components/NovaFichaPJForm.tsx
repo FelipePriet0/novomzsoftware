@@ -192,7 +192,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
               <FormField control={form.control} name="cnpj" render={({ field }) => (
                 <FormItem>
                   <FormLabel>CNPJ</FormLabel>
-                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0000-00" /></FormControl>
+                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0000-00" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -209,7 +209,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
                 <FormItem>
                   <FormLabel>Telefone</FormLabel>
                   <FormControl>
-                    <Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" />
+                    <Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -217,7 +217,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
               <FormField control={form.control} name="contact_whatsapp" render={({ field }) => (
                 <FormItem>
                   <FormLabel>WhatsApp</FormLabel>
-                  <FormControl><Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" /></FormControl>
+                  <FormControl><Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />

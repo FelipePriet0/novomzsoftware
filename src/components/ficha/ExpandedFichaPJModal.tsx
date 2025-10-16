@@ -963,9 +963,14 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header com espaçamento otimizado */}
-        <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100" : "px-6 py-4 border-b border-gray-100"}>
+        <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-white" : "px-6 py-4 border-b border-gray-100"}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              <img 
+                src="/src/assets/Logo MZNET (1).png" 
+                alt="MZNET Logo" 
+                className="h-8 w-auto"
+              />
               <DialogTitle className="text-lg sm:text-xl font-semibold text-gray-900">
                 Ficha Comercial — Pessoa Jurídica
               </DialogTitle>
@@ -1003,7 +1008,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         {/* Container principal com espaçamento responsivo otimizado */}
         <div
           className={expanded 
-            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" 
+            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
             : "flex-1 overflow-hidden space-y-6 px-6 py-6"
           }
           onBlurCapture={async () => {
@@ -1193,7 +1198,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
           )}
         </div>
         {expanded && (
-          <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 flex items-center justify-end gap-2">
+          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 flex items-center justify-end gap-2">
             <Button
               variant="ghost"
               className="text-gray-700"

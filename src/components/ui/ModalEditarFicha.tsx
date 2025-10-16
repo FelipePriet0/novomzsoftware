@@ -1051,7 +1051,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Editar Ficha</h2>
+            <img 
+              src="/src/assets/Logo MZNET (1).png" 
+              alt="MZNET Logo" 
+              className="h-6 w-auto"
+            />
             <Button
               variant="ghost"
               size="sm"

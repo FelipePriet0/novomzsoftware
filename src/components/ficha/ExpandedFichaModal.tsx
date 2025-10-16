@@ -700,11 +700,18 @@ export function ExpandedFichaModal({
           onInteractOutside={(e) => e.preventDefault()} // Prevent closing on outside click
         >
           {/* Header com espaçamento otimizado */}
-          <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-100" : "px-6 py-4 border-b border-gray-100"}>
+          <DialogHeader className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-white" : "px-6 py-4 border-b border-gray-100"}>
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-lg sm:text-xl font-semibold text-gray-900">
-                Ficha Comercial - {basicInfo.nome}
-              </DialogTitle>
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/src/assets/Logo MZNET (1).png" 
+                  alt="MZNET Logo" 
+                  className="h-8 w-auto"
+                />
+                <DialogTitle className="text-lg sm:text-xl font-semibold text-gray-900">
+                  Ficha Comercial - {basicInfo.nome}
+                </DialogTitle>
+              </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -731,7 +738,7 @@ export function ExpandedFichaModal({
           
           {/* Container principal com espaçamento responsivo otimizado */}
           <div className={expanded 
-            ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" 
+            ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
             : "flex-1 overflow-hidden px-6 py-6"
           }>
             <NovaFichaComercialForm
@@ -745,23 +752,23 @@ export function ExpandedFichaModal({
                 hideInternalActions={expanded}
               />
           </div>
-          {expanded && (
-            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
-              <Button
-                className="bg-[#018942] hover:bg-[#018942]/90 text-white"
-                onClick={async () => {
-                  try {
-                    if (!formApi) return;
-                    await formApi.flushAutosave?.();
-                    const values = formApi.getCurrentValues();
-                    await handleSubmitWrapper(values);
-                  } catch (_) {}
-                }}
-              >
-                Salvar Alterações
-              </Button>
-            </div>
-          )}
+           {expanded && (
+             <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
+               <Button
+                 className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+                 onClick={async () => {
+                   try {
+                     if (!formApi) return;
+                     await formApi.flushAutosave?.();
+                     const values = formApi.getCurrentValues();
+                     await handleSubmitWrapper(values);
+                   } catch (_) {}
+                 }}
+               >
+                 Salvar Alterações
+               </Button>
+             </div>
+           )}
         </DialogContent>
       </Dialog>
 

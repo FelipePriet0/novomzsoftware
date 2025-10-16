@@ -47,12 +47,19 @@ interface Parecer {
   is_thread_starter?: boolean;
 }
 
+// Parecer salvo no banco (pode conter metadados auxiliares como deleted)
+type NoteRecord = Parecer & { deleted?: boolean };
+
+// Estrutura de campos atualizados (applicants)
+type Updates = Record<string, string | number | boolean | null | undefined>;
+
 // Schema
 const schema = z.object({
   cliente: z.object({
     nome: z.string().min(1, "Obrigatório"),
     cpf: z.string().min(11, "CPF é obrigatório").max(14, "CPF inválido"),
     nasc: z.string().optional(), // yyyy-mm-dd
+    id: z.string().optional(),
     tel: z.string().optional(),
     whats: z.string().optional(),
     doPs: z.string().optional(),
@@ -259,9 +266,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         relacoes: { temContrato: "Não" },
         ...initialValues,
       };
-      form.reset(merged as any, { keepDirty: false, keepTouched: false });
+      // react-hook-form aceita DeepPartial; fazemos cast seguro para o tipo do formulário
+      form.reset(merged as unknown as ComercialFormValues, { keepDirty: false, keepTouched: false });
     }
-  }, [initialValues, applicationId, form.formState.isDirty]);
+  }, [initialValues, applicationId, form.formState.isDirty, form]);
 
   // Initialize pareceres from existing data
   React.useEffect(() => {
@@ -281,22 +289,23 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   const loadPareceres = React.useCallback(async () => {
     if (!applicationId) return;
     try {
+      // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
       const { data, error } = await supabase
         .from('kanban_cards')
         .select('reanalysis_notes')
         .eq('id', applicationId)
         .maybeSingle();
       if (error) return;
-      let notes: any[] = [];
+      let notes: NoteRecord[] = [];
       if (data?.reanalysis_notes) {
-        if (Array.isArray(data.reanalysis_notes)) notes = data.reanalysis_notes as any[];
+        if (Array.isArray(data.reanalysis_notes)) notes = data.reanalysis_notes as NoteRecord[];
         else if (typeof data.reanalysis_notes === 'string') {
-          try { notes = JSON.parse(data.reanalysis_notes) || []; } catch {}
+          try { notes = (JSON.parse(data.reanalysis_notes) as NoteRecord[]) || []; } catch { /* invalid JSON from legacy */ }
         }
       }
       
       // Migrar pareceres antigos que não têm estrutura hierárquica
-      const migratedNotes = (Array.isArray(notes) ? notes : []).map(parecer => {
+      const migratedNotes = (Array.isArray(notes) ? notes : []).map((parecer: NoteRecord) => {
         // Se não tem estrutura hierárquica, adicionar
         if (!parecer.thread_id || parecer.level === undefined) {
           return {
@@ -311,11 +320,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       });
       
       // Filtrar pareceres deletados (soft delete)
-      const activePareceres = migratedNotes.filter((p: any) => !p.deleted);
+      const activePareceres = migratedNotes.filter((p: NoteRecord) => !p.deleted);
       if (import.meta.env.DEV) console.log('📊 [NovaFicha] Pareceres carregados:', migratedNotes.length, 'Ativos:', activePareceres.length);
       setPareceres(activePareceres);
     } catch {
-      // ignore
+      // ignore errors loading notes
     }
   }, [applicationId]);
 
@@ -328,7 +337,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   // =============================
   const [resolvedApplicantId, setResolvedApplicantId] = React.useState<string | null>(applicantId || null);
   const autosaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastApplicantsSavedRef = React.useRef<any>(null);
+  const lastApplicantsSavedRef = React.useRef<Updates | null>(null);
   const lastPFSavedRef = React.useRef<string | null>(null);
   const { savePersonalData } = usePfFichasTestConnection();
 
@@ -339,13 +348,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       try {
         if (applicantId) { setResolvedApplicantId(applicantId); return; }
         if (!applicationId) { setResolvedApplicantId(null); return; }
-        const { data, error } = await (supabase as any)
+        // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
+        const { data, error } = await supabase
           .from('kanban_cards')
           .select('applicant_id')
           .eq('id', applicationId)
           .maybeSingle();
         if (error) throw error;
-        if (active) setResolvedApplicantId((data as any)?.applicant_id || null);
+        const row = data as unknown as { applicant_id?: string } | null;
+        if (active) setResolvedApplicantId(row?.applicant_id || null);
       } catch {
         if (active) setResolvedApplicantId(null);
       }
@@ -360,7 +371,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
 
   // Helpers: construir objeto de updates para applicants a partir do form
   const buildApplicantsUpdates = React.useCallback((values: ComercialFormValues) => {
-    const updates: any = {};
+    const updates: Updates = {};
     // Cliente
     if (values?.cliente?.nome !== undefined) updates.primary_name = values.cliente.nome?.trim() || null;
     if (values?.cliente?.cpf !== undefined) {
@@ -382,7 +393,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     if (values?.outras?.carneImpresso !== undefined) updates.carne_impresso = values.outras.carneImpresso === 'Sim' ? true : values.outras.carneImpresso === 'Não' ? false : null;
     if (values?.outras?.svaAvulso !== undefined) updates.sva_avulso = values.outras.svaAvulso || null;
     // Administrativas
-    const adm = (values as any)?.outras?.administrativas;
+    const adm = (values as unknown as { outras?: { administrativas?: { quemSolicitou?: string; fone?: string; protocoloMk?: string; meio?: string } } })?.outras?.administrativas;
     if (adm) {
       if (adm.quemSolicitou !== undefined) updates.quem_solicitou = adm.quemSolicitou || null;
       if (adm.fone !== undefined) updates.telefone_solicitante = adm.fone || null;
@@ -484,8 +495,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   React.useEffect(() => {
     if (!resolvedApplicantId) return;
     const current = form.getValues();
-    lastApplicantsSavedRef.current = buildApplicantsUpdates(current as any);
-    lastPFSavedRef.current = JSON.stringify(pickPfSlice(current as any));
+    lastApplicantsSavedRef.current = buildApplicantsUpdates(current as ComercialFormValues);
+    lastPFSavedRef.current = JSON.stringify(pickPfSlice(current as ComercialFormValues));
   }, [resolvedApplicantId, buildApplicantsUpdates, pickPfSlice, form]);
 
   // Função de flush (executa o autosave imediatamente)
@@ -493,23 +504,24 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     if (!resolvedApplicantId) return;
     try {
       const v = form.getValues();
-      const candidate = buildApplicantsUpdates(v as any);
-      const last = lastApplicantsSavedRef.current || {};
-      const diff: any = {};
+      const candidate = buildApplicantsUpdates(v as ComercialFormValues);
+      const last: Updates = lastApplicantsSavedRef.current || {};
+      const diff: Updates = {};
       for (const k of Object.keys(candidate)) {
         const prev = last[k];
         const next = candidate[k];
         if (prev !== next) diff[k] = next;
       }
       if (Object.keys(diff).length > 0) {
-        await (supabase as any).from('applicants').update(diff).eq('id', resolvedApplicantId);
+        await supabase.from('applicants').update(diff).eq('id', resolvedApplicantId);
         lastApplicantsSavedRef.current = { ...last, ...diff };
         if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] Applicants diff =', diff);
       }
-      const pfSliceStr = JSON.stringify(pickPfSlice(v as any));
+      const pfSliceStr = JSON.stringify(pickPfSlice(v as ComercialFormValues));
       if (pfSliceStr !== lastPFSavedRef.current) {
         try {
-          await savePersonalData(resolvedApplicantId, v as any);
+          // savePersonalData aceita estrutura compatível com ComercialFormValues
+          await savePersonalData(resolvedApplicantId, v as unknown as Parameters<typeof savePersonalData>[1]);
           lastPFSavedRef.current = pfSliceStr;
           if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] PF saved for applicant =', resolvedApplicantId);
         } catch (e) {
@@ -593,16 +605,16 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       is_thread_starter: true
     };
     // Fetch current notes from DB to avoid overwriting
-    let currentNotes: any[] = [];
+    let currentNotes: NoteRecord[] = [];
     if (applicationId) {
       const { data } = await supabase
         .from('kanban_cards')
         .select('reanalysis_notes')
         .eq('id', applicationId)
         .maybeSingle();
-      const raw = (data as any)?.reanalysis_notes;
-      if (Array.isArray(raw)) currentNotes = raw as any[];
-      else if (typeof raw === 'string') { try { currentNotes = JSON.parse(raw) || []; } catch {}
+      const raw = (data as { reanalysis_notes?: NoteRecord[] | string | null } | null)?.reanalysis_notes;
+      if (Array.isArray(raw)) currentNotes = raw as NoteRecord[];
+      else if (typeof raw === 'string') { try { currentNotes = (JSON.parse(raw) as NoteRecord[]) || []; } catch { /* invalid JSON */ }
       }
     }
     
@@ -611,7 +623,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     const next = [...currentNotes, newParecer];
     
     // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
-    const activePareceres = next.filter((p: any) => !p.deleted);
+    const activePareceres = next.filter((p: NoteRecord) => !p.deleted);
     setPareceres(activePareceres);
     
     setNewParecerText("");
@@ -633,14 +645,18 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           let cardTitle = 'Cliente';
           let applicantId: string | null = null;
           try {
+            // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
             const { data: kc } = await supabase
               .from('kanban_cards')
               .select('applicant:applicant_id(id, primary_name)')
               .eq('id', applicationId)
               .maybeSingle();
-            cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
-            applicantId = (kc as any)?.applicant?.id || null;
-          } catch (_) {}
+            const appRef = kc as unknown as { applicant?: { id?: string; primary_name?: string } } | null;
+            cardTitle = appRef?.applicant?.primary_name || 'Cliente';
+            applicantId = appRef?.applicant?.id || null;
+          } catch (err) {
+            if (import.meta.env.DEV) console.error('Falha ao carregar título do card', err);
+          }
 
           const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
           const unique = Array.from(new Set(matches));
@@ -656,7 +672,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   .limit(5);
                 
                 const targets = (profiles || [])
-                  .map((p: any) => p.id)
+                  .map((p: { id: string }) => p.id)
                   .filter((id: string) => id && id !== (profile?.id || ''));
                 
                 // 🚀 Paralelizar inserts de notificações
@@ -691,9 +707,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         // if (onRefetch) {
         //   onRefetch();
         // }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('❌ [NovaFicha] Erro ao adicionar parecer:', e);
-        toast({ title: 'Erro ao salvar parecer', description: e?.message || String(e), variant: 'destructive' });
+        const desc = (e as { message?: string })?.message || String(e);
+        toast({ title: 'Erro ao salvar parecer', description: desc, variant: 'destructive' });
       }
     }
   };
@@ -720,22 +737,22 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     if (!text) return;
     // Only the creator can edit; merge with DB to avoid overwriting others
     const currentUserId = profile?.id || 'current-user-id';
-    let base: any[] = [];
+    let base: NoteRecord[] = [];
     if (applicationId) {
       const { data } = await supabase
         .from('kanban_cards')
         .select('reanalysis_notes')
         .eq('id', applicationId)
         .maybeSingle();
-      const raw = (data as any)?.reanalysis_notes;
-      if (Array.isArray(raw)) base = raw as any[];
-      else if (typeof raw === 'string') { try { base = JSON.parse(raw) || []; } catch {}
+      const raw = (data as { reanalysis_notes?: NoteRecord[] | string | null } | null)?.reanalysis_notes;
+      if (Array.isArray(raw)) base = raw as NoteRecord[];
+      else if (typeof raw === 'string') { try { base = (JSON.parse(raw) as NoteRecord[]) || []; } catch { /* invalid JSON */ }
       }
     }
     const source = base.length ? base : pareceres;
     
     // ✅ Editar na lista completa (incluindo deletados)
-    const updated = source.map((p: any) => {
+    const updated = source.map((p: NoteRecord) => {
       if (p.id !== editingParecerId) return p;
       if (p.author_id !== currentUserId) return p; // guard
       return {
@@ -748,7 +765,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     });
     
     // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
-    const activePareceres = updated.filter((p: any) => !p.deleted);
+    const activePareceres = updated.filter((p: NoteRecord) => !p.deleted);
     setPareceres(activePareceres);
     
     setEditingParecerId(null);
@@ -770,9 +787,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         if (onRefetch) {
           onRefetch();
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('❌ [NovaFicha] Erro ao editar parecer:', e);
-        toast({ title: 'Erro ao editar parecer', description: e?.message || String(e), variant: 'destructive' });
+        const desc = (e as { message?: string })?.message || String(e);
+        toast({ title: 'Erro ao editar parecer', description: desc, variant: 'destructive' });
       }
     }
   };
@@ -811,7 +829,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   };
   
   const getGroupedPareceres = () => {
-    const threads = new Map<string, any[]>();
+    const threads = new Map<string, Parecer[]>();
     
     // Agrupar por thread_id
     pareceres.forEach(parecer => {
@@ -866,7 +884,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       if (!parecerOriginal) return;
       
       // Criar resposta do gestor
-      const respostaGestor = {
+      const respostaGestor: NoteRecord = {
         id: crypto.randomUUID(),
         author_id: profile?.id || 'gestor-id',
         author_name: profile?.full_name || 'Gestor',
@@ -880,22 +898,24 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       };
       
       // Salvar no banco de dados
-      let base: any[] = [];
+      let base: NoteRecord[] = [];
+      // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
       const { data } = await supabase.from('kanban_cards').select('reanalysis_notes').eq('id', applicationId).maybeSingle();
-      const raw = (data as any)?.reanalysis_notes;
-      if (Array.isArray(raw)) base = raw as any[];
-      else if (typeof raw === 'string') { try { base = JSON.parse(raw) || []; } catch {} }
+      const raw = (data as { reanalysis_notes?: NoteRecord[] | string | null } | null)?.reanalysis_notes;
+      if (Array.isArray(raw)) base = raw as NoteRecord[];
+      else if (typeof raw === 'string') { try { base = (JSON.parse(raw) as NoteRecord[]) || []; } catch { /* invalid JSON */ } }
       
       // ✅ IMPORTANTE: Adicionar resposta à lista completa (incluindo deletados)
       const updated = [...base, respostaGestor];
       
       // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
-      const activePareceres = updated.filter((p: any) => !p.deleted);
+      const activePareceres = updated.filter((p: NoteRecord) => !p.deleted);
       setPareceres(activePareceres);
       
       // ✅ Salvar lista COMPLETA no banco (incluindo deletados para histórico)
       const serialized = JSON.stringify(updated);
       
+      // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
       const { error } = await supabase
         .from('kanban_cards')
         .update({ reanalysis_notes: serialized })
@@ -910,24 +930,29 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           // Resolver título do card
           let cardTitle = 'Cliente';
           try {
-            const { data: kc2 } = await (supabase as any)
+            // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
+            const { data: kc2 } = await supabase
               .from('kanban_cards')
               .select('applicant:applicant_id(id, primary_name)')
               .eq('id', applicationId)
               .maybeSingle();
-            cardTitle = (kc2 as any)?.applicant?.primary_name || 'Cliente';
-            applicantId = (kc2 as any)?.applicant?.id || applicantId;
-          } catch (_) {}
+            const appRef2 = kc2 as unknown as { applicant?: { id?: string; primary_name?: string } } | null;
+            cardTitle = appRef2?.applicant?.primary_name || 'Cliente';
+            applicantId = appRef2?.applicant?.id || applicantId;
+          } catch (err) {
+            if (import.meta.env.DEV) console.error('Falha ao carregar título do card (resposta)', err);
+          }
           for (const mention of unique) {
-            const { data: profiles } = await (supabase as any)
+            const { data: profiles } = await supabase
               .from('profiles')
               .select('id, full_name')
               .ilike('full_name', `${mention}%`)
               .limit(5);
-            const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
+            const targets = (profiles || []).map((p: { id: string }) => p.id).filter(Boolean);
             for (const userId of targets) {
               if (userId === (profile?.id || '')) continue;
-              await (supabase as any)
+              // @ts-expect-error - 'inbox_notifications' não está no types.ts gerado
+              await supabase
                 .from('inbox_notifications')
                   .insert({
                     user_id: userId,
@@ -953,7 +978,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       setReplyText("");
       if (import.meta.env.DEV) console.log('✅ [NovaFicha] Resposta salva com sucesso! Realtime vai sincronizar outros modais.');
       toast({ title: 'Resposta salva', description: 'Sua resposta foi adicionada ao parecer.' });
-    } catch (error) {
+      } catch (error) {
       if (import.meta.env.DEV) console.error('❌ [NovaFicha] Erro ao salvar resposta:', error);
       toast({ title: 'Erro ao salvar resposta', variant: 'destructive' });
     }
@@ -969,18 +994,19 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     
     try {
       // Buscar pareceres atuais do banco
-      let currentNotes: any[] = [];
+      let currentNotes: NoteRecord[] = [];
+      // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
       const { data } = await supabase
         .from('kanban_cards')
         .select('reanalysis_notes')
         .eq('id', applicationId)
         .maybeSingle();
-      const raw = (data as any)?.reanalysis_notes;
-      if (Array.isArray(raw)) currentNotes = raw as any[];
-      else if (typeof raw === 'string') { try { currentNotes = JSON.parse(raw) || []; } catch {} }
+      const raw = (data as { reanalysis_notes?: NoteRecord[] | string | null } | null)?.reanalysis_notes;
+      if (Array.isArray(raw)) currentNotes = raw as NoteRecord[];
+      else if (typeof raw === 'string') { try { currentNotes = (JSON.parse(raw) as NoteRecord[]) || []; } catch { /* invalid JSON */ } }
       
       // Marcar o parecer como deletado (soft delete)
-      const updated = currentNotes.map((p: any) => {
+      const updated = currentNotes.map((p: NoteRecord) => {
         if (p.id === deletingParecerId) {
           return {
             ...p,
@@ -996,9 +1022,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       if (import.meta.env.DEV) console.log('✅ [Comercial] Parecer marcado como deletado (soft delete):', deletingParecerId);
       
       // Preparar dados para update
-      const updateData: any = { reanalysis_notes: serialized };
+      const updateData: Updates = { reanalysis_notes: serialized } as unknown as Updates;
       
       // Salvar no banco
+      // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
       const { error } = await supabase
         .from('kanban_cards')
         .update(updateData)
@@ -1018,8 +1045,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       }
       
       toast({ title: 'Parecer excluído', description: 'O parecer foi removido com sucesso.' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao excluir parecer', description: e?.message || String(e), variant: 'destructive' });
+    } catch (e: unknown) {
+      const desc = (e as { message?: string })?.message || String(e);
+      toast({ title: 'Erro ao excluir parecer', description: desc, variant: 'destructive' });
     }
   };
 
@@ -1051,7 +1079,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         form.setValue("relacoes.nomeComprovante", nomeDe, { shouldValidate: false });
       }
     }
-  }, [temContrato, enviouContrato, nomeDe]); // ✅ Removido 'form' das dependências
+  }, [temContrato, enviouContrato, nomeDe, form]);
 
   async function submit(values: ComercialFormValues) {
     // Padronizar: parecer_analise como TEXTO simples
@@ -1071,14 +1099,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     // Atualizar applicants (produção) com campos canônicos se tivermos applicationId
     try {
       if (applicationId) {
-        const { data: kc } = await (supabase as any)
+        // @ts-expect-error - 'kanban_cards' não está no types.ts gerado
+        const { data: kc } = await supabase
           .from('kanban_cards')
           .select('applicant_id')
           .eq('id', applicationId)
           .maybeSingle();
-        const aid = (kc as any)?.applicant_id as string | undefined;
+        const aid = (kc as unknown as { applicant_id?: string } | null)?.applicant_id as string | undefined;
         if (aid) {
-          const appUpdates: any = {};
+          const appUpdates: Updates = {};
           // WhatsApp
           if (values?.cliente?.whats) appUpdates.whatsapp = values.cliente.whats;
           // Endereço
@@ -1095,10 +1124,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           }
           if (values?.outras?.svaAvulso) appUpdates.sva_avulso = values.outras.svaAvulso;
           // Intake/solicitação
-          if ((values as any)?.outras?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = (values as any).outras.administrativas.quemSolicitou;
-          if ((values as any)?.outras?.administrativas?.fone) appUpdates.telefone_solicitante = (values as any).outras.administrativas.fone;
-          if ((values as any)?.outras?.administrativas?.protocoloMk) appUpdates.protocolo_mk = (values as any).outras.administrativas.protocoloMk;
-          if ((values as any)?.outras?.administrativas?.meio) appUpdates.meio = (values as any).outras.administrativas.meio;
+          const adm2 = values?.outras as unknown as { administrativas?: { quemSolicitou?: string; fone?: string; protocoloMk?: string; meio?: string } };
+          if (adm2?.administrativas?.quemSolicitou) appUpdates.quem_solicitou = adm2.administrativas.quemSolicitou;
+          if (adm2?.administrativas?.fone) appUpdates.telefone_solicitante = adm2.administrativas.fone;
+          if (adm2?.administrativas?.protocoloMk) appUpdates.protocolo_mk = adm2.administrativas.protocoloMk;
+          if (adm2?.administrativas?.meio) appUpdates.meio = adm2.administrativas.meio;
           // Informações/Notas
           if (values?.spc) appUpdates.info_spc = values.spc;
           if (values?.pesquisador) appUpdates.info_pesquisador = values.pesquisador;
@@ -1106,11 +1136,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           if (values?.infoRelevantes?.infoMk) appUpdates.info_mk = values.infoRelevantes.infoMk;
           if (currentParecerAnalise) appUpdates.parecer_analise = currentParecerAnalise;
           if (Object.keys(appUpdates).length > 0) {
-            await (supabase as any).from('applicants').update(appUpdates).eq('id', aid);
+            await supabase.from('applicants').update(appUpdates).eq('id', aid);
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('submit() update applicants error', err);
+    }
 
     await onSubmit(values);
   }
@@ -1131,20 +1163,82 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         {/* 1. Dados do Cliente */}
         <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">1. Dados do Cliente</h3>
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+            {/* Linha 1: Nome + CPF + Data de Nascimento + ID */}
             <FormField control={form.control} name="cliente.nome" render={({ field }) => (
-              <FormItem className="md:col-span-3">
+              <FormItem>
                 <FormLabel>Nome</FormLabel>
                 <FormControl>
                   <Input 
                     {...field} 
                     placeholder="Nome completo"
-                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+            <FormField control={form.control} name="cliente.cpf" render={({ field }) => (
+              <FormItem>
+                <FormLabel>CPF *</FormLabel>
+                <FormControl>
+                  <InputMask
+                    mask="999.999.999-99"
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    maskChar=" "
+                  >
+                    {(inputProps) => (
+                      <Input
+                        {...inputProps}
+                        placeholder="000.000.000-00"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    )}
+                  </InputMask>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="cliente.nasc" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Data de Nascimento</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="dd/mm/aaaa"
+                    maxLength={10}
+                    value={field.value || ''}
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '');
+                      const p1 = v.slice(0,2);
+                      const p2 = v.slice(2,4);
+                      const p3 = v.slice(4,8);
+                      let out = p1;
+                      if (p2) out += '/' + p2;
+                      if (p3) out += '/' + p3;
+                      field.onChange(out);
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="cliente.id" render={({ field }) => (
+              <FormItem>
+                <FormLabel>ID</FormLabel>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Digite o ID"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
+              </FormItem>
+            )} />
+          </div>
+          
+          {/* Linha 2: Tel + Whats + Do PS */}
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4 sm:mt-6">
             <FormField control={form.control} name="cliente.tel" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tel</FormLabel>
@@ -1160,7 +1254,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         {...inputProps}
                         inputMode="tel"
                         placeholder="(11) 99999-9999"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     )}
                   </InputMask>
@@ -1182,7 +1276,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         {...inputProps}
                         inputMode="tel"
                         placeholder="(11) 99999-9999"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     )}
                   </InputMask>
@@ -1197,68 +1291,40 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 </FormControl>
               </FormItem>
             )} />
-            <FormField control={form.control} name="cliente.cpf" render={({ field }) => (
-              <FormItem>
-                <FormLabel>CPF *</FormLabel>
-                <FormControl>
-                  <InputMask
-                    mask="999.999.999-99"
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    maskChar=" "
-                  >
-                    {(inputProps) => (
-                      <Input
-                        {...inputProps}
-                        placeholder="000.000.000-00"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
-                      />
-                    )}
-                  </InputMask>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="cliente.nasc" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Data de Nascimento</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="dd/mm/aaaa"
-                    maxLength={10}
-                    value={field.value || ''}
-                    className="placeholder:text-[#018942] placeholder:opacity-70"
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/\D/g, '');
-                      const p1 = v.slice(0,2);
-                      const p2 = v.slice(2,4);
-                      const p3 = v.slice(4,8);
-                      let out = p1;
-                      if (p2) out += '/' + p2;
-                      if (p3) out += '/' + p3;
-                      field.onChange(out);
-                    }}
-                  />
-                </FormControl>
-              </FormItem>
-            )} />
+          </div>
+          
+          {/* Linha 3: Naturalidade + UF + E-mail */}
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4 sm:mt-6">
             <FormField control={form.control} name="cliente.naturalidade" render={({ field }) => (
               <FormItem>
                 <FormLabel>Naturalidade</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    {...field} 
+                    placeholder="Digite a naturalidade"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="cliente.uf" render={({ field }) => (
               <FormItem>
                 <FormLabel>UF</FormLabel>
-                <FormControl><Input maxLength={2} {...field} /></FormControl>
+                <FormControl>
+                  <Input 
+                    maxLength={2} 
+                    {...field} 
+                    placeholder="Ex: SP"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="cliente.email" render={({ field }) => (
-              <FormItem className="md:col-span-3">
+              <FormItem>
                 <FormLabel>E-mail</FormLabel>
                 <FormControl>
-                  <Input type="email" {...field} placeholder="Ex: nome@empresa.com" className="placeholder:text-[#018942] placeholder:opacity-70" />
+                  <Input type="email" {...field} placeholder="Ex: nome@empresa.com" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" />
                 </FormControl>
               </FormItem>
             )} />
@@ -1296,7 +1362,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.compl" render={({ field }) => (
               <FormItem>
                 <FormLabel>Complemento</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: Apt. 301" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Ex: Apt. 301" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.cep" render={({ field }) => (
@@ -1335,13 +1401,25 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.cond" render={({ field }) => (
               <FormItem>
                 <FormLabel>Cond</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: Condomínio Jardim Europa" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Ex: Condomínio Jardim Europa" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="endereco.doPs" render={({ field }) => (
+              <FormItem className="md:col-span-3">
+                <FormLabel>Do PS</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder="Digite aqui..."
+                    className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.tempo" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tempo</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: 2 anos" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Ex: 2 anos" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.tipoMoradia" render={({ field }) => (
@@ -1364,21 +1442,9 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.tipoMoradiaObs" render={({ field }) => (
-              <FormItem className="md:col-span-2">
+              <FormItem>
                 <FormLabel>Observações</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="endereco.doPs" render={({ field }) => (
-              <FormItem className="md:col-span-3">
-                <FormLabel>Do PS</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="Digite aqui..."
-                    className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
-                  />
-                </FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
           </div>
@@ -1388,12 +1454,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">3. Relações de residência</h3>
           <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {/* Linha 1: Única no lote + Obs */}
             <FormField control={form.control} name="relacoes.unicaNoLote" render={({ field }) => (
               <FormItem>
                 <FormLabel>Única no lote</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>
@@ -1405,13 +1472,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.unicaNoLoteObs" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Obs</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
+            
+            {/* Linha 2: Com quem reside + Nas outras */}
             <FormField control={form.control} name="relacoes.comQuemReside" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Com quem reside</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.nasOutras" render={({ field }) => (
@@ -1419,7 +1488,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Nas Outras</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Parentes">Parentes</SelectItem>
@@ -1430,12 +1499,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 </Select>
               </FormItem>
             )} />
+            
+            {/* Linha 3: Tem contrato + Enviou contrato? (condicional) + Nome de (condicional) */}
             <FormField control={form.control} name="relacoes.temContrato" render={({ field }) => (
-              <FormItem>
+              <FormItem className={temContrato === "Sim" ? "" : "md:col-span-3"}>
                 <FormLabel>Tem contrato?</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>
@@ -1451,7 +1522,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                     <FormLabel>Enviou contrato?</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                        <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="Sim">Sim</SelectItem>
@@ -1464,18 +1535,20 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormField control={form.control} name="relacoes.nomeDe" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nome de</FormLabel>
-                    <FormControl><Input {...field} autoComplete="off" /></FormControl>
+                    <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
               </>
             )}
+            
+            {/* Linha 4: Enviou comprovante? + Tipo de comprovante + Nome do comprovante (sempre aparecem) */}
             <FormField control={form.control} name="relacoes.enviouComprovante" render={({ field }) => (
               <FormItem>
                 <FormLabel>Enviou comprovante?</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>
@@ -1489,7 +1562,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Tipo de comprovante de endereço</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Energia">Energia</SelectItem>
@@ -1501,30 +1574,37 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.nomeComprovante" render={({ field }) => (
-              <FormItem className="md:col-span-2">
+              <FormItem>
                 <FormLabel>Nome do comprovante</FormLabel>
-                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
+            
+            {/* Linha 5: Nome do Locador(a) + Telefone */}
             <FormField control={form.control} name="relacoes.nomeLocador" render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-2">
                 <FormLabel>Nome do Locador(a)</FormLabel>
-                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.telefoneLocador" render={({ field }) => (
               <FormItem>
                 <FormLabel>Telefone</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
+            
+          </div>
+          
+          {/* Linha 6: Tem internet fixa + Empresa + Plano + Valor (grid de 4 colunas quando Sim) */}
+          <div className={`grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 ${form.watch("relacoes.temInternetFixa") === "Sim" ? "lg:grid-cols-4" : "lg:grid-cols-3"} mt-4 sm:mt-6`}>
             <FormField control={form.control} name="relacoes.temInternetFixa" render={({ field }) => (
-              <FormItem>
+              <FormItem className={form.watch("relacoes.temInternetFixa") === "Sim" ? "" : "md:col-span-3"}>
                 <FormLabel>Tem internet fixa atualmente?</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="Sim">Sim</SelectItem>
@@ -1542,7 +1622,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                       <Input 
                         {...field} 
                         placeholder="Ex: Vivo"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1555,7 +1635,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                       <Input 
                         {...field} 
                         placeholder="Ex: 300MB"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1568,7 +1648,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                       <Input 
                         {...field} 
                         placeholder="Ex: R$ 99,90"
-                        className="placeholder:text-[#018942] placeholder:opacity-70"
+                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </FormControl>
                     <FormMessage />
@@ -1576,10 +1656,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 )} />
               </>
             )}
+          </div>
+          
+          {/* Linha 7: Observações */}
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4 sm:mt-6">
             <FormField control={form.control} name="relacoes.observacoes" render={({ field }) => (
               <FormItem className="md:col-span-3">
-                <FormLabel>Observações</FormLabel>
-                <FormControl><Textarea rows={3} {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormLabel>Obs</FormLabel>
+                <FormControl><Textarea rows={3} {...field} placeholder="Digite aqui..." className="flex w-full rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
           </div>
@@ -1592,13 +1676,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="empregoRenda.profissao" render={({ field }) => (
               <FormItem>
                 <FormLabel>Profissão</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="empregoRenda.empresa" render={({ field }) => (
               <FormItem>
                 <FormLabel>Empresa</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="empregoRenda.vinculo" render={({ field }) => (
@@ -1622,7 +1706,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="empregoRenda.vinculoObs" render={({ field }) => (
               <FormItem>
                 <FormLabel>Obs</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="empregoRenda.doPs" render={({ field }) => (
@@ -1675,19 +1759,19 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="conjuge.nome" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Nome</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.telefone" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>Telefone</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.whatsapp" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>WhatsApp</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
 
@@ -1695,25 +1779,25 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="conjuge.cpf" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>CPF</FormLabel>
-                <FormControl><Input {...field} placeholder="000.000.000-00" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="000.000.000-00" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.naturalidade" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>Naturalidade</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.uf" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>UF</FormLabel>
-                <FormControl><Input maxLength={2} {...field} placeholder="Ex: MG" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input maxLength={2} {...field} placeholder="Ex: MG" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="conjuge.idade" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>Idade</FormLabel>
-                <FormControl><Input inputMode="numeric" {...field} placeholder="Ex: 35" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="numeric" {...field} placeholder="Ex: 35" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
 
@@ -1764,37 +1848,37 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormField control={form.control} name="filiacao.pai.nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pai – Nome</FormLabel>
-                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name="filiacao.pai.reside" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pai – Reside</FormLabel>
-                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name="filiacao.pai.telefone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pai – Telefone</FormLabel>
-                  <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name="filiacao.mae.nome" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Mãe – Nome</FormLabel>
-                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name="filiacao.mae.reside" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Mãe – Reside</FormLabel>
-                  <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
               <FormField control={form.control} name="filiacao.mae.telefone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Mãe – Telefone</FormLabel>
-                  <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                  <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 </FormItem>
               )} />
             </div>
@@ -1807,49 +1891,49 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="referencias.ref1.nome" render={({ field }) => (
               <FormItem>
                 <FormLabel>Ref. 1 – Nome</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref1.parentesco" render={({ field }) => (
               <FormItem>
                 <FormLabel>Parentesco</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref1.reside" render={({ field }) => (
               <FormItem>
                 <FormLabel>Reside</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref1.telefone" render={({ field }) => (
               <FormItem>
                 <FormLabel>Telefone</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref2.nome" render={({ field }) => (
               <FormItem>
                 <FormLabel>Ref. 2 – Nome</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref2.parentesco" render={({ field }) => (
               <FormItem>
                 <FormLabel>Parentesco</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref2.reside" render={({ field }) => (
               <FormItem>
                 <FormLabel>Reside</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="referencias.ref2.telefone" render={({ field }) => (
               <FormItem>
                 <FormLabel>Telefone</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
           </div>
@@ -1864,7 +1948,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Plano escolhido</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50">
                       <SelectValue placeholder="Selecionar plano" />
                     </SelectTrigger>
                   </FormControl>
@@ -1909,7 +1993,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>Dia de vencimento</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="5">5</SelectItem>
@@ -1926,7 +2010,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormLabel>SVA Avulso</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="text-[#018942] placeholder:text-[#018942]">
+                    <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50">
                       <SelectValue placeholder="Selecionar" />
                     </SelectTrigger>
                   </FormControl>

@@ -93,8 +93,10 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
             {filtered.map(item => {
               // Mantém ícone baseado em prioridade; fundo verde primário 15%
               const Icon = item.priority==='high'? AlertTriangle : item.priority==='medium'? Clock : ClipboardList;
-              const cardId = (item as any).meta?.cardId as string | undefined;
-              const applicantId = (item as any).meta?.applicantId as string | undefined;
+              const meta = (item as any)?.meta || {};
+              const cardId = (meta.cardId || meta.card_id) as string | undefined;
+              const applicantId = (meta.applicantId || meta.applicant_id) as string | undefined;
+              const destUrl = cardId ? `/?openCardId=${cardId}` : applicantId ? `/?openApplicantId=${applicantId}` : (item.link_url || null);
               return (
                 <div
                   key={item.id}
@@ -103,18 +105,21 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
                     backgroundColor: 'hsl(var(--brand) / 0.15)',
                     borderColor: 'hsl(var(--brand))'
                   }}
-                  role={(cardId || applicantId) ? 'button' as any : undefined}
-                  tabIndex={(cardId || applicantId) ? 0 : -1}
+                  role={(destUrl ? 'button' : undefined) as any}
+                  tabIndex={destUrl ? 0 : -1}
                   onClick={() => {
-                    if (cardId) { navigate(`/?openCardId=${cardId}`); onClose(); return; }
-                    if (applicantId) { navigate(`/?openApplicantId=${applicantId}`); onClose(); }
+                    if (!destUrl) return;
+                    // marca como lida ao clicar
+                    if (!item.read_at) markRead(item.id);
+                    navigate(destUrl);
+                    onClose();
                   }}
                   onKeyDown={(e) => {
-                    if (!applicantId && !cardId) return;
+                    if (!destUrl) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      if (cardId) navigate(`/?openCardId=${cardId}`);
-                      else if (applicantId) navigate(`/?openApplicantId=${applicantId}`);
+                      if (!item.read_at) markRead(item.id);
+                      navigate(destUrl);
                       onClose();
                     }
                   }}

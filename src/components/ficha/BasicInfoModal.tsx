@@ -151,7 +151,14 @@ export function BasicInfoModal({ open, onClose, onSubmit, initialData, onBack }:
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent aria-describedby={undefined} className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Dados Pessoais Básicos</DialogTitle>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/src/assets/Logo MZNET (1).png" 
+              alt="MZNET Logo" 
+              className="h-6 w-auto"
+            />
+            <DialogTitle>Dados Pessoais Básicos</DialogTitle>
+          </div>
         </DialogHeader>
 
         <Form {...form}>

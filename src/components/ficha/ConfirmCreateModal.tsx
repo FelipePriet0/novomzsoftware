@@ -25,7 +25,14 @@ export function ConfirmCreateModal({ open, onClose, onConfirm }: ConfirmCreateMo
               <AlertTriangle className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <DialogTitle>Criar Nova Ficha</DialogTitle>
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/src/assets/Logo MZNET (1).png" 
+                  alt="MZNET Logo" 
+                  className="h-6 w-auto"
+                />
+                <DialogTitle>Criar Nova Ficha</DialogTitle>
+              </div>
               <DialogDescription className="mt-1">
                 Você está prestes a iniciar o processo de criação de uma nova ficha comercial.
               </DialogDescription>

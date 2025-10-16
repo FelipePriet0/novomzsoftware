@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragEndEvent,
@@ -70,7 +71,6 @@ import { useAuth } from "@/context/AuthContext";
 import { canChangeStatus, isPremium } from "@/lib/access";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { supabase } from "@/integrations/supabase/client";
-import { useLocation } from "react-router-dom";
 
 // Types
 export type ColumnId =
@@ -284,6 +284,7 @@ export default function KanbanBoard() {
     return () => window.removeEventListener('focus', onFocus);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const [isScrolling, setIsScrolling] = useState(false);
   
   // Estados para sistema de anexos
@@ -390,9 +391,12 @@ export default function KanbanBoard() {
     }
   };
 
+  const routeLocation = useLocation();
+  const navigate = useNavigate();
+
   // Abrir card por query param (?openCardId=...)
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(routeLocation.search);
     const openId = params.get('openCardId');
     if (!openId) return;
     (async () => {
@@ -429,16 +433,20 @@ export default function KanbanBoard() {
             area: ((data as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
-          setAutoOpenExpandedNext(false);
+          setAutoOpenExpandedNext(true);
+          // Limpa o query param para permitir abrir novamente em cliques futuros
+          const next = new URLSearchParams(routeLocation.search);
+          next.delete('openCardId');
+          navigate({ pathname: (routeLocation as any).pathname || '/', search: next.toString() ? `?${next.toString()}` : '' }, { replace: true });
         }
       } catch {}
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [routeLocation.search]);
 
   // Abrir card por applicant (?openApplicantId=...)
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(routeLocation.search);
     const openApplicantId = params.get('openApplicantId');
     if (!openApplicantId) return;
     (async () => {
@@ -478,16 +486,19 @@ export default function KanbanBoard() {
             area: ((data as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
-          setAutoOpenExpandedNext(false);
+          setAutoOpenExpandedNext(true);
+          const next = new URLSearchParams(routeLocation.search);
+          next.delete('openApplicantId');
+          navigate({ pathname: (routeLocation as any).pathname || '/', search: next.toString() ? `?${next.toString()}` : '' }, { replace: true });
         }
       } catch {}
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [routeLocation.search]);
 
   // Focar card por applicantId ou cardId sem abrir modal
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(routeLocation.search);
     const focusApplicantId = params.get('focusApplicantId');
     const focusCardId = params.get('focusCardId');
     if (!focusApplicantId && !focusCardId) return;
@@ -507,7 +518,7 @@ export default function KanbanBoard() {
       const t = setTimeout(() => setFocusedCardId(null), 5000);
       return () => clearTimeout(t);
     }
-  }, [location.search, cards]);
+  }, [routeLocation.search, cards]);
 
   // Função para atualizar o estado local em tempo real
   const handleStatusChange = (cardId: string, newStatus: string) => {
@@ -1565,20 +1576,24 @@ useEffect(() => {
       <Card className="shadow-md bg-white text-[#018942]" style={{ boxShadow: "var(--shadow-elegant)" }}>
         <CardHeader />
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          {/* Linha 1: Filtros */}
+          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {/* Barra de pesquisar */}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#018942]" />
               <Input
                 placeholder="Buscar titular (nome da ficha)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942] w-full"
+                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942] w-full h-10"
               />
             </div>
+            
+            {/* Área */}
             <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Área</Label>
+              <Label className="whitespace-nowrap text-sm">Área</Label>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[130px]">
+                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
                   <SelectValue placeholder="Área" />
                 </SelectTrigger>
                 <SelectContent className="z-50">
@@ -1587,11 +1602,13 @@ useEffect(() => {
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Responsável */}
             <div className="flex items-center gap-2">
-              <Label className="whitespace-nowrap">Responsável</Label>
+              <Label className="whitespace-nowrap text-sm">Responsável</Label>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[180px] max-w-[260px] justify-between">
+                  <Button variant="outline" className="bg-white text-[#018942] border-[#018942] w-full h-10 justify-between">
                     <span className="truncate">{responsavelFiltro.length === 0 ? 'Todos' : responsavelFiltro.join(', ')}</span>
                     <ChevronDown className="ml-2 h-4 w-4 opacity-70 shrink-0" />
                   </Button>
@@ -1617,80 +1634,75 @@ useEffect(() => {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="flex items-center gap-1">
-              <Label>Prazo</Label>
-              <div className="flex items-center gap-2">
-                <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
-                  setPrazoFiltro(v);
-                  if (v === 'data') {
-                    // dispara abertura automática do calendário
-                    setTimeout(() => setPrazoOpenTick((t) => t + 1), 0);
-                  }
-                }}>
-                  <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full md:w-auto min-w-[170px]">
-                    <SelectValue placeholder="Prazo" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50">
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="hoje">Agendada para hoje</SelectItem>
-                    <SelectItem value="amanha">Agendada para amanhã</SelectItem>
-                    <SelectItem value="atrasados">Atrasado</SelectItem>
-                    <SelectItem value="data">Escolher Data…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {prazoFiltro === 'data' && (
-                  <div className="rounded-md border border-[#018942]/40 p-2 bg-white min-w-[220px]">
-                    <DatePicker
-                      key={prazoOpenTick}
-                      value={(() => {
-                        if (!prazoData) return '';
-                        const y = prazoData.getUTCFullYear();
-                        const m = String(prazoData.getUTCMonth() + 1).padStart(2, '0');
-                        const d = String(prazoData.getUTCDate()).padStart(2, '0');
-                        return `${y}-${m}-${d}`;
-                      })()}
-                      onChange={(iso) => {
-                        if (!iso) { setPrazoData(null); return; }
-                        const [yy, mm, dd] = iso.split('-').map((s) => parseInt(s, 10));
-                        if (!yy || !mm || !dd) { setPrazoData(null); return; }
-                        // Armazenar como data em UTC para evitar deslocamentos
-                        const dt = new Date(Date.UTC(yy, mm - 1, dd, 0, 0, 0, 0));
-                        setPrazoData(dt);
-                      }}
-                      showIcon={true}
-                      allowTyping={false}
-                      forceFlatpickr={true}
-                      autoOpen={true}
-                      className="w-full"
-                    />
-                  </div>
-                )}
-              </div>
+            
+            {/* Prazo */}
+            <div className="flex items-center gap-2">
+              <Label className="whitespace-nowrap text-sm">Prazo</Label>
+              <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
+                setPrazoFiltro(v);
+                if (v === 'data') {
+                  setTimeout(() => setPrazoOpenTick((t) => t + 1), 0);
+                }
+              }}>
+                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent className="z-50">
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="hoje">Agendada para hoje</SelectItem>
+                  <SelectItem value="amanha">Agendada para amanhã</SelectItem>
+                  <SelectItem value="atrasados">Atrasado</SelectItem>
+                  <SelectItem value="data">Escolher Data…</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <Label className="min-w-24">Atribuídas</Label>
-                <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
-                  <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                    <SelectValue placeholder="Escolha" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50">
-                    <SelectItem value="none">—</SelectItem>
-                    <SelectItem value="mentions">Minhas menções</SelectItem>
-                    <SelectItem value="tasks">Minhas tarefas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Atribuídas agora é independente do filtro Responsável */}
+            
+            {/* Atribuídas */}
+            <div className="flex items-center gap-2">
+              <Label className="whitespace-nowrap text-sm">Atribuídas</Label>
+              <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
+                <SelectTrigger className="bg-white text-[#018942] border-[#018942] w-full h-10">
+                  <SelectValue placeholder="Escolha" />
+                </SelectTrigger>
+                <SelectContent className="z-50">
+                  <SelectItem value="none">—</SelectItem>
+                  <SelectItem value="mentions">Minhas menções</SelectItem>
+                  <SelectItem value="tasks">Minhas tarefas</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex gap-2 flex-wrap">
-              <Badge className="bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]">Em Análise</Badge>
-              <Badge className="bg-[hsl(var(--success))] text-white">Aprovado</Badge>
-              <Badge className="bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]">Atrasado</Badge>
+          
+          {/* DatePicker condicional para Prazo */}
+          {prazoFiltro === 'data' && (
+            <div className="mt-3 rounded-md border border-[#018942]/40 p-2 bg-white max-w-[280px]">
+              <DatePicker
+                key={prazoOpenTick}
+                value={(() => {
+                  if (!prazoData) return '';
+                  const y = prazoData.getUTCFullYear();
+                  const m = String(prazoData.getUTCMonth() + 1).padStart(2, '0');
+                  const d = String(prazoData.getUTCDate()).padStart(2, '0');
+                  return `${y}-${m}-${d}`;
+                })()}
+                onChange={(iso) => {
+                  if (!iso) { setPrazoData(null); return; }
+                  const [yy, mm, dd] = iso.split('-').map((s) => parseInt(s, 10));
+                  if (!yy || !mm || !dd) { setPrazoData(null); return; }
+                  const dt = new Date(Date.UTC(yy, mm - 1, dd, 0, 0, 0, 0));
+                  setPrazoData(dt);
+                }}
+                showIcon={true}
+                allowTyping={false}
+                forceFlatpickr={true}
+                autoOpen={true}
+                className="w-full"
+              />
             </div>
+          )}
+
+          {/* Linha 2: CTA Nova Ficha */}
+          <div className="mt-4 flex items-center justify-end">
             <Button 
               variant="pill" 
               size="xl" 
@@ -1751,103 +1763,81 @@ useEffect(() => {
         <div className="relative">
           <div
             ref={scrollRef}
-            className="overflow-x-auto overflow-y-visible pb-4"
+            className="overflow-x-auto overflow-y-visible"
           >
             <div className="flex items-start gap-4 min-h-[200px] w-max pr-4">
-              {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
+          {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
                 <div key={col.id} className="min-w-[320px] w-[320px] max-w-[340px]">
-                  <ColumnDropArea 
-                    columnId={col.id}
-                    isDragOver={dragOverColumn === col.id}
-                    activeId={activeId}
-                  >
+            <ColumnDropArea 
+              columnId={col.id}
+              isDragOver={dragOverColumn === col.id}
+              activeId={activeId}
+            >
                     <div className="rounded-xl border bg-card h-full">
-                      <div
+                <div
                         className="px-4 py-3 border-b flex items-center justify-between sticky top-0 z-10"
-                        style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
-                      >
+                  style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
+                >
                         <h2 className="font-semibold truncate">{col.title}</h2>
-                        <Badge variant="secondary" className="bg-white text-[#018942]">
-                          {getCardsWithPlaceholder(
-                            kanbanArea === 'comercial'
-                              ? (commercialByColumn.get(col.id) || [])
-                              : (analysisByColumn.get(col.id) || []),
-                            col.id
-                          ).length}
-                        </Badge>
-                      </div>
-                      <div className="p-3">
-                        <SortableContext
-                          items={getCardsWithPlaceholder(
-                            kanbanArea === 'comercial'
-                              ? (commercialByColumn.get(col.id) || [])
-                              : (analysisByColumn.get(col.id) || []),
-                            col.id
-                          ).map((c) => c.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <div className="min-h-[120px] space-y-3">
-                            {getCardsWithPlaceholder(
-                              kanbanArea === 'comercial'
-                                ? (commercialByColumn.get(col.id) || [])
-                                : (analysisByColumn.get(col.id) || []),
-                              col.id
-                            )
-                               .map((card) => (
-                                   <OptimizedKanbanCard
-                                     key={card.id}
-                                     card={card}
-                                     isOverdue={isOverdue(card)}
-                                     allowMove={allowMove}
-                                     onEdit={openEdit}
-                                     onDelete={(card) => {
-                                       setCardToDelete(card);
-                                       setShowDeleteConfirm(true);
-                                     }}
-                                     onIngressar={handleIngressar}
-                                     onAprovar={handleAprovar}
-                                     onNegar={handleNegar}
-                                     onReanalisar={handleReanalisar}
-                                     onStatusChange={handleStatusChange}
-                                     isDragging={activeId === card.id}
-                                     onAttachmentClick={handleAttachmentClick}
-                                     onCardClick={handleCardClick}
+                  <Badge variant="secondary" className="bg-white text-[#018942]">
+                    {getCardsWithPlaceholder(
+                      kanbanArea === 'comercial'
+                        ? (commercialByColumn.get(col.id) || [])
+                        : (analysisByColumn.get(col.id) || []),
+                      col.id
+                    ).length}
+                  </Badge>
+                </div>
+                <div className="p-3">
+                  <SortableContext
+                    items={getCardsWithPlaceholder(
+                      kanbanArea === 'comercial'
+                        ? (commercialByColumn.get(col.id) || [])
+                        : (analysisByColumn.get(col.id) || []),
+                      col.id
+                    ).map((c) => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="min-h-[120px] space-y-3">
+                      {getCardsWithPlaceholder(
+                        kanbanArea === 'comercial'
+                          ? (commercialByColumn.get(col.id) || [])
+                          : (analysisByColumn.get(col.id) || []),
+                        col.id
+                      )
+                         .map((card) => (
+                             <OptimizedKanbanCard
+                               key={card.id}
+                               card={card}
+                               isOverdue={isOverdue(card)}
+                               allowMove={allowMove}
+                               onEdit={openEdit}
+                               onDelete={(card) => {
+                                 setCardToDelete(card);
+                                 setShowDeleteConfirm(true);
+                               }}
+                               onIngressar={handleIngressar}
+                               onAprovar={handleAprovar}
+                               onNegar={handleNegar}
+                               onReanalisar={handleReanalisar}
+                               onStatusChange={handleStatusChange}
+                               isDragging={activeId === card.id}
+                               onAttachmentClick={handleAttachmentClick}
+                               onCardClick={handleCardClick}
                                      isFocused={focusedCardId === card.id}
-                                   />
-                               ))}
-                          </div>
-                        </SortableContext>
-                      </div>
+                             />
+                         ))}
                     </div>
-                  </ColumnDropArea>
+                  </SortableContext>
+                </div>
+              </div>
+            </ColumnDropArea>
                 </div>
               ))}
             </div>
           </div>
+          
 
-          {/* Barra de navegação inferior com setas */}
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => scrollRef.current?.scrollBy({ left: -400, behavior: 'smooth' })}
-              aria-label="Rolar para a esquerda"
-              className="border-[#018942] text-[#018942] hover:bg-[#018942]/10"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => scrollRef.current?.scrollBy({ left: 400, behavior: 'smooth' })}
-              aria-label="Rolar para a direita"
-              className="border-[#018942] text-[#018942] hover:bg-[#018942]/10"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
         </div>
       </DndContext>
 
@@ -2084,20 +2074,20 @@ useEffect(() => {
               cpf: fullCard.applicant?.cpf_cnpj || '',
               receivedAt: fullCard.received_at,
               deadline: fullCard.received_at,
-              responsavel: undefined,
-              responsavelId: undefined,
+                responsavel: undefined,
+                responsavelId: undefined,
               telefone: fullCard.applicant?.phone || undefined,
               email: fullCard.applicant?.email || undefined,
-              naturalidade: data.naturalidade,
-              uf: data.uf,
-              applicantId: applicantProd!.id,
-              parecer: '',
-              columnId: 'com_feitas',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              lastMovedAt: new Date().toISOString(),
-              labels: [],
-              vendedorNome: currentUserName,
+                naturalidade: data.naturalidade,
+                uf: data.uf,
+                applicantId: applicantProd!.id,
+                parecer: '',
+                columnId: 'com_feitas',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                lastMovedAt: new Date().toISOString(),
+                labels: [],
+                vendedorNome: currentUserName,
             } as any;
             setMockCard(fallbackCard);
           }
