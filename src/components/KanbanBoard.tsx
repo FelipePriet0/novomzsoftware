@@ -1697,26 +1697,8 @@ useEffect(() => {
       <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white shadow-xl">
         <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
         <div className="relative p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold mb-2">Kanban Board</h1>
-              <p className="text-green-100 text-sm">
-                {kanbanArea === 'comercial' 
-                  ? 'Gestão do fluxo comercial e vendas' 
-                  : 'Análise e aprovação de fichas'
-                }
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-4 py-2">
-                <span className="text-sm text-green-100">Total de fichas</span>
-                <div className="text-xl font-bold">{cards.length}</div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Filtros com design melhorado */}
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {/* Filtros com design melhorado e alinhamento */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-end">
             {/* Barra de pesquisar com design moderno */}
             <div className="relative group">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within:text-white transition-colors" />
@@ -1729,8 +1711,7 @@ useEffect(() => {
             </div>
             
             {/* Área com design melhorado */}
-            <div className="space-y-2">
-              <Label className="text-white/90 text-sm font-medium">Área</Label>
+            <div>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
                 <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Área" />
@@ -1753,8 +1734,7 @@ useEffect(() => {
             </div>
             
             {/* Responsável com design melhorado */}
-            <div className="space-y-2">
-              <Label className="text-white/90 text-sm font-medium">Responsável</Label>
+            <div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20 hover:border-white/40 w-full h-11 justify-between transition-all duration-200">
@@ -1793,8 +1773,7 @@ useEffect(() => {
             </div>
             
             {/* Prazo com design melhorado */}
-            <div className="space-y-2">
-              <Label className="text-white/90 text-sm font-medium">Prazo</Label>
+            <div>
               <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
                 setPrazoFiltro(v);
                 if (v === 'data') {
@@ -1840,8 +1819,7 @@ useEffect(() => {
             </div>
             
             {/* Atribuídas com design melhorado */}
-            <div className="space-y-2">
-              <Label className="text-white/90 text-sm font-medium">Atribuídas</Label>
+            <div>
               <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
                 <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Escolha" />
