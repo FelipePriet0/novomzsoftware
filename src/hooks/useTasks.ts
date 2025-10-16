@@ -161,13 +161,15 @@ export function useTasks(userId?: string, cardId?: string) {
         if (newTask.assigned_to && newTask.assigned_to !== profile.id) {
           // Resolver título do card
           let cardTitle = 'Cliente';
+          let applicantId: string | null = null;
           try {
             const { data: kc } = await (supabase as any)
               .from('kanban_cards')
-              .select('applicant:applicant_id(primary_name)')
+              .select('applicant:applicant_id(id, primary_name)')
               .eq('id', newTask.card_id)
               .maybeSingle();
             cardTitle = kc?.applicant?.primary_name || 'Cliente';
+            applicantId = kc?.applicant?.id || null;
           } catch {}
 
           const actorName = (profile?.full_name || 'Colaborador');
@@ -184,7 +186,8 @@ export function useTasks(userId?: string, cardId?: string) {
               priority: 'medium',
               title: `${actorName} criou uma nova tarefa para você`,
               body: bodyLines,
-              meta: { cardId: newTask.card_id, taskId: newTask.id },
+              applicant_id: applicantId || undefined,
+              meta: { cardId: newTask.card_id, taskId: newTask.id, applicantId },
               transient: false,
             });
         }

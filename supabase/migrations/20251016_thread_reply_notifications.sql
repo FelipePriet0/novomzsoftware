@@ -26,6 +26,7 @@ AS $$
 DECLARE
   v_thread_id uuid;
   v_card_id uuid;
+  v_applicant_id uuid;
   v_actor_id uuid;
   v_actor_name text;
   v_parent_id uuid;
@@ -43,17 +44,24 @@ BEGIN
   v_card_id := NEW.card_id;
   v_actor_id := NEW.author_id;
   v_parent_id := NEW.parent_id;
+  v_applicant_id := NEW.applicant_id;
 
   -- Resolve actor name (fallback)
   SELECT COALESCE(p.full_name, 'Colaborador') INTO v_actor_name
   FROM public.profiles p
   WHERE p.id = v_actor_id;
 
-  -- Resolve card title from applicants via kanban_cards
-  SELECT COALESCE(a.primary_name, 'Cliente') INTO v_card_title
-  FROM public.kanban_cards kc
-  LEFT JOIN public.applicants a ON a.id = kc.applicant_id
-  WHERE kc.id = v_card_id;
+  -- Resolve card title from applicants via applicants (prefer NEW.applicant_id; fallback via kanban_cards)
+  IF v_applicant_id IS NOT NULL THEN
+    SELECT COALESCE(a.primary_name, 'Cliente') INTO v_card_title
+    FROM public.applicants a
+    WHERE a.id = v_applicant_id;
+  ELSE
+    SELECT COALESCE(a.primary_name, 'Cliente') INTO v_card_title
+    FROM public.kanban_cards kc
+    LEFT JOIN public.applicants a ON a.id = kc.applicant_id
+    WHERE kc.id = v_card_id;
+  END IF;
 
   -- Snippet of reply (compress whitespace, limit length)
   v_snippet := regexp_replace(substr(COALESCE(NEW.content, ''), 1, 120), '\\s+', ' ', 'g');
@@ -78,7 +86,7 @@ BEGIN
     IF v_parent_author IS NOT NULL AND v_user_id = v_parent_author THEN
       -- Special body for the replied user
       INSERT INTO public.inbox_notifications (
-        user_id, type, priority, title, body, meta, transient
+        user_id, type, priority, title, body, meta, transient, applicant_id
       ) VALUES (
         v_user_id,
         'thread_reply',
@@ -94,13 +102,14 @@ BEGIN
           'actorId', v_actor_id,
           'kind', 'reply_target'
         ),
-        false
+        false,
+        v_applicant_id
       )
       ON CONFLICT DO NOTHING;
     ELSE
       -- Body for other participants
       INSERT INTO public.inbox_notifications (
-        user_id, type, priority, title, body, meta, transient
+        user_id, type, priority, title, body, meta, transient, applicant_id
       ) VALUES (
         v_user_id,
         'thread_reply',
@@ -116,7 +125,8 @@ BEGIN
           'actorId', v_actor_id,
           'kind', 'thread_participant'
         ),
-        false
+        false,
+        v_applicant_id
       )
       ON CONFLICT DO NOTHING;
     END IF;

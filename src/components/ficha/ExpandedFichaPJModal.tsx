@@ -374,13 +374,15 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
               if (userId === (profile?.id || '')) continue;
               // Resolver título do card
               let cardTitle = 'Cliente';
+              let applicantId: string | null = null;
               try {
                 const { data: kc } = await (supabase as any)
                   .from('kanban_cards')
-                  .select('applicant:applicant_id(primary_name)')
+                  .select('applicant:applicant_id(id, primary_name)')
                   .eq('id', applicationId)
                   .maybeSingle();
                 cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+                applicantId = (kc as any)?.applicant?.id || null;
               } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
@@ -390,7 +392,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
                   priority: 'low',
                   title: `${profile?.full_name || 'Colaborador'} mencionou você em um Parecer`,
                   body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
-                  meta: { cardId: applicationId, parecerId: newP.id },
+                  applicant_id: applicantId || undefined,
+                  meta: { cardId: applicationId, applicantId, parecerId: newP.id },
                   transient: false,
                 });
             }
@@ -545,13 +548,15 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
               if (userId === (profile?.id || '')) continue;
               // Resolver título do card
               let cardTitle = 'Cliente';
+              let applicantId: string | null = null;
               try {
                 const { data: kc } = await (supabase as any)
                   .from('kanban_cards')
-                  .select('applicant:applicant_id(primary_name)')
+                  .select('applicant:applicant_id(id, primary_name)')
                   .eq('id', applicationId)
                   .maybeSingle();
                 cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+                applicantId = (kc as any)?.applicant?.id || null;
               } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
@@ -561,7 +566,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
                   priority: 'low',
                   title: `${profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
                   body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
-                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
+                  applicant_id: applicantId || undefined,
+                  meta: { cardId: applicationId, applicantId, parentParecerId: replyingToParecerId },
                   transient: false,
                 });
             }

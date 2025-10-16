@@ -630,13 +630,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
         try {
           // Resolver título do card (nome/razão social)
           let cardTitle = 'Cliente';
+          let applicantId: string | null = null;
           try {
             const { data: kc } = await supabase
               .from('kanban_cards')
-              .select('applicant:applicant_id(primary_name)')
+              .select('applicant:applicant_id(id, primary_name)')
               .eq('id', applicationId)
               .maybeSingle();
             cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+            applicantId = (kc as any)?.applicant?.id || null;
           } catch (_) {}
 
           const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
@@ -666,7 +668,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         priority: 'low',
                         title: `${currentUserName || profile?.full_name || 'Colaborador'} mencionou você em um Parecer`,
                         body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
-                        meta: { cardId: applicationId, parecerId: newParecer.id },
+                        applicant_id: applicantId || undefined,
+                        meta: { cardId: applicationId, applicantId, parecerId: newParecer.id },
                         transient: false,
                       })
                     )
@@ -908,10 +911,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           try {
             const { data: kc2 } = await (supabase as any)
               .from('kanban_cards')
-              .select('applicant:applicant_id(primary_name)')
+              .select('applicant:applicant_id(id, primary_name)')
               .eq('id', applicationId)
               .maybeSingle();
             cardTitle = (kc2 as any)?.applicant?.primary_name || 'Cliente';
+            applicantId = (kc2 as any)?.applicant?.id || applicantId;
           } catch (_) {}
           for (const mention of unique) {
             const { data: profiles } = await (supabase as any)
@@ -924,15 +928,16 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               if (userId === (profile?.id || '')) continue;
               await (supabase as any)
                 .from('inbox_notifications')
-                .insert({
-                  user_id: userId,
-                  type: 'mention',
-                  priority: 'low',
-                  title: `${currentUserName || profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
-                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
-                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
-                  transient: false,
-                });
+                  .insert({
+                    user_id: userId,
+                    type: 'mention',
+                    priority: 'low',
+                    title: `${currentUserName || profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
+                    body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
+                    applicant_id: applicantId || undefined,
+                    meta: { cardId: applicationId, applicantId, parentParecerId: replyingToParecerId },
+                    transient: false,
+                  });
             }
           }
         }

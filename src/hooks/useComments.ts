@@ -58,13 +58,15 @@ export function useComments(cardId: string) {
           } catch {}
 
           let cardTitle = 'Cliente';
+          let applicantId: string | null = null;
           try {
             const { data: kc } = await (supabase as any)
               .from('kanban_cards')
-              .select('applicant:applicant_id(primary_name)')
+              .select('applicant:applicant_id(id, primary_name)')
               .eq('id', cardId)
               .maybeSingle();
             cardTitle = kc?.applicant?.primary_name || 'Cliente';
+            applicantId = kc?.applicant?.id || null;
           } catch {}
 
           const snippet = String(content || '')
@@ -88,9 +90,10 @@ export function useComments(cardId: string) {
                 priority: 'low',
                 title: `${authorName} mencionou você em um comentário`,
                 body: `${cardTitle}\n${snippet}`,
-                meta: { cardId },
-                transient: false,
-              });
+                 applicant_id: applicantId || undefined,
+                 meta: { cardId, applicantId },
+                 transient: false,
+               });
           }
         } catch (e) {
           // Fallback silencioso: ainda mostra toast local
