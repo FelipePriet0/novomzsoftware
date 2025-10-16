@@ -91,20 +91,20 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
           <div className="space-y-2">
             {filtered.map(item => {
-              // Mantém ícone baseado em prioridade, mas padroniza o fundo para verde primário 45% (estilo WhatsApp)
+              // Mantém ícone baseado em prioridade; fundo verde primário 15%
               const Icon = item.priority==='high'? AlertTriangle : item.priority==='medium'? Clock : ClipboardList;
               const cardId = (item as any).meta?.cardId as string | undefined;
               const applicantId = (item as any).meta?.applicantId as string | undefined;
               return (
                 <div
                   key={item.id}
-                  className={`rounded-md border p-2 flex items-start justify-between gap-2 ${cardId ? 'cursor-pointer' : ''}`}
+                  className={`rounded-md border p-2 flex items-start justify-between gap-2 ${(cardId || applicantId) ? 'cursor-pointer' : ''}`}
                   style={{
-                    backgroundColor: 'hsl(var(--brand) / 0.45)',
+                    backgroundColor: 'hsl(var(--brand) / 0.15)',
                     borderColor: 'hsl(var(--brand))'
                   }}
-                  role={cardId ? 'button' as any : undefined}
-                  tabIndex={cardId ? 0 : -1}
+                  role={(cardId || applicantId) ? 'button' as any : undefined}
+                  tabIndex={(cardId || applicantId) ? 0 : -1}
                   onClick={() => {
                     if (cardId) { navigate(`/?openCardId=${cardId}`); onClose(); return; }
                     if (applicantId) { navigate(`/?openApplicantId=${applicantId}`); onClose(); }
