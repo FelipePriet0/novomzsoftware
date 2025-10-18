@@ -955,28 +955,17 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
     return (
       <div className="min-h-screen flex flex-col bg-white">
         <div className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-start">
             <div className="flex items-center gap-3">
               <img src="/src/assets/Logo MZNET (1).png" alt="MZNET Logo" className="h-8 w-auto" />
               <div className="text-lg sm:text-xl font-semibold text-white">Ficha Comercial — Pessoa Jurídica</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label={expanded ? 'Minimizar' : 'Expandir'} title={expanded ? 'Minimizar' : 'Expandir'}>
-                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Abrir em nova aba" title="Abrir em nova aba">
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Fechar">
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </div>
         <div
           className={expanded 
-            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
-            : "flex-1 overflow-hidden space-y-6 px-6 py-6"
+            ? "flex-1 overflow-y-auto min-h-0 space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-y-auto min-h-0 space-y-6 px-6 py-6"
           }
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;
@@ -992,6 +981,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
             </div>
           )}
           {!isLoadingInitial && (
+            <>
             <FichaPJForm
               defaultValues={initialValues || undefined}
               onSubmit={handleSubmitWrapper}
@@ -999,7 +989,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
               onFormChange={handleFormChange}
               applicationId={applicationId}
               onExpose={(api) => setPjSubmit(() => api.submit)}
-              hideInternalActions={expanded}
+              hideInternalActions={true}
               afterMkSlot={(
                 <section>
                   <div className="flex items-center justify-between mb-2">
@@ -1031,6 +1021,21 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
                 </section>
               )}
             />
+            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+              <Button
+                className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
+                onClick={handleClose}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+                onClick={() => pjSubmit?.()}
+              >
+                Salvar ficha PJ
+              </Button>
+            </div>
+            </>
           )}
         </div>
       </div>
@@ -1096,8 +1101,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         </DialogHeader>
         <div
           className={expanded 
-            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
-            : "flex-1 overflow-hidden space-y-6 px-6 py-6"
+            ? "flex-1 overflow-y-auto min-h-0 space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-y-auto min-h-0 space-y-6 px-6 py-6"
           }
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;

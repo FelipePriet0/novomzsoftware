@@ -15,6 +15,13 @@ export default function FichaPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Evitar barra de rolagem da página; a ficha gerencia seu próprio scroll
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     (async () => {
       if (!cardId) { setLoading(false); return; }

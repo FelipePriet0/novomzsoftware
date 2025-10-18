@@ -725,7 +725,7 @@ export function ExpandedFichaModal({
             </div>
           </div>
         </div>
-        <div className={expanded ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" : "flex-1 overflow-hidden px-6 py-6"}>
+        <div className={expanded ? "flex-1 overflow-y-auto min-h-0 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" : "flex-1 overflow-y-auto min-h-0 px-6 py-6"}>
           <NovaFichaComercialForm
             onSubmit={handleSubmitWrapper}
             initialValues={transformedFormData}
@@ -735,23 +735,21 @@ export function ExpandedFichaModal({
             hideHeader={true}
             onExpose={(api) => setFormApi(api)}
             onRefetch={onRefetch}
-            hideInternalActions={expanded}
+            hideInternalActions={true}
           />
         </div>
-        {expanded && (
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
-            <Button className="bg-[#018942] hover:bg-[#018942]/90 text-white" onClick={async () => {
-              try {
-                if (!formApi) return;
-                await formApi.flushAutosave?.();
-                const values = formApi.getCurrentValues();
-                await handleSubmitWrapper(values);
-              } catch (_) {}
-            }}>
-              Salvar Alterações
-            </Button>
-          </div>
-        )}
+        <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
+          <Button className="bg-[#018942] hover:bg-[#018942]/90 text-white" onClick={async () => {
+            try {
+              if (!formApi) return;
+              await formApi.flushAutosave?.();
+              const values = formApi.getCurrentValues();
+              await handleSubmitWrapper(values);
+            } catch (_) {}
+          }}>
+            Salvar Alterações
+          </Button>
+        </div>
         {/* Dialogs de confirmação mantidos para UX consistente */}
         <AlertDialog open={showFirstConfirmDialog} onOpenChange={setShowFirstConfirmDialog}>
           <AlertDialogContent>
@@ -849,8 +847,8 @@ export function ExpandedFichaModal({
           
           {/* Container principal com espaçamento responsivo otimizado */}
           <div className={expanded 
-            ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
-            : "flex-1 overflow-hidden px-6 py-6"
+            ? "flex-1 overflow-y-auto min-h-0 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-y-auto min-h-0 px-6 py-6"
           }>
             <NovaFichaComercialForm
                 onSubmit={handleSubmitWrapper}

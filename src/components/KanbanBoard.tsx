@@ -1171,13 +1171,7 @@ useEffect(() => {
         devLog('Card concluído no comercial -> movendo para recebido no analise');
       }
       
-      // LÓGICA ESPECIAL: Transição Automática para Finalizado
-      // Se está indo para "aprovado" ou "negado" no analise, deve ir para "finalizado"
-      if (target === 'aprovado' || target === 'negado') {
-        toArea = 'analise';
-        toStage = 'finalizado';
-        devLog('Card aprovado/negado -> movendo automaticamente para finalizado');
-      }
+      // Removido: NÃO mover automaticamente para "finalizado" ao aprovar/negar
       
       // VALIDAÇÃO: Impedir que cards voltem para "entrada" no comercial
       // Se o card já passou pelo comercial (tem commercialStage definido), não pode voltar para entrada
@@ -1226,10 +1220,7 @@ useEffect(() => {
             finalColumnId = 'recebido';
           }
           
-          // Se está indo para "aprovado" ou "negado", deve ir para "finalizado"
-          if (target === 'aprovado' || target === 'negado') {
-            finalColumnId = 'finalizado';
-          }
+          // Manter destino real (aprovado/negado) sem forçar "finalizado"
           
           const updatedCard = {
             ...c,
@@ -1528,11 +1519,11 @@ useEffect(() => {
         throw error;
       }
 
-      // Update UI optimistically to finalizado
+      // Update UI otimista: permanecer em "aprovado"
       setCards(prev => prev.map(c => c.id === card.id ? {
         ...c,
         area: 'analise',
-        columnId: 'finalizado',
+        columnId: 'aprovado',
         lastMovedAt: new Date().toISOString(),
       } : c));
       // Background refresh to sync
@@ -1573,11 +1564,11 @@ useEffect(() => {
         throw error;
       }
 
-      // Update UI optimistically to finalizado
+      // Update UI otimista: permanecer em "negado"
       setCards(prev => prev.map(c => c.id === card.id ? {
         ...c,
         area: 'analise',
-        columnId: 'finalizado',
+        columnId: 'negado',
         lastMovedAt: new Date().toISOString(),
       } : c));
       setTimeout(() => { loadApplications(); }, 250);
