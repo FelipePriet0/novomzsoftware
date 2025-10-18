@@ -167,66 +167,152 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent aria-describedby={undefined} className="sm:max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle>Dados Cadastrais Básicos</DialogTitle>
+      <DialogContent aria-describedby={undefined} className="sm:max-w-2xl p-0 overflow-hidden">
+        {/* Header com gradiente moderno */}
+        <DialogHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
+          <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+          <div className="relative flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+              <span className="text-white text-lg font-bold">🏢</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <img 
+                src="/src/assets/Logo MZNET (1).png" 
+                alt="MZNET Logo" 
+                className="h-8 w-auto filter brightness-0 invert"
+              />
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white">
+                  Nova Ficha - Pessoa Jurídica
+                </DialogTitle>
+                <p className="text-green-100 text-sm mt-1">
+                  Dados cadastrais básicos da empresa
+                </p>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-6 mz-form">
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FormField control={form.control} name="corporate_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Razão Social</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="trade_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome Fantasia</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="cnpj" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CNPJ</FormLabel>
-                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0000-00" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>E-mail</FormLabel>
-                  <FormControl><Input type="email" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              {/* Ordem desejada: Telefone | Whatsapp (Solicitante removidos desta etapa) */}
-              <FormField control={form.control} name="contact_phone" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Telefone</FormLabel>
-                  <FormControl>
-                    <Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="contact_whatsapp" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>WhatsApp</FormLabel>
-                  <FormControl><Input value={field.value || ''} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              </section>
-            
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* Seção: Dados da Empresa */}
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                Dados da Empresa
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="corporate_name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Razão Social</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: Empresa LTDA"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="trade_name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Nome Fantasia</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: Empresa Legal"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="cnpj" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">CNPJ</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value} 
+                        onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} 
+                        placeholder="00.000.000/0000-00"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">E-mail</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email" 
+                        {...field} 
+                        placeholder="empresa@exemplo.com"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
 
-            <div className="flex justify-between pt-2">
-              <Button type="button" variant="secondary" onClick={() => (onBack ? onBack() : onClose())}>Voltar</Button>
-              <Button type="submit" className="bg-[#018942] text-white hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(0,0,0,0.25)]">Criar Ficha PJ</Button>
+            {/* Seção: Contatos */}
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                Contatos
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="contact_phone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Telefone</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value || ''} 
+                        onChange={(e)=> field.onChange(maskPhone(e.target.value))} 
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="contact_whatsapp" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value || ''} 
+                        onChange={(e)=> field.onChange(maskPhone(e.target.value))} 
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => (onBack ? onBack() : onClose())}
+                className="flex-1 bg-white hover:bg-gray-50 text-gray-700 border-gray-300 hover:border-gray-400 rounded-lg transition-all duration-200"
+              >
+                Voltar
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1 bg-gradient-to-r from-[#018942] to-[#016b35] hover:from-[#016b35] hover:to-[#014d28] text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                Criar Ficha PJ
+              </Button>
             </div>
           </form>
         </Form>

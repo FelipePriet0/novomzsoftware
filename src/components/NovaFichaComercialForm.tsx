@@ -201,9 +201,10 @@ interface NovaFichaComercialFormProps {
   onRefetch?: () => void;
   onExpose?: (api: { getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> }) => void;
   hideInternalActions?: boolean;
+  hideHeader?: boolean;
 }
 
-export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, applicantId, onRefetch, onExpose, hideInternalActions }: NovaFichaComercialFormProps) {
+export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValues, onFormChange, applicationId, applicantId, onRefetch, onExpose, hideInternalActions, hideHeader }: NovaFichaComercialFormProps) {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
@@ -1160,19 +1161,49 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
     <>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(submit)} autoComplete="off" className="space-y-6 sm:space-y-8 max-h-[70vh] overflow-y-auto mz-form">
+        {/* Header com gradiente moderno */}
+        {!hideHeader && (
+          <div className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white rounded-xl p-6 relative overflow-hidden">
+            <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+            <div className="relative flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                <span className="text-white text-lg font-bold">👤</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <img 
+                  src="/src/assets/Logo MZNET (1).png" 
+                  alt="MZNET Logo" 
+                  className="h-8 w-auto filter brightness-0 invert"
+                />
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Nova Ficha Comercial - Pessoa Física
+                  </h2>
+                  <p className="text-green-100 text-sm mt-1">
+                    Formulário completo de cadastro e análise
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 1. Dados do Cliente */}
-        <section className="bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 sm:mb-6">1. Dados do Cliente</h3>
+        <section className="bg-gray-50 rounded-xl p-4 sm:p-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4 sm:mb-6 flex items-center gap-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            1. Dados do Cliente
+          </h3>
           <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
             {/* Linha 1: Nome + CPF + Data de Nascimento + ID */}
             <FormField control={form.control} name="cliente.nome" render={({ field }) => (
               <FormItem>
-                <FormLabel>Nome</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">Nome</FormLabel>
                 <FormControl>
                   <Input 
                     {...field} 
                     placeholder="Nome completo"
-                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                   />
                 </FormControl>
                 <FormMessage />
@@ -1180,7 +1211,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             )} />
             <FormField control={form.control} name="cliente.cpf" render={({ field }) => (
               <FormItem>
-                <FormLabel>CPF *</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">CPF *</FormLabel>
                 <FormControl>
                   <InputMask
                     mask="999.999.999-99"
@@ -1192,7 +1223,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                       <Input
                         {...inputProps}
                         placeholder="000.000.000-00"
-                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                       />
                     )}
                   </InputMask>
@@ -1202,13 +1233,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             )} />
             <FormField control={form.control} name="cliente.nasc" render={({ field }) => (
               <FormItem>
-                <FormLabel>Data de Nascimento</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">Data de Nascimento</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="dd/mm/aaaa"
                     maxLength={10}
                     value={field.value || ''}
-                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                     onChange={(e) => {
                       const v = e.target.value.replace(/\D/g, '');
                       const p1 = v.slice(0,2);
@@ -1225,12 +1256,12 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             )} />
             <FormField control={form.control} name="cliente.id" render={({ field }) => (
               <FormItem>
-                <FormLabel>ID</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">ID</FormLabel>
                 <FormControl>
                   <Input 
                     {...field} 
                     placeholder="Digite o ID"
-                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                   />
                 </FormControl>
               </FormItem>
@@ -1241,7 +1272,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4 sm:mt-6">
             <FormField control={form.control} name="cliente.tel" render={({ field }) => (
               <FormItem>
-                <FormLabel>Tel</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">Telefone</FormLabel>
                 <FormControl>
                   <InputMask
                     mask="(99) 99999-9999"
@@ -1254,7 +1285,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         {...inputProps}
                         inputMode="tel"
                         placeholder="(11) 99999-9999"
-                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                       />
                     )}
                   </InputMask>
@@ -1263,7 +1294,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             )} />
             <FormField control={form.control} name="cliente.whats" render={({ field }) => (
               <FormItem>
-                <FormLabel>Whats</FormLabel>
+                <FormLabel className="text-sm font-medium text-gray-700">WhatsApp</FormLabel>
                 <FormControl>
                   <InputMask
                     mask="(99) 99999-9999"
@@ -1276,7 +1307,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                         {...inputProps}
                         inputMode="tel"
                         placeholder="(11) 99999-9999"
-                        className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                       />
                     )}
                   </InputMask>

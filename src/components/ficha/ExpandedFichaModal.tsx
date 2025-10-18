@@ -753,6 +753,7 @@ export function ExpandedFichaModal({
                 onFormChange={handleFormChange}
                 applicationId={applicationId}
                 applicantId={applicantId}
+                hideHeader={true}
                 onExpose={(api) => setFormApi(api)}
                 onRefetch={onRefetch}
                 hideInternalActions={expanded}
