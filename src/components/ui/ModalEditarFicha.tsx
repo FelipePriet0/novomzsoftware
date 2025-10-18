@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
+import React, { useEffect, useState, useCallback, lazy, Suspense, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canEditReanalysis } from "@/lib/access";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { ObservationsWithComments } from "@/components/ui/ObservationsWithComments";
+const ObservationsWithComments = lazy(() => import("@/components/ui/ObservationsWithComments").then(m => ({ default: m.ObservationsWithComments })));
 import { AttachmentUploadModal } from "@/components/attachments/AttachmentUploadModal";
 import { AttachmentList } from "@/components/attachments/AttachmentDisplay";
 import { useAttachments } from "@/hooks/useAttachments";
@@ -44,6 +44,17 @@ interface ModalEditarFichaProps {
 
 export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar, responsaveis = [], onRefetch, autoOpenExpanded = false }: ModalEditarFichaProps) {
   const devLog = (...args: any[]) => { if ((import.meta as any)?.env?.DEV) console.log(...args); };
+  const [isPending, startTransition] = useTransition();
+  const ENABLE_APPLICANT_REALTIME = false;
+  const shallowEqual = (a: any, b: any) => {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    if (ka.length !== kb.length) return false;
+    for (const k of ka) { if (a[k] !== b[k]) return false; }
+    return true;
+  };
   const toDateInput = (iso?: string) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -579,8 +590,9 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     };
   }, [card?.id, loadPareceres]);
 
-  // 🔴 REALTIME: Sincronizar campos do formulário quando Applicants (cliente) mudar (fonte de verdade)
+  // 🔴 REALTIME de applicants desativado para evitar jank durante edição
   useEffect(() => {
+    if (!ENABLE_APPLICANT_REALTIME) return;
     const applicantId = (card as any)?.applicantId;
     if (!applicantId) return;
     const channel = supabase
@@ -590,28 +602,33 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         { event: 'UPDATE', schema: 'public', table: 'applicants', filter: `id=eq.${applicantId}` },
         (payload) => {
           const a: any = (payload as any).new || {};
-          setForm((prev) => ({
-            ...prev,
-            nome: typeof a.primary_name !== 'undefined' ? (a.primary_name ?? prev.nome) : prev.nome,
-            telefone: typeof a.phone !== 'undefined' ? (a.phone ?? prev.telefone) : prev.telefone,
-            cpf: typeof a.cpf_cnpj !== 'undefined' ? (a.cpf_cnpj ?? prev.cpf) : prev.cpf,
-            email: typeof a.email !== 'undefined' ? (a.email ?? prev.email) : prev.email,
-            whatsapp: typeof a.whatsapp !== 'undefined' ? (a.whatsapp ?? prev.whatsapp) : prev.whatsapp,
-            endereco: typeof a.address_line !== 'undefined' ? (a.address_line ?? prev.endereco) : prev.endereco,
-            numero: typeof a.address_number !== 'undefined' ? (a.address_number ?? prev.numero) : prev.numero,
-            complemento: typeof a.address_complement !== 'undefined' ? (a.address_complement ?? prev.complemento) : prev.complemento,
-            cep: typeof a.cep !== 'undefined' ? (a.cep ?? prev.cep) : prev.cep,
-            bairro: typeof a.bairro !== 'undefined' ? (a.bairro ?? prev.bairro) : prev.bairro,
-            plano_acesso: typeof a.plano_acesso !== 'undefined' ? (a.plano_acesso ?? prev.plano_acesso) : prev.plano_acesso,
-            venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
-            carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
-            sva_avulso: typeof a.sva_avulso !== 'undefined' ? (a.sva_avulso ?? prev.sva_avulso) : prev.sva_avulso,
-          }));
+          startTransition(() => {
+            setForm((prev) => {
+              const next = {
+                ...prev,
+                nome: typeof a.primary_name !== 'undefined' ? (a.primary_name ?? prev.nome) : prev.nome,
+                telefone: typeof a.phone !== 'undefined' ? (a.phone ?? prev.telefone) : prev.telefone,
+                cpf: typeof a.cpf_cnpj !== 'undefined' ? (a.cpf_cnpj ?? prev.cpf) : prev.cpf,
+                email: typeof a.email !== 'undefined' ? (a.email ?? prev.email) : prev.email,
+                whatsapp: typeof a.whatsapp !== 'undefined' ? (a.whatsapp ?? prev.whatsapp) : prev.whatsapp,
+                endereco: typeof a.address_line !== 'undefined' ? (a.address_line ?? prev.endereco) : prev.endereco,
+                numero: typeof a.address_number !== 'undefined' ? (a.address_number ?? prev.numero) : prev.numero,
+                complemento: typeof a.address_complement !== 'undefined' ? (a.address_complement ?? prev.complemento) : prev.complemento,
+                cep: typeof a.cep !== 'undefined' ? (a.cep ?? prev.cep) : prev.cep,
+                bairro: typeof a.bairro !== 'undefined' ? (a.bairro ?? prev.bairro) : prev.bairro,
+                plano_acesso: typeof a.plano_acesso !== 'undefined' ? (a.plano_acesso ?? prev.plano_acesso) : prev.plano_acesso,
+                venc: typeof a.venc !== 'undefined' && a.venc !== null ? String(a.venc) : prev.venc,
+                carne_impresso: typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : prev.carne_impresso,
+                sva_avulso: typeof a.sva_avulso !== 'undefined' ? (a.sva_avulso ?? prev.sva_avulso) : prev.sva_avulso,
+              };
+              return shallowEqual(prev, next) ? prev : next;
+            });
+          });
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [(card as any)?.applicantId]);
+  }, [ENABLE_APPLICANT_REALTIME, (card as any)?.applicantId]);
 
   // Create new parecer and persist
   const handleCreateParecer = async () => {
@@ -1601,28 +1618,19 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
           <div className="space-y-2">
             <Label>Observações e Conversas</Label>
-            {!showComments && (
-              <div className="flex justify-start">
-                <Button size="sm" type="button" onClick={() => setShowComments(true)} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">
-                  Mostrar conversas
-                </Button>
-              </div>
-            )}
-            {showComments && (
-              <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando conversas...</div>}>
-                <ObservationsWithComments
-                  key={commentsRefreshKey}
-                  name="observacoes"
-                  value={form.observacoes}
-                  onChange={handleChange}
-                  className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
-                  placeholder="Use @mencoes para colaboradores..."
-                  cardId={card?.id || ''}
-                  onAttachmentClick={handleAttachmentClick}
-                  onRefetch={onRefetch}
-                />
-              </Suspense>
-            )}
+            <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando conversas...</div>}>
+              <ObservationsWithComments
+                key={commentsRefreshKey}
+                name="observacoes"
+                value={form.observacoes}
+                onChange={handleChange}
+                className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
+                placeholder="Use @mencoes para colaboradores..."
+                cardId={card?.id || ''}
+                onAttachmentClick={handleAttachmentClick}
+                onRefetch={onRefetch}
+              />
+            </Suspense>
           </div>
         </div>
 

@@ -178,14 +178,14 @@ export function OptimizedKanbanCard({
             target.closest('[role="menuitem"]') ||
             target.closest('.dropdown-menu') ||
             target.closest('[data-radix-collection-item]')) {
-          console.log('🚫 [DEBUG] Clicou no dropdown, bloqueando card click');
+        if (import.meta?.env?.DEV) console.log('🚫 [DEBUG] Clicou no dropdown, bloqueando card click');
           return;
         }
         // Prevent click during drag
         if (isDraggingHook) {
           return;
         }
-        console.log('✅ [DEBUG] Clicou no card, abrindo edição');
+        if (import.meta?.env?.DEV) console.log('✅ [DEBUG] Clicou no card, abrindo edição');
         onCardClick?.(card);
       }}
       data-card-id={card.id}

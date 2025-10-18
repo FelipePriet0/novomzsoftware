@@ -15,7 +15,21 @@ export interface DraftData {
 
 const ENABLE_PROFILE_EDIT_SESSION = false; // desativa PATCH em profiles para evitar 400 no console
 
+const ENABLE_DRAFTS = false;
+
 export function useDraftForm() {
+  if (!ENABLE_DRAFTS) {
+    return {
+      currentDraft: null,
+      isAutoSaving: false,
+      lastSaved: null,
+      saveDraft: async () => {},
+      deleteDraft: async () => {},
+      loadExistingDraft: async () => {},
+      clearEditingSession: async () => {},
+      checkForResumeSession: async () => null,
+    } as any;
+  }
   const [currentDraft, setCurrentDraft] = useState<{ id: string; data: DraftData; applicationId?: string; step?: string } | null>(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);

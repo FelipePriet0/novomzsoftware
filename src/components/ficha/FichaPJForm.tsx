@@ -220,7 +220,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="endereco.tipo" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Tipo</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value="Comércio Térreo">Comércio Térreo</SelectItem>
@@ -247,7 +247,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="endereco.estab" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Estabelecimento</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger></FormControl>
                   <SelectContent>
                     <SelectItem value="Própria">Própria</SelectItem>
@@ -424,7 +424,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="solicitacao.meio" render={({ field }) => (
               <FormItem>
                 <FormLabel>Meio</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -456,7 +456,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="solicitacao.planoAcesso" render={({ field }) => (
               <FormItem>
                 <FormLabel>Plano de Acesso</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar plano" /></SelectTrigger>
                   </FormControl>
@@ -499,7 +499,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="solicitacao.svaAvulso" render={({ field }) => (
               <FormItem>
                 <FormLabel>SVA Avulso</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="A definir" />
@@ -524,7 +524,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="solicitacao.venc" render={({ field }) => (
               <FormItem>
                 <FormLabel>Venc</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -537,7 +537,7 @@ export function FichaPJForm({ defaultValues, onSubmit, onCancel, afterMkSlot, on
             <FormField control={form.control} name="solicitacao.carneImpresso" render={({ field }) => (
               <FormItem>
                 <FormLabel>Carnê Impresso</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+<Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>

@@ -1456,7 +1456,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.tipoMoradia" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo de moradia</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecionar" />
@@ -1489,7 +1489,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.unicaNoLote" render={({ field }) => (
               <FormItem>
                 <FormLabel>Única no lote</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1517,7 +1517,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.nasOutras" render={({ field }) => (
               <FormItem>
                 <FormLabel>Nas Outras</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1535,7 +1535,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.temContrato" render={({ field }) => (
               <FormItem className={temContrato === "Sim" ? "" : "md:col-span-3"}>
                 <FormLabel>Tem contrato?</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1551,7 +1551,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormField control={form.control} name="relacoes.enviouContrato" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Enviou contrato?</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
                         <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                       </FormControl>
@@ -1577,7 +1577,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.enviouComprovante" render={({ field }) => (
               <FormItem>
                 <FormLabel>Enviou comprovante?</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1591,7 +1591,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.tipoComprovante" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo de comprovante de endereço</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1633,7 +1633,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.temInternetFixa" render={({ field }) => (
               <FormItem className={form.watch("relacoes.temInternetFixa") === "Sim" ? "" : "md:col-span-3"}>
                 <FormLabel>Tem internet fixa atualmente?</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1719,7 +1719,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="empregoRenda.vinculo" render={({ field }) => (
               <FormItem>
                 <FormLabel>Vínculo</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1763,7 +1763,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="conjuge.estadoCivil" render={({ field }) => (
               <FormItem className="md:col-span-1">
                 <FormLabel>Estado civil</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -1977,7 +1977,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="outras.planoEscolhido" render={({ field }) => (
               <FormItem>
                 <FormLabel>Plano escolhido</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50">
                       <SelectValue placeholder="Selecionar plano" />
@@ -2022,7 +2022,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="outras.diaVencimento" render={({ field }) => (
               <FormItem>
                 <FormLabel>Dia de vencimento</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -2039,7 +2039,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="outras.svaAvulso" render={({ field }) => (
               <FormItem>
                 <FormLabel>SVA Avulso</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50">
                       <SelectValue placeholder="Selecionar" />

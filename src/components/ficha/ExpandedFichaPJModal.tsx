@@ -205,14 +205,16 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         const { data: card } = await cardPromise;
 
         let tradeName: string | undefined = undefined;
-        if ((card as any)?.applicant_id) {
-          const { data: pjFicha } = await supabase
-            .from('pj_fichas')
-            .select('trade_name')
-            .eq('applicant_id', (card as any).applicant_id)
-            .maybeSingle();
-          if (pjFicha && (pjFicha as any).trade_name) tradeName = (pjFicha as any).trade_name as string;
-        }
+        try {
+          if ((card as any)?.applicant_id) {
+            const { data: pjFicha, error } = await supabase
+              .from('pj_fichas')
+              .select('trade_name')
+              .eq('applicant_id', (card as any).applicant_id)
+              .maybeSingle();
+            if (!error && pjFicha && (pjFicha as any).trade_name) tradeName = (pjFicha as any).trade_name as string;
+          }
+        } catch (_) { /* ignore missing table/404 */ }
 
         if (!mounted) return;
         let defaults: Partial<PJFormValues> = {
@@ -271,19 +273,7 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
           }
         } catch (_) {}
         // Tentar carregar rascunho salvo para esta aplicação e usuário
-        try {
-          const { data: draft } = await supabase
-            .from('applications_drafts')
-            .select('other_data, application_id, user_id')
-            .eq('application_id', applicationId)
-            .maybeSingle();
-          const pjDraft = (draft as any)?.other_data?.pj as Partial<PJFormValues> | undefined;
-          if (pjDraft && typeof pjDraft === 'object') {
-            defaults = { ...defaults, ...pjDraft } as Partial<PJFormValues>;
-          }
-        } catch (_) {
-          // ignore
-        }
+        // drafts desativados: pular leitura de applications_drafts
         setInitialValues(defaults);
         if (import.meta?.env?.DEV) console.log('[PJ] Initial defaults ready');
         setIsInitialized(false);

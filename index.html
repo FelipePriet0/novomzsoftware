@@ -43,73 +43,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                DEFAULT: '#018942',
-                50: '#e6f7ed',
-                100: '#c0ebd5',
-                200: '#99dfbd',
-                300: '#73d3a5',
-                400: '#4dc78d',
-                500: '#018942',
-                600: '#016b35',
-                700: '#014d28',
-                800: '#012d1a',
-                900: '#001a0f',
-              }
-            },
-            fontFamily: {
-              poppins: ['Poppins', 'Segoe UI', 'system-ui', 'sans-serif'],
-            },
-            animation: {
-              'gradient-shift': 'gradientShift 15s ease infinite',
-              'float': 'float 20s ease-in-out infinite',
-              'pulse-custom': 'pulseCustom 3s ease-in-out infinite',
-              'shimmer': 'shimmer 2s infinite',
-              'fade-in-up': 'fadeInUp 0.8s ease-out both',
-              'scale-in': 'scaleIn 0.6s ease-out',
-              'bounce-gentle': 'bounceGentle 2s ease-in-out infinite',
-            },
-            keyframes: {
-              gradientShift: {
-                '0%, 100%': { 'background-position': '0% 50%' },
-                '50%': { 'background-position': '100% 50%' }
-              },
-              float: {
-                '0%, 100%': { transform: 'translateY(0px)' },
-                '50%': { transform: 'translateY(-10px)' }
-              },
-              pulseCustom: {
-                '0%, 100%': { opacity: '0.6' },
-                '50%': { opacity: '1' }
-              },
-              shimmer: {
-                '0%': { 'background-position': '-1000px 0' },
-                '100%': { 'background-position': '1000px 0' }
-              },
-              fadeInUp: {
-                'from': { opacity: '0', transform: 'translateY(30px)' },
-                'to': { opacity: '1', transform: 'translateY(0)' }
-              },
-              scaleIn: {
-                'from': { opacity: '0', transform: 'scale(0.9)' },
-                'to': { opacity: '1', transform: 'scale(1)' }
-              },
-              bounceGentle: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-5px)' }
-              }
-            }
-          }
-        }
-      }
-    </script>
+    <!-- Tailwind via PostCSS (CDN removido em produção) -->
+    <!-- Tailwind theme is configured via tailwind.config.ts (no inline config) -->
 
     <!-- CSS Premium Global -->
     <style>
