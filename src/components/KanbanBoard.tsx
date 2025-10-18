@@ -386,8 +386,7 @@ export default function KanbanBoard() {
           area: row.area as 'comercial' | 'analise',
         } as CardItem;
       });
-      if (import.meta.env.DEV) console.log('Loaded cards:', mapped.length);
-      if (import.meta.env.DEV) console.log('Cards by column:', mapped.map(c => ({ id: c.id, nome: c.nome, columnId: c.columnId })));
+      // Debug logs removidos para reduzir ruído no console
       setCards(mapped);
     } catch (e) {
       // Fallback: remover relacionamentos para evitar 500 quando FKs não existem

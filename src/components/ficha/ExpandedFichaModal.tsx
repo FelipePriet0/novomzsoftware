@@ -10,7 +10,7 @@ import { BasicInfoData } from './BasicInfoModal';
 import { Button } from "@/components/ui/button";
 // Drafts desativados temporariamente
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Loader2, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
@@ -41,6 +41,7 @@ interface ExpandedFichaModalProps {
   applicantId?: string;
   onStatusChange?: (cardId: string, newStatus: string) => void;
   onRefetch?: () => void;
+  asPage?: boolean;
 }
 
 export function ExpandedFichaModal({ 
@@ -51,7 +52,8 @@ export function ExpandedFichaModal({
   applicationId,
   applicantId,
   onStatusChange,
-  onRefetch
+  onRefetch,
+  asPage = false,
 }: ExpandedFichaModalProps) {
   // Drafts desativados: remover auto-save e estados relacionados
   const [showFirstConfirmDialog, setShowFirstConfirmDialog] = useState(false);
@@ -276,6 +278,13 @@ export function ExpandedFichaModal({
     }
     
     setPendingAction(null);
+  };
+
+  const handleOpenInNewTab = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}`;
+    window.open(url, '_blank', 'noopener');
   };
 
   const handleDiscardChanges = async () => {
@@ -688,6 +697,92 @@ export function ExpandedFichaModal({
     return out as Partial<ComercialFormValues>;
   }, [applicantInitial, pfInitial]);
 
+  if (asPage) {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <div className={expanded ? "px-4 py-3 sm:px-6 sm:py-4 border-b border-gray-200 bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white" : "px-6 py-4 border-b border-gray-100 bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white"}>
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src="/src/assets/Logo MZNET (1).png" alt="MZNET Logo" className="h-8 w-auto" />
+                <div>
+                  <div className="text-lg sm:text-xl font-semibold text-white">Ficha Comercial - {basicInfo.nome}</div>
+                  <p className="text-green-100 text-sm">Formulário completo de análise</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label={expanded ? 'Minimizar' : 'Expandir'} title={expanded ? 'Minimizar' : 'Expandir'}>
+                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Abrir em nova aba" title="Abrir em nova aba">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Fechar">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className={expanded ? "flex-1 overflow-hidden px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8" : "flex-1 overflow-hidden px-6 py-6"}>
+          <NovaFichaComercialForm
+            onSubmit={handleSubmitWrapper}
+            initialValues={transformedFormData}
+            onFormChange={handleFormChange}
+            applicationId={applicationId}
+            applicantId={applicantId}
+            hideHeader={true}
+            onExpose={(api) => setFormApi(api)}
+            onRefetch={onRefetch}
+            hideInternalActions={expanded}
+          />
+        </div>
+        {expanded && (
+          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
+            <Button className="bg-[#018942] hover:bg-[#018942]/90 text-white" onClick={async () => {
+              try {
+                if (!formApi) return;
+                await formApi.flushAutosave?.();
+                const values = formApi.getCurrentValues();
+                await handleSubmitWrapper(values);
+              } catch (_) {}
+            }}>
+              Salvar Alterações
+            </Button>
+          </div>
+        )}
+        {/* Dialogs de confirmação mantidos para UX consistente */}
+        <AlertDialog open={showFirstConfirmDialog} onOpenChange={setShowFirstConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Você deseja alterar as informações dessa ficha?</AlertDialogTitle>
+              <AlertDialogDescription>
+                As alterações serão aplicadas permanentemente à ficha.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleDiscardChanges} className="bg-red-600 hover:bg-red-700 text-white border-red-600 hover:border-red-700">Descartar alterações</AlertDialogCancel>
+              <AlertDialogAction onClick={handleFirstConfirm} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Sim, alterar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={showSecondConfirmDialog} onOpenChange={setShowSecondConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Tem certeza que deseja alterar as informações?</AlertDialogTitle>
+              <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => { setShowSecondConfirmDialog(false); setPendingAction(null); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleSecondConfirm} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Confirmar alteração</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
@@ -727,6 +822,16 @@ export function ExpandedFichaModal({
                     title={expanded ? 'Minimizar' : 'Expandir'}
                   >
                     {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleOpenInNewTab}
+                    className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                    aria-label="Abrir em nova aba"
+                    title="Abrir em nova aba"
+                  >
+                    <ExternalLink className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"

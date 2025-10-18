@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
+import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2, ExternalLink } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,7 @@ interface ExpandedFichaPJModalProps {
   applicationId?: string;
   onRefetch?: () => void;
   applicantId?: string;
+  asPage?: boolean;
 }
 
 type Parecer = {
@@ -53,7 +54,7 @@ type Parecer = {
 
 import { usePjFichasTestConnection } from '@/hooks/usePjFichasTestConnection';
 
-export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, applicantId: applicantIdProp }: ExpandedFichaPJModalProps) {
+export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, applicantId: applicantIdProp, asPage = false }: ExpandedFichaPJModalProps) {
   const { profile } = useAuth();
   const { name: currentUserName } = useCurrentUser();
   const [pareceres, setPareceres] = useState<Parecer[]>([]);
@@ -932,6 +933,13 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
     onClose();
   };
 
+  const handleOpenInNewTab = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
   const handleSubmitWrapper = async (data: PJFormValues) => {
     if (applicationId) {
       setFormData(data);
@@ -941,6 +949,94 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
       onClose();
     }
   };
+  
+  // Render as full page (without Dialog overlay)
+  if (asPage) {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <div className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/src/assets/Logo MZNET (1).png" alt="MZNET Logo" className="h-8 w-auto" />
+              <div className="text-lg sm:text-xl font-semibold text-white">Ficha Comercial — Pessoa Jurídica</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label={expanded ? 'Minimizar' : 'Expandir'} title={expanded ? 'Minimizar' : 'Expandir'}>
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Abrir em nova aba" title="Abrir em nova aba">
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Fechar">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+        <div
+          className={expanded 
+            ? "flex-1 overflow-hidden space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-hidden space-y-6 px-6 py-6"
+          }
+          onBlurCapture={async () => {
+            if (!applicationId || !lastFormSnapshot) return;
+            try {
+              await ensureCommercialFeitas(applicationId);
+              await saveDraft({ other_data: { pj: lastFormSnapshot } } as any, applicationId, 'pj', false);
+            } catch (_) {}
+          }}
+        >
+          {isLoadingInitial && (
+            <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando dados básicos...
+            </div>
+          )}
+          {!isLoadingInitial && (
+            <FichaPJForm
+              defaultValues={initialValues || undefined}
+              onSubmit={handleSubmitWrapper}
+              onCancel={handleClose}
+              onFormChange={handleFormChange}
+              applicationId={applicationId}
+              onExpose={(api) => setPjSubmit(() => api.submit)}
+              hideInternalActions={expanded}
+              afterMkSlot={(
+                <section>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-base font-semibold">Pareceres da Análise</h3>
+                    <Button type="button" size="default" className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90" onClick={() => setShowNewParecerEditor(true)}>+ Adicionar Parecer</Button>
+                  </div>
+                  {showNewParecerEditor && (
+                    <div className="mt-2">
+                      <Textarea rows={3} value={newParecerText} onChange={(e) => setNewParecerText(e.target.value)} className="text-sm text-[#018942]" placeholder="Escreva um novo parecer..." />
+                      <div className="flex justify-end gap-2 mt-2">
+                        <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
+                        <Button size="default" type="button" onClick={appendParecer} className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar Parecer</Button>
+                      </div>
+                    </div>
+                  )}
+                  {pareceres.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Nenhum parecer registrado.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pareceres.map((p) => (
+                        <div key={p.id} className="rounded-md border p-3">
+                          <div className="text-xs text-muted-foreground mb-1">{new Date(p.created_at).toLocaleString('pt-BR')}</div>
+                          <div className="text-sm font-medium">{p.author_name} {p.author_role ? <span className="text-xs text-gray-500">({p.author_role})</span> : null}</div>
+                          <div className="text-sm mt-1 whitespace-pre-wrap">{p.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
@@ -966,6 +1062,26 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
               </DialogTitle>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(e => !e)}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                aria-label={expanded ? 'Minimizar' : 'Expandir'}
+                title={expanded ? 'Minimizar' : 'Expandir'}
+              >
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenInNewTab}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                aria-label="Abrir em nova aba"
+                title="Abrir em nova aba"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"

@@ -361,9 +361,9 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
         handleCancel();
       }
     }}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
+      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col h-full">
         {/* Header com gradiente moderno */}
-        <SheetHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
+        <SheetHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden flex-shrink-0">
         <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
           <div className="relative">
             <SheetTitle className="text-xl font-semibold text-white">
@@ -375,6 +375,8 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
           </div>
         </SheetHeader>
 
+        {/* Body scrollable */}
+        <div className="flex-1 overflow-y-auto min-h-0">
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Seção: Atribuição */}
           <div className="bg-gray-50 rounded-xl p-4">
@@ -489,7 +491,8 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
           </div>
 
           {/* Botões de Ação */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200 mt-6 pt-6">
+          <div className="sticky bottom-0 left-0 right-0 -mx-6 bg-white border-t border-gray-200 z-10">
+            <div className="px-6 py-4 flex gap-3">
             <Button
               type="button"
               variant="outline"
@@ -513,8 +516,10 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
                 editingTask ? 'Salvar Alterações' : 'Criar Tarefa'
               )}
             </Button>
+            </div>
           </div>
         </form>
+        </div>
       </SheetContent>
 
       {/* Diálogo de Confirmação para Mudanças Não Salvas */}
