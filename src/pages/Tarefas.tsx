@@ -205,7 +205,7 @@ export default function Tarefas() {
               <img 
                 src="/src/assets/Logo MZNET (1).png" 
                 alt="MZNET Logo" 
-                className="h-8 w-auto filter brightness-0 invert"
+                className="h-8 w-auto"
               />
               <div>
                 <h1 className="text-2xl font-bold text-white">Minhas Tarefas</h1>

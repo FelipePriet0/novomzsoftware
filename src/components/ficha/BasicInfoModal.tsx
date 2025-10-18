@@ -161,7 +161,7 @@ export function BasicInfoModal({ open, onClose, onSubmit, initialData, onBack }:
               <img 
                 src="/src/assets/Logo MZNET (1).png" 
                 alt="MZNET Logo" 
-                className="h-8 w-auto filter brightness-0 invert"
+                className="h-8 w-auto"
               />
               <div>
                 <DialogTitle className="text-lg font-semibold text-white">

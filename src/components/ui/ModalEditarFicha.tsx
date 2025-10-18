@@ -135,6 +135,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   } = useAttachments(card?.id || '', { auto: false, realtime: false });
   // Forçar remount da área de comentários ao anexar/excluir para recarregar listas
   const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
+  const [showComments, setShowComments] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -398,9 +399,9 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       // Filtrar pareceres deletados (soft delete)
       const activePareceres = migratedList.filter(parecer => !parecer.deleted);
       devLog('📊 [ModalEditar] Pareceres carregados:', migratedList.length, 'Ativos:', activePareceres.length);
-      setPareceres(activePareceres);
+      startTransition(() => setPareceres(activePareceres));
     } catch (e) {
-      setPareceres([]);
+      startTransition(() => setPareceres([]));
     }
   }, [card?.id]);
 
@@ -551,16 +552,21 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         { event: 'UPDATE', schema: 'public', table: 'kanban_cards', filter: `id=eq.${card.id}` },
         (payload) => {
           devLog('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
-          loadPareceres();
+          startTransition(() => loadPareceres());
           const k: any = (payload as any).new || {};
           // Espelhar apenas campos básicos do card (demais vêm de applicants)
-          setForm((prev) => ({
-            ...prev,
-            nome: k.title ?? prev.nome,
-            telefone: k.phone ?? prev.telefone,
-            cpf: k.cpf_cnpj ?? prev.cpf,
-            agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
-          }));
+          startTransition(() => {
+            setForm((prev) => {
+              const next = {
+                ...prev,
+                nome: k.title ?? prev.nome,
+                telefone: k.phone ?? prev.telefone,
+                cpf: k.cpf_cnpj ?? prev.cpf,
+                agendamento: k.due_at ? toDateInput(k.due_at) : prev.agendamento,
+              };
+              return shallowEqual(prev, next) ? prev : next;
+            });
+          });
         }
       )
       .subscribe((status) => {
@@ -644,7 +650,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     
     // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
     const activePareceres = next.filter((p: any) => !p.deleted);
-    setPareceres(activePareceres);
+    startTransition(() => setPareceres(activePareceres));
     
     setNewParecerText("");
     setShowNewParecerEditor(false);
@@ -773,7 +779,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       
       // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
       const activePareceres = updated.filter((p: any) => !p.deleted);
-      setPareceres(activePareceres);
+      startTransition(() => setPareceres(activePareceres));
       
       // ✅ Salvar lista COMPLETA no banco (incluindo deletados para histórico)
       const serialized = JSON.stringify(updated);
@@ -815,7 +821,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     
     // ✅ Para a UI, mostrar apenas pareceres ativos (sem deleted)
     const activePareceres = updated.filter((p: any) => !p.deleted);
-    setPareceres(activePareceres);
+    startTransition(() => setPareceres(activePareceres));
     
     setEditingParecerId(null);
     setEditingText("");
@@ -898,7 +904,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       devLog('💾 Parecer marcado como deletado (soft delete) no banco!', updateData);
       
       // Atualizar estado local - remover da lista (já foi filtrado como deletado)
-      setPareceres(prev => prev.filter(p => p.id !== deletingParecerId));
+      startTransition(() => setPareceres(prev => prev.filter(p => p.id !== deletingParecerId)));
       setDeletingParecerId(null);
       
       // Chamar onRefetch se disponível para forçar recarregamento
@@ -1061,7 +1067,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   <img 
                     src="/src/assets/Logo MZNET (1).png" 
                     alt="MZNET Logo" 
-                    className="h-8 w-auto filter brightness-0 invert"
+                    className="h-8 w-auto"
                   />
                   <div>
                     <h2 className="text-lg font-semibold">Editar Ficha</h2>
@@ -1595,17 +1601,28 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
           <div className="space-y-2">
             <Label>Observações e Conversas</Label>
-            <ObservationsWithComments
-              key={commentsRefreshKey}
-              name="observacoes"
-              value={form.observacoes}
-              onChange={handleChange}
-              className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
-              placeholder="Use @mencoes para colaboradores..."
-              cardId={card?.id || ''}
-              onAttachmentClick={handleAttachmentClick}
-              onRefetch={onRefetch}
-            />
+            {!showComments && (
+              <div className="flex justify-start">
+                <Button size="sm" type="button" onClick={() => setShowComments(true)} className="bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">
+                  Mostrar conversas
+                </Button>
+              </div>
+            )}
+            {showComments && (
+              <Suspense fallback={<div className="text-sm text-muted-foreground">Carregando conversas...</div>}>
+                <ObservationsWithComments
+                  key={commentsRefreshKey}
+                  name="observacoes"
+                  value={form.observacoes}
+                  onChange={handleChange}
+                  className="rounded-[12px] min-h-[120px] text-[#018942] placeholder-[#018942]"
+                  placeholder="Use @mencoes para colaboradores..."
+                  cardId={card?.id || ''}
+                  onAttachmentClick={handleAttachmentClick}
+                  onRefetch={onRefetch}
+                />
+              </Suspense>
+            )}
           </div>
         </div>
 

@@ -965,9 +965,16 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
         {/* Header simplificado para robustez do parser */}
         <DialogHeader className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg sm:text-xl font-semibold text-white">
-              Ficha Comercial — Pessoa Jurídica
-            </DialogTitle>
+            <div className="flex items-center gap-3">
+              <img 
+                src="/src/assets/Logo MZNET (1).png" 
+                alt="MZNET Logo" 
+                className="h-8 w-auto"
+              />
+              <DialogTitle className="text-lg sm:text-xl font-semibold text-white">
+                Ficha Comercial — Pessoa Jurídica
+              </DialogTitle>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"

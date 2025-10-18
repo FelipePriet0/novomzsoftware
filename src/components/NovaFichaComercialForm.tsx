@@ -1173,7 +1173,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <img 
                   src="/src/assets/Logo MZNET (1).png" 
                   alt="MZNET Logo" 
-                  className="h-8 w-auto filter brightness-0 invert"
+                  className="h-8 w-auto"
                 />
                 <div>
                   <h2 className="text-lg font-semibold text-white">

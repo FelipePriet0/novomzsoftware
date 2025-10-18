@@ -487,7 +487,7 @@
 
   <body>
     <!-- Loading Screen MEGA PREMIUM -->
-    <div id="loading-screen" class="loading-screen">
+    <div id="loading-screen" class="loading-screen" style="display: none;">
       <div class="loading-content">
         <div class="loading-logo"></div>
         <h1 class="loading-text">MZNet</h1>
@@ -502,31 +502,6 @@
     <!-- Scripts -->
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- Script para remover loading screen -->
-    <script>
-      // Remove loading screen quando a aplicação carrega
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          const loadingScreen = document.getElementById('loading-screen');
-          if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            setTimeout(function() {
-              loadingScreen.style.display = 'none';
-            }, 500);
-          }
-        }, 1000); // Delay para mostrar o loading por pelo menos 1 segundo
-      });
-
-      // Fallback: remove loading após 5 segundos máximo
-      setTimeout(function() {
-        const loadingScreen = document.getElementById('loading-screen');
-        if (loadingScreen) {
-          loadingScreen.style.opacity = '0';
-          setTimeout(function() {
-            loadingScreen.style.display = 'none';
-          }, 500);
-        }
-      }, 5000);
-    </script>
+    <!-- Script para remover loading screen (desativado: tela não exibe mais por padrão) -->
   </body>
 </html>

@@ -708,7 +708,7 @@ export function ExpandedFichaModal({
                   <img 
                     src="/src/assets/Logo MZNET (1).png" 
                     alt="MZNET Logo" 
-                    className="h-8 w-auto filter brightness-0 invert"
+                    className="h-8 w-auto"
                   />
                   <div>
                     <DialogTitle className="text-lg sm:text-xl font-semibold text-white">

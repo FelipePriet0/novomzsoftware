@@ -11,3 +11,12 @@ if (import.meta.env.PROD) {
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Garantir remoção do splash caso exista
+(() => {
+  const el = document.getElementById('loading-screen');
+  if (el) {
+    el.style.opacity = '0';
+    el.style.display = 'none';
+  }
+})();
