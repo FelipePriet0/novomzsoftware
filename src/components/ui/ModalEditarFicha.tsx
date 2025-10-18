@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, lazy, Suspense } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { X, MoreVertical, Paperclip, ArrowLeft } from "lucide-react";
 import InputMask from "react-input-mask";
-import { ExpandedFichaModal } from "@/components/ficha/ExpandedFichaModal";
-import { ExpandedFichaPJModal } from "@/components/ficha/ExpandedFichaPJModal";
+const ExpandedFichaModal = lazy(() => import("@/components/ficha/ExpandedFichaModal").then(m => ({ default: m.ExpandedFichaModal })));
+const ExpandedFichaPJModal = lazy(() => import("@/components/ficha/ExpandedFichaPJModal").then(m => ({ default: m.ExpandedFichaPJModal })));
 import { supabase } from "@/integrations/supabase/client";
 import { ComercialFormValues } from "@/components/NovaFichaComercialForm";
 import { useAuth } from "@/context/AuthContext";
@@ -43,6 +43,7 @@ interface ModalEditarFichaProps {
 }
 
 export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar, responsaveis = [], onRefetch, autoOpenExpanded = false }: ModalEditarFichaProps) {
+  const devLog = (...args: any[]) => { if ((import.meta as any)?.env?.DEV) console.log(...args); };
   const toDateInput = (iso?: string) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -131,7 +132,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     formatFileSize, 
     getFileIcon,
     loadAttachments 
-  } = useAttachments(card?.id || '');
+  } = useAttachments(card?.id || '', { auto: false, realtime: false });
   // Forçar remount da área de comentários ao anexar/excluir para recarregar listas
   const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
 
@@ -151,11 +152,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleUploadAttachment = async (data: any) => {
     try {
-      console.log('📎 [ModalEditarFicha] Iniciando upload de anexo...');
+      devLog('📎 [ModalEditarFicha] Iniciando upload de anexo...');
       const uploaded = await uploadAttachment(data);
-      console.log('📎 [ModalEditarFicha] Upload concluído, recarregando anexos...');
+      devLog('📎 [ModalEditarFicha] Upload concluído, recarregando anexos...');
       await loadAttachments();
-      console.log('📎 [ModalEditarFicha] Anexos recarregados. Verificando comentário automático de anexo...');
+      devLog('📎 [ModalEditarFicha] Anexos recarregados. Verificando comentário automático de anexo...');
 
       // Fallback: garantir que exista um comentário de "Anexo adicionado" vinculado
       try {
@@ -178,7 +179,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           );
 
           if (match) {
-            console.log('📎 [ModalEditarFicha] Comentário automático detectado. Vinculando attachment ao comentário:', match.id);
+            devLog('📎 [ModalEditarFicha] Comentário automático detectado. Vinculando attachment ao comentário:', match.id);
             // Vincular attachment ao comentário encontrado (se ainda não vinculado)
             try {
               await (supabase as any)
@@ -187,15 +188,15 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                 .eq('id', uploaded.id);
             } catch {}
           } else {
-            console.log('📎 [ModalEditarFicha] Nenhum comentário automático encontrado. Criando NOVA conversa encadeada...');
+            devLog('📎 [ModalEditarFicha] Nenhum comentário automático encontrado. Criando NOVA conversa encadeada...');
             const content = `📎 **Anexo adicionado**\n\n` +
               `📄 **Arquivo:** ${uploaded.file_name}\n` +
               (uploaded.description ? `📝 **Descrição:** ${uploaded.description}\n` : '') +
               `📎 Anexo adicionado: ${uploaded.file_name}`;
             
             const newThreadId = `thread_${card.id}_${Date.now()}`;
-            console.log('📎 [ModalEditarFicha] ===== CRIANDO NOVA THREAD =====');
-            console.log('📎 [ModalEditarFicha] Dados do comentário (NOVA CONVERSA):', {
+            devLog('📎 [ModalEditarFicha] ===== CRIANDO NOVA THREAD =====');
+            devLog('📎 [ModalEditarFicha] Dados do comentário (NOVA CONVERSA):', {
               card_id: card.id,
               author_id: profile.id,
               author_name: currentUserName || profile.full_name || 'Usuário',
@@ -221,8 +222,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
               .select('id')
               .single();
               
-            console.log('📎 [ModalEditarFicha] ===== RESULTADO DA CRIAÇÃO =====');
-            console.log('📎 [ModalEditarFicha] Resultado da criação do comentário:', {
+            devLog('📎 [ModalEditarFicha] ===== RESULTADO DA CRIAÇÃO =====');
+            devLog('📎 [ModalEditarFicha] Resultado da criação do comentário:', {
               success: !ccErr,
               error: ccErr,
               commentId: manualComment?.id,
@@ -240,7 +241,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
           }
         }
       } catch (err) {
-        console.log('ℹ️ [ModalEditarFicha] Fallback de comentário ignorado:', err);
+        devLog('ℹ️ [ModalEditarFicha] Fallback de comentário ignorado:', err);
       }
 
       // Realtime cuida da sincronização
@@ -269,16 +270,16 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleDeleteAttachment = async (attachmentId: string) => {
     try {
-      console.log('🗑️ [ModalEditarFicha] Iniciando exclusão de anexo:', attachmentId);
+      devLog('🗑️ [ModalEditarFicha] Iniciando exclusão de anexo:', attachmentId);
       const success = await deleteAttachment(attachmentId);
-      console.log('🗑️ [ModalEditarFicha] Exclusão resultado:', success);
+      devLog('🗑️ [ModalEditarFicha] Exclusão resultado:', success);
       if (success) {
-        console.log('🗑️ [ModalEditarFicha] Recarregando anexos...');
+        devLog('🗑️ [ModalEditarFicha] Recarregando anexos...');
         await loadAttachments();
-        console.log('🗑️ [ModalEditarFicha] Anexos recarregados com sucesso');
+        devLog('🗑️ [ModalEditarFicha] Anexos recarregados com sucesso');
         // Recarregar comentários também
         if (onRefetch) {
-          console.log('🗑️ [ModalEditarFicha] Chamando onRefetch...');
+          devLog('🗑️ [ModalEditarFicha] Chamando onRefetch...');
           onRefetch();
         }
       }
@@ -396,7 +397,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       
       // Filtrar pareceres deletados (soft delete)
       const activePareceres = migratedList.filter(parecer => !parecer.deleted);
-      console.log('📊 [ModalEditar] Pareceres carregados:', migratedList.length, 'Ativos:', activePareceres.length);
+      devLog('📊 [ModalEditar] Pareceres carregados:', migratedList.length, 'Ativos:', activePareceres.length);
       setPareceres(activePareceres);
     } catch (e) {
       setPareceres([]);
@@ -448,8 +449,10 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     onRefetch?.();
   }, [loadPareceres, onRefetch, card?.id]);
 
+  // Defer carregar pareceres para após primeiro paint (melhor UX de abertura)
   useEffect(() => {
-    loadPareceres();
+    const t = setTimeout(() => { loadPareceres(); }, 0);
+    return () => clearTimeout(t);
   }, [loadPareceres]);
 
   // Carregar valores atuais dando preferência a Applicants (fonte de verdade)
@@ -530,7 +533,8 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         // silencioso
       }
     };
-    loadInitialForm();
+    const t = setTimeout(() => { loadInitialForm(); }, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card?.id]);
 
@@ -538,7 +542,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   useEffect(() => {
     if (!card?.id) return;
     
-    console.log('🔴 [ModalEditar] Configurando Realtime para pareceres do card:', card.id);
+    devLog('🔴 [ModalEditar] Configurando Realtime para pareceres do card:', card.id);
     
     const channel = supabase
       .channel(`pareceres-modal-editar-${card.id}`)
@@ -546,7 +550,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'kanban_cards', filter: `id=eq.${card.id}` },
         (payload) => {
-          console.log('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
+          devLog('🔴 [ModalEditar] Card atualizado, recarregando pareceres:', payload);
           loadPareceres();
           const k: any = (payload as any).new || {};
           // Espelhar apenas campos básicos do card (demais vêm de applicants)
@@ -560,11 +564,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [ModalEditar] Status da subscrição Realtime de pareceres:', status);
+        devLog('🔴 [ModalEditar] Status da subscrição Realtime de pareceres:', status);
       });
     
     return () => {
-      console.log('🔴 [ModalEditar] Removendo subscrição Realtime de pareceres');
+      devLog('🔴 [ModalEditar] Removendo subscrição Realtime de pareceres');
       supabase.removeChannel(channel);
     };
   }, [card?.id, loadPareceres]);
@@ -648,13 +652,13 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     // ✅ Salvar lista COMPLETA (incluindo deletados para histórico)
     const serialized = JSON.stringify(next);
     try {
-      console.log('➕ [ModalEditar] Adicionando novo parecer ao banco:', newP.id);
+      devLog('➕ [ModalEditar] Adicionando novo parecer ao banco:', newP.id);
       const { error } = await (supabase as any)
         .from('kanban_cards')
         .update({ reanalysis_notes: serialized })
         .eq('id', card.id);
       if (error) throw error;
-      console.log('✅ [ModalEditar] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
+      devLog('✅ [ModalEditar] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
       toast({ title: 'Parecer adicionado', description: 'Seu parecer foi salvo na ficha.' });
     } catch (e: any) {
       console.error('❌ [ModalEditar] Erro ao adicionar parecer:', e);
@@ -783,7 +787,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       
       setReplyingToParecerId(null);
       setReplyText("");
-      console.log('✅ [ModalEditar] Resposta salva com sucesso! Realtime vai sincronizar outros modais.');
+      devLog('✅ [ModalEditar] Resposta salva com sucesso! Realtime vai sincronizar outros modais.');
       toast({ title: 'Resposta salva', description: 'Sua resposta foi adicionada ao parecer.' });
     } catch (e: any) {
       console.error('❌ [ModalEditar] Erro ao salvar resposta:', e);
@@ -816,13 +820,13 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     setEditingParecerId(null);
     setEditingText("");
     try {
-      console.log('✏️ [ModalEditar] Editando parecer no banco:', editingParecerId);
+      devLog('✏️ [ModalEditar] Editando parecer no banco:', editingParecerId);
       
       // ✅ Salvar lista COMPLETA no banco (incluindo deletados para histórico)
       const serialized = JSON.stringify(updated);
       const { error } = await (supabase as any).from('kanban_cards').update({ reanalysis_notes: serialized }).eq('id', card.id);
       if (error) throw error;
-      console.log('✅ [ModalEditar] Parecer editado com sucesso! Realtime vai sincronizar outros modais.');
+      devLog('✅ [ModalEditar] Parecer editado com sucesso! Realtime vai sincronizar outros modais.');
       toast({ title: 'Parecer atualizado', description: 'Alteração aplicada com sucesso.' });
     } catch (e: any) {
       console.error('❌ [ModalEditar] Erro ao editar parecer:', e);
@@ -839,7 +843,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     if (!deletingParecerId || !card?.id) return;
     
     try {
-      console.log('🗑️ Excluindo parecer:', deletingParecerId, 'do card:', card.id);
+      devLog('🗑️ Excluindo parecer:', deletingParecerId, 'do card:', card.id);
       
       // Buscar pareceres atuais do banco
       let currentNotes: any[] = [];
@@ -849,13 +853,13 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         .eq('id', card.id)
         .maybeSingle();
       
-      console.log('📋 Pareceres atuais do banco:', data);
+      devLog('📋 Pareceres atuais do banco:', data);
       
       const raw = (data as any)?.reanalysis_notes;
       if (Array.isArray(raw)) currentNotes = raw as any[];
       else if (typeof raw === 'string') { try { currentNotes = JSON.parse(raw) || []; } catch {} }
       
-      console.log('📝 Pareceres parseados:', currentNotes);
+      devLog('📝 Pareceres parseados:', currentNotes);
       
       // Marcar o parecer como deletado (soft delete)
       const updated = currentNotes.map((p: any) => {
@@ -871,14 +875,14 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       });
       const serialized = JSON.stringify(updated);
       
-      console.log('✅ Parecer marcado como deletado (soft delete):', deletingParecerId);
+      devLog('✅ Parecer marcado como deletado (soft delete):', deletingParecerId);
       
       // Preparar dados para update
       const updateData: any = { reanalysis_notes: serialized };
       
       // Verificar se restaram pareceres ativos (não deletados)
       const activePareceres = updated.filter((p: any) => !p.deleted);
-      console.log('📊 Pareceres ativos restantes:', activePareceres.length);
+      devLog('📊 Pareceres ativos restantes:', activePareceres.length);
       
       // Salvar no banco
       const { error } = await (supabase as any)
@@ -891,7 +895,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         throw error;
       }
       
-      console.log('💾 Parecer marcado como deletado (soft delete) no banco!', updateData);
+      devLog('💾 Parecer marcado como deletado (soft delete) no banco!', updateData);
       
       // Atualizar estado local - remover da lista (já foi filtrado como deletado)
       setPareceres(prev => prev.filter(p => p.id !== deletingParecerId));
@@ -899,7 +903,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
       
       // Chamar onRefetch se disponível para forçar recarregamento
       if (onRefetch) {
-        console.log('🔄 Chamando onRefetch...');
+        devLog('🔄 Chamando onRefetch...');
         onRefetch();
       }
       
@@ -952,13 +956,11 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   };
 
   const handleAnalyze = async () => {
-    // 1) Persistir campos básicos no card
-    await persistBasicFieldsNow();
-    // 2) Forçar espelhamento local e atualizar listas quando possível
-    await triggerLocalRefetch();
-
-    // 3) Abrir modal expandido
+    // Abra o modal primeiro para sensação de velocidade
     setShowExpandedModal(true);
+    // Persistir e sincronizar em background (não bloquear abertura)
+    try { await persistBasicFieldsNow(); } catch (_) {}
+    try { await triggerLocalRefetch(); } catch (_) {}
   };
 
   const handleClose = () => {
@@ -1020,7 +1022,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleExpandedSubmit = async (data: ComercialFormValues) => {
     // Handle the full form submission
-    console.log('Full form submitted:', data);
+    devLog('Full form submitted:', data);
     setShowExpandedModal(false);
     onRefetch?.();
   };
@@ -1706,25 +1708,27 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
         </AlertDialogContent>
       </AlertDialog>
 
-      {isPJ ? (
-        <ExpandedFichaPJModal
-          open={showExpandedModal}
-          onClose={() => setShowExpandedModal(false)}
-          applicationId={card?.id}
-          onRefetch={triggerLocalRefetch}
-          applicantId={(card as any)?.applicantId}
-        />
-      ) : (
-        <ExpandedFichaModal
-          open={showExpandedModal}
-          onClose={() => setShowExpandedModal(false)}
-          onSubmit={handleExpandedSubmit}
-          basicInfo={basicInfo}
-          applicationId={card?.id}
-          applicantId={(card as any)?.applicantId}
-          onRefetch={triggerLocalRefetch}
-        />
-      )}
+      <Suspense fallback={null}>
+        {isPJ ? (
+          <ExpandedFichaPJModal
+            open={showExpandedModal}
+            onClose={() => setShowExpandedModal(false)}
+            applicationId={card?.id}
+            onRefetch={triggerLocalRefetch}
+            applicantId={(card as any)?.applicantId}
+          />
+        ) : (
+          <ExpandedFichaModal
+            open={showExpandedModal}
+            onClose={() => setShowExpandedModal(false)}
+            onSubmit={handleExpandedSubmit}
+            basicInfo={basicInfo}
+            applicationId={card?.id}
+            applicantId={(card as any)?.applicantId}
+            onRefetch={triggerLocalRefetch}
+          />
+        )}
+      </Suspense>
 
       {/* Modal de Upload de Anexos */}
       <AttachmentUploadModal

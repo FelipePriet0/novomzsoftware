@@ -174,6 +174,7 @@ type CommercialStage = Extract<ColumnId, `com_${string}`>;
 type CommercialStageDB = 'entrada' | 'feitas' | 'aguardando' | 'canceladas' | 'concluidas';
 
 export default function KanbanBoard() {
+  const devLog = (...args: any[]) => { if (import.meta?.env?.DEV) console.log(...args); };
   const [cards, setCards] = useState<CardItem[]>(initialCards);
   const [query, setQuery] = useState("");
   const [responsavelFiltro, setResponsavelFiltro] = useState<string[]>([]);
@@ -1138,11 +1139,11 @@ useEffect(() => {
     try {
       const card = cards.find(c => c.id === cardId);
       if (!card) {
-        console.log('Card not found:', cardId);
+        devLog('Card not found:', cardId);
         return;
       }
       
-      console.log('Moving card:', cardId, 'from', card.columnId, 'to', target);
+      devLog('Moving card:', cardId, 'from', card.columnId, 'to', target);
       
       // Determinar área e stage baseado na coluna de destino
       let toArea: 'comercial' | 'analise';
@@ -1168,7 +1169,7 @@ useEffect(() => {
       if (target === 'com_concluidas') {
         toArea = 'analise';
         toStage = 'recebido';
-        console.log('Card concluído no comercial -> movendo para recebido no analise');
+        devLog('Card concluído no comercial -> movendo para recebido no analise');
       }
       
       // LÓGICA ESPECIAL: Transição Automática para Finalizado
@@ -1176,13 +1177,13 @@ useEffect(() => {
       if (target === 'aprovado' || target === 'negado') {
         toArea = 'analise';
         toStage = 'finalizado';
-        console.log('Card aprovado/negado -> movendo automaticamente para finalizado');
+        devLog('Card aprovado/negado -> movendo automaticamente para finalizado');
       }
       
       // VALIDAÇÃO: Impedir que cards voltem para "entrada" no comercial
       // Se o card já passou pelo comercial (tem commercialStage definido), não pode voltar para entrada
       if (target === 'com_entrada' && card.commercialStage && card.commercialStage !== 'entrada') {
-        console.log('Card já processado no comercial - impedindo volta para entrada');
+        devLog('Card já processado no comercial - impedindo volta para entrada');
         toast({
           title: "Movimento não permitido",
           description: "Cards já processados não podem voltar para 'Entrada'",
@@ -1193,7 +1194,7 @@ useEffect(() => {
       
       // VALIDAÇÃO: Impedir que cards do analise voltem para comercial (fluxo unidirecional)
       if (card.area === 'analise' && toArea === 'comercial') {
-        console.log('Card do analise não pode voltar para comercial - fluxo unidirecional');
+        devLog('Card do analise não pode voltar para comercial - fluxo unidirecional');
         toast({
           title: "Movimento não permitido", 
           description: "Cards em análise seguem fluxo unidirecional: Análise → Finalizado",
@@ -1211,12 +1212,12 @@ useEffect(() => {
       };
       
       // Atualização otimista imediata da UI
-      console.log('Updating UI optimistically...');
+      devLog('Updating UI optimistically...');
       setCards(prev => {
         const updated = prev.map(c => {
           if (c.id !== cardId) return c;
           
-          console.log('Updating card:', c.id, 'from', c.columnId, 'to', target);
+          devLog('Updating card:', c.id, 'from', c.columnId, 'to', target);
           
           // Determinar a coluna correta baseada na lógica especial
           let finalColumnId = target;
@@ -1277,7 +1278,7 @@ useEffect(() => {
               c.id === cardId ? { ...c, columnId: target, commercialStage: toStage === 'aguardando_doc' ? 'aguardando' : toStage } : c
             );
             localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
-            console.log('Card position saved to localStorage');
+            devLog('Card position saved to localStorage');
             // Enfileirar movimento para re-tentativa
             enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
             toast({
@@ -1289,21 +1290,17 @@ useEffect(() => {
           }
           
           // Manter a atualização da UI (não fazer rollback)
-          console.log('Card moved successfully to', target, '(local fallback)');
+          devLog('Card moved successfully to', target, '(local fallback)');
           // Recarregar dados mesmo no fallback
-          setTimeout(() => {
-            loadApplications();
-          }, 100);
+          setTimeout(() => { loadApplications(); }, 200);
         } else {
-          console.log('Card moved successfully to', target);
+          devLog('Card moved successfully to', target);
           // Recarregar dados para garantir sincronização
-          setTimeout(() => {
-            loadApplications();
-          }, 100);
+          setTimeout(() => { loadApplications(); }, 200);
         }
       } catch (dbError) {
         console.error('Database error:', dbError);
-        console.log('Using fallback: saving to localStorage');
+        devLog('Using fallback: saving to localStorage');
         
         // Fallback: salvar no localStorage
         try {
@@ -1312,7 +1309,7 @@ useEffect(() => {
             c.id === cardId ? { ...c, columnId: target, commercialStage: toStage === 'aguardando_doc' ? 'aguardando' : toStage } : c
           );
           localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
-          console.log('Card position saved to localStorage');
+          devLog('Card position saved to localStorage');
           enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
           toast({
             title: 'Conexão instável – usando fallback',
@@ -1335,11 +1332,9 @@ useEffect(() => {
           return;
         }
         
-        console.log('Card moved successfully to', target, '(local fallback)');
+        devLog('Card moved successfully to', target, '(local fallback)');
         // Recarregar dados mesmo no fallback
-        setTimeout(() => {
-          loadApplications();
-        }, 100);
+        setTimeout(() => { loadApplications(); }, 200);
       }
 
     } catch (error) {
@@ -1450,41 +1445,29 @@ useEffect(() => {
   }
 
   async function openEdit(card: CardItem) {
-    console.log('🔍 Abrindo card:', card.id);
-    // Garantir que abriremos somente o modal de "Editar Ficha" (não o expandido)
+    devLog('🔍 Abrindo card:', card.id);
+    // Abrir imediatamente com dados atuais (melhor percepção de velocidade)
     setAutoOpenExpandedNext(false);
+    setMockCard(card);
     
+    // Atualizar em background com dados frescos (não bloquear UI)
     try {
-      // Buscar dados frescos do banco SEMPRE que abrir o modal
       const { data: freshCard, error } = await (supabase as any)
         .from('kanban_cards')
         .select('*')
         .eq('id', card.id)
         .is('deleted_at', null)
         .single();
-      
-      if (error) {
-        console.error('❌ Erro ao buscar card do banco:', error);
-        // Se houver erro, usar card do cache local
-        setMockCard(card);
-        return;
+      if (!error && freshCard) {
+        devLog('✅ Dados frescos do banco carregados:', freshCard);
+        const updatedCard: CardItem = {
+          ...card,
+          parecer: freshCard.reanalysis_notes || freshCard.comments || freshCard.comments_short || '',
+        };
+        setMockCard(updatedCard);
       }
-      
-      console.log('✅ Dados frescos do banco carregados:', freshCard);
-      
-      // Usar os dados frescos do banco
-      const updatedCard: CardItem = {
-        ...card,
-        parecer: freshCard.reanalysis_notes || freshCard.comments || freshCard.comments_short || '',
-        // Dados vêm de applicants via card.applicantId, não do kanban_cards
-      };
-      
-      setMockCard(updatedCard);
     } catch (error) {
-      console.error('❌ Erro ao abrir card:', error);
-      // Fallback para dados do cache
-      setAutoOpenExpandedNext(false);
-      setMockCard(card);
+      devLog('❌ Erro ao buscar dados frescos (ignorando):', error);
     }
   }
 
@@ -1545,10 +1528,16 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on approve:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI optimistically to finalizado
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'finalizado',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      // Background refresh to sync
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Ficha aprovada",
@@ -1584,10 +1573,15 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on deny:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI optimistically to finalizado
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'finalizado',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Ficha negada",
@@ -1623,10 +1617,15 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on reanalyze:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI optimistically to reanálise
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'reanalise',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Enviado para reanálise",

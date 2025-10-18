@@ -49,7 +49,12 @@ export interface UploadAttachmentData {
   customFileName?: string;
 }
 
-export const useAttachments = (cardId: string) => {
+export const useAttachments = (cardId: string, opts?: { auto?: boolean; realtime?: boolean }) => {
+  const options = {
+    auto: opts?.auto !== undefined ? opts.auto : true,
+    realtime: opts?.realtime !== undefined ? opts.realtime : true,
+  } as const;
+  const devLog = (...args: any[]) => { if ((import.meta as any)?.env?.DEV) console.log(...args); };
   const [attachments, setAttachments] = useState<CardAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -62,7 +67,7 @@ export const useAttachments = (cardId: string) => {
   const loadAttachments = useCallback(async () => {
     if (!cardId) return;
     
-    console.log('📥 [loadAttachments] Iniciando carregamento de anexos para card:', cardId);
+    devLog('📥 [loadAttachments] Iniciando carregamento de anexos para card:', cardId);
     setIsLoading(true);
     try {
       const { data, error } = await (supabase as any)
@@ -72,7 +77,7 @@ export const useAttachments = (cardId: string) => {
         .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
-      console.log('📥 [loadAttachments] Resposta do Supabase:', { 
+      devLog('📥 [loadAttachments] Resposta do Supabase:', { 
         encontrados: data?.length || 0, 
         error: error,
         ids: data?.map((a: any) => a.id) || [],
@@ -94,7 +99,7 @@ export const useAttachments = (cardId: string) => {
         throw error;
       }
       
-      console.log('📥 [loadAttachments] ✅ Atualizando estado com', data?.length || 0, 'anexos');
+      devLog('📥 [loadAttachments] ✅ Atualizando estado com', data?.length || 0, 'anexos');
       setAttachments(data || []);
     } catch (error: any) {
       console.error('📥 [loadAttachments] ❌ Erro ao carregar anexos:', error);
@@ -115,7 +120,7 @@ export const useAttachments = (cardId: string) => {
   // Upload a new attachment
   const uploadAttachment = async ({ file, description, commentId, customFileName }: UploadAttachmentData): Promise<CardAttachment | null> => {
     // Debug: verificar valores
-    console.log('📤 DEBUG uploadAttachment:', {
+    devLog('📤 DEBUG uploadAttachment:', {
       fileName: customFileName || file.name,
       fileSize: file.size,
       fileType: file.type,
@@ -236,7 +241,7 @@ export const useAttachments = (cardId: string) => {
       return false;
     }
 
-    console.log('🗑️ [useAttachments] Perfil do usuário:', { id: profile.id, role: profile.role });
+    devLog('🗑️ [useAttachments] Perfil do usuário:', { id: profile.id, role: profile.role });
 
     try {
       // Get attachment info first
@@ -414,24 +419,24 @@ export const useAttachments = (cardId: string) => {
     }
   };
 
-  // Load attachments when cardId changes
+  // Load attachments when cardId changes (optional)
   useEffect(() => {
-    if (cardId) {
+    if (cardId && options.auto) {
       loadAttachments();
     }
-  }, [cardId]);
+  }, [cardId, options.auto, loadAttachments]);
 
   // 🔥 SUPABASE REALTIME: Sincronização automática de anexos
   useEffect(() => {
-    if (!cardId) return;
+    if (!cardId || !options.realtime) return;
 
     // Evitar criar canais duplicados
     if (channelRef.current) {
-      console.log('⚠️ [useAttachments] Canal já existe, pulando criação');
+      devLog('⚠️ [useAttachments] Canal já existe, pulando criação');
       return;
     }
 
-    console.log('🔴 [useAttachments] Configurando Realtime para card:', cardId);
+    devLog('🔴 [useAttachments] Configurando Realtime para card:', cardId);
     
     const channel = supabase
       .channel(`attachments-${cardId}`)
@@ -444,27 +449,27 @@ export const useAttachments = (cardId: string) => {
           filter: `card_id=eq.${cardId}`
         },
         (payload) => {
-          console.log('🔴 [useAttachments] Mudança detectada no banco:', payload.eventType, payload);
+          devLog('🔴 [useAttachments] Mudança detectada no banco:', payload.eventType, payload);
           
           // Recarregar anexos automaticamente quando houver qualquer mudança
           loadAttachments();
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [useAttachments] Status da subscrição Realtime:', status);
+        devLog('🔴 [useAttachments] Status da subscrição Realtime:', status);
       });
 
     channelRef.current = channel;
 
     // Cleanup ao desmontar
     return () => {
-      console.log('🔴 [useAttachments] Removendo subscrição Realtime');
+      devLog('🔴 [useAttachments] Removendo subscrição Realtime');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }
     };
-  }, [cardId, loadAttachments]);
+  }, [cardId, loadAttachments, options.realtime]);
 
   return {
     attachments,
@@ -480,4 +485,3 @@ export const useAttachments = (cardId: string) => {
     listAllFiles
   };
 };
-

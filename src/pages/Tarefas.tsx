@@ -18,7 +18,7 @@ type FilterType = 'today' | 'week' | 'all';
 
 export default function Tarefas() {
   const { profile } = useAuth();
-  const { tasks, isLoading, updateTaskStatus } = useTasks(profile?.id);
+  const { tasks, isLoading, updateTaskStatus, loadTasks } = useTasks(profile?.id);
   const { toast } = useToast();
   const [filter, setFilter] = useState<FilterType>('all');
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
@@ -168,9 +168,13 @@ export default function Tarefas() {
   };
 
   const handleSaveCard = async (updatedCard: any) => {
-    // Salvar alterações e recarregar tarefas
+    // Salvar alterações já ocorre no modal; aqui apenas fechamos e atualizamos lista
     handleCloseCardModal();
-    window.location.reload();
+    try {
+      await loadTasks();
+    } catch (_) {
+      // manter silencioso para não travar a UI
+    }
   };
 
   if (isLoading) {

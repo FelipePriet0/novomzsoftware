@@ -10,7 +10,7 @@ type FilterTab = 'all' | 'tasks' | 'conversations' | 'fichas' | 'overdue';
 type SortKey = 'recent' | 'priority' | 'unread';
 
 export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { items, loading, markAllRead, markRead, remove } = useInbox();
+  const { items, loading, markAllRead, markRead, remove, fetchMore } = useInbox();
   const [filter, setFilter] = useState<FilterTab>('all');
   const [sort, setSort] = useState<SortKey>('recent');
   const navigate = useNavigate();
@@ -254,6 +254,7 @@ export function InboxDrawer({ open, onClose }: { open: boolean; onClose: () => v
           <Button 
             variant="ghost" 
             className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+            onClick={fetchMore}
           >
             Ver histórico
           </Button>
