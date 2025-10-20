@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2, ExternalLink } from "lucide-react";
+import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2, ExternalLink, Printer } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
@@ -955,10 +955,13 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
     return (
       <div className="min-h-screen flex flex-col bg-white">
         <div className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
-          <div className="flex items-center justify-start">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src="/src/assets/Logo MZNET (1).png" alt="MZNET Logo" className="h-8 w-auto" />
               <div className="text-lg sm:text-xl font-semibold text-white">Ficha Comercial — Pessoa Jurídica</div>
+            </div>
+            <div className="flex items-center gap-2 print-hide">
+              <Button variant="ghost" size="sm" onClick={handleOpenPrint} className="h-8 px-2 text-white hover:bg-white/20 rounded-full" aria-label="Imprimir" title="Imprimir"><Printer className="h-4 w-4" /></Button>
             </div>
           </div>
         </div>

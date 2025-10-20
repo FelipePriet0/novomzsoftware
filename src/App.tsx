@@ -10,6 +10,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import RequireAuth from "@/routes/RequireAuth";
 import Index from "./pages/Index";
 import FichaPage from "./pages/FichaPage";
+import FichaPrintPage from "./pages/FichaPrintPage";
 import Agendamento from "./pages/Agendamento";
 import Historico from "./pages/Historico";
 import Tarefas from "./pages/Tarefas";
@@ -58,6 +59,7 @@ const App = () => (
               <Route element={<RequireAuth />}>
                 {/* Página dedicada da Ficha Expandida (sem ProtectedLayout) */}
                 <Route path="/ficha/:cardId" element={<FichaPage />} />
+                <Route path="/ficha/:cardId/print" element={<FichaPrintPage />} />
 
                 <Route element={<ProtectedLayout />}>
                   <Route path="/" element={<Index />} />

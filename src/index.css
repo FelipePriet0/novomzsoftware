@@ -611,3 +611,9 @@ All colors MUST be HSL.
     outline-offset: 2px;
   }
 }
+
+@media print {
+  .print-hide { display: none !important; }
+  .print-container { background: white !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

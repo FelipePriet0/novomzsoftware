@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "@/hooks/use-toast";
-import { X, MoreVertical, Paperclip, ArrowLeft, ExternalLink } from "lucide-react";
+import { X, MoreVertical, Paperclip, ArrowLeft, ExternalLink, Printer } from "lucide-react";
 import InputMask from "react-input-mask";
 const ExpandedFichaModal = lazy(() => import("@/components/ficha/ExpandedFichaModal").then(m => ({ default: m.ExpandedFichaModal })));
 const ExpandedFichaPJModal = lazy(() => import("@/components/ficha/ExpandedFichaPJModal").then(m => ({ default: m.ExpandedFichaPJModal })));
@@ -1074,6 +1074,12 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     window.open(url, '_blank', 'noopener');
   };
 
+  const handleOpenPrint = () => {
+    if (!card?.id) return;
+    const url = ;
+    window.open(url, '_blank', 'noopener');
+  };
+
   return (
     <div>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => e.preventDefault()}>
@@ -1098,6 +1104,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleOpenPrint} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full print-hide" aria-label="Imprimir" title="Imprimir"><Printer className="h-4 w-4" /></Button>
                   <Button
                     variant="ghost"
                     size="sm"

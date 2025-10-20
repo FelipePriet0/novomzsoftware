@@ -10,7 +10,7 @@ import { BasicInfoData } from './BasicInfoModal';
 import { Button } from "@/components/ui/button";
 // Drafts desativados temporariamente
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { Loader2, X, Maximize2, Minimize2, ExternalLink, Printer } from 'lucide-react';
 import { usePfFichasTestConnection } from '@/hooks/usePfFichasTestConnection';
 import {
   AlertDialog,
@@ -85,6 +85,13 @@ export function ExpandedFichaModal({
     } catch (_) {
       // ignore
     }
+  };
+
+  const handleOpenPrint = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}/print`;
+    window.open(url, '_blank', 'noopener');
   };
 
   // Auto-save status component
@@ -711,15 +718,16 @@ export function ExpandedFichaModal({
                   <p className="text-green-100 text-sm">Formulário completo de análise</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setExpanded(e => !e)} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label={expanded ? 'Minimizar' : 'Expandir'} title={expanded ? 'Minimizar' : 'Expandir'}>
-                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Abrir em nova aba" title="Abrir em nova aba">
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full" aria-label="Fechar">
-                  <X className="h-4 w-4" />
+              <div className="flex items-center gap-2 print-hide">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleOpenPrint}
+                  className="h-8 px-2 text-white hover:bg-white/20 rounded-full"
+                  aria-label="Imprimir"
+                  title="Imprimir"
+                >
+                  <Printer className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -738,7 +746,8 @@ export function ExpandedFichaModal({
             hideInternalActions={true}
           />
         </div>
-        <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 sm:px-6 md:px-8 py-3 flex items-center justify-end">
+        {/* Rodapé discreto (sem borda/margem marcando) apenas com CTA */}
+        <div className="px-4 sm:px-6 md:px-8 py-3 mb-6 flex items-center justify-end">
           <Button className="bg-[#018942] hover:bg-[#018942]/90 text-white" onClick={async () => {
             try {
               if (!formApi) return;
