@@ -1,5 +1,6 @@
 import { usePfFichasTest } from './usePfFichasTest';
 import { supabase } from '@/integrations/supabase/client';
+import { dbg } from '@/lib/debug';
 
 interface PfFichaFormData {
   // Cliente
@@ -134,7 +135,7 @@ export function usePfFichasTestConnection() {
         .maybeSingle();
 
       if (existing) {
-        console.log('✅ [usePfFichasTestConnection] PF Ficha já existe:', existing.id);
+        dbg('pf', 'PF Ficha já existe');
         return existing.id;
       }
 
@@ -144,7 +145,7 @@ export function usePfFichasTestConnection() {
       };
 
       const newPfFicha = await createPfFicha(pfFichaData);
-      console.log('✅ [usePfFichasTestConnection] PF Ficha criada:', newPfFicha.id);
+      dbg('pf', 'PF Ficha criada');
       return newPfFicha.id;
 
     } catch (error) {
@@ -177,12 +178,19 @@ export function usePfFichasTestConnection() {
         return null;
       };
 
-      // Map cliente data
+      // Map cliente data (não sobrescrever com vazio)
       if (formData.cliente) {
-        updateData.birth_date = normalizeDate(formData.cliente.nasc);
-        updateData.naturalidade = formData.cliente.naturalidade;
-        updateData.uf_naturalidade = formData.cliente.uf;
-        updateData.do_ps = formData.cliente.doPs;
+        const bdate = normalizeDate(formData.cliente.nasc);
+        if (bdate) updateData.birth_date = bdate;
+        if (formData.cliente.naturalidade && formData.cliente.naturalidade.trim()) {
+          updateData.naturalidade = formData.cliente.naturalidade;
+        }
+        if (formData.cliente.uf && formData.cliente.uf.trim()) {
+          updateData.uf_naturalidade = formData.cliente.uf;
+        }
+        if (typeof formData.cliente.doPs === 'string' && formData.cliente.doPs.trim()) {
+          updateData.do_ps = formData.cliente.doPs;
+        }
       }
 
       // Map endereco data
@@ -268,7 +276,7 @@ export function usePfFichasTestConnection() {
 
       // 🔍 DEBUG TEMPORÁRIO: Verificar campos "do ps"
       if (import.meta.env.DEV) {
-        console.log('🔍 [DEBUG] Campos DO PS que serão salvos:', {
+        dbg('pf', 'Campos DO PS salvos', {
           'cliente.doPs → do_ps': updateData.do_ps,
           'endereco.doPs → endereco_do_ps': updateData.endereco_do_ps,
           'empregoRenda.doPs → emprego_do_ps': updateData.emprego_do_ps,
@@ -283,7 +291,7 @@ export function usePfFichasTestConnection() {
       }
 
       await updatePfFicha(pfFichaId, updateData);
-      if (import.meta.env.DEV) console.log('✅ [usePfFichasTestConnection] Dados pessoais salvos');
+      dbg('pf', 'Dados pessoais salvos');
 
     } catch (error) {
       console.error('❌ [usePfFichasTestConnection] Erro ao salvar dados pessoais:', error);

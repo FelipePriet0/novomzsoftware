@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { dbg } from "@/lib/debug";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -80,7 +81,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
     try {
       // 1) Garantir applicant PJ em PRODUÇÃO (kanban_cards exige FK não nulo)
       const cnpj = values.cnpj.replace(/\D+/g, '');
-      console.log('🔍 [NovaFichaPJ] CNPJ limpo:', cnpj);
+      dbg('pj', 'CNPJ normalizado');
       
       let applicantProd: { id: string } | null = null;
       const { data: existingProd } = await supabase
@@ -91,7 +92,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         .maybeSingle();
       
       if (existingProd?.id) {
-        console.log('⚠️ [NovaFichaPJ] CNPJ já cadastrado! Bloqueando criação.', existingProd);
+        dbg('pj', 'CNPJ já cadastrado – bloqueando criação');
         
         // 🚫 BLOQUEAR criação e avisar usuário
         toast({
@@ -109,7 +110,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         // ❌ ABORTAR criação
         return;
       } else {
-        console.log('📝 [NovaFichaPJ] Criando novo applicant PJ');
+        dbg('pj', 'Criando applicant PJ');
         const { data: createdProd, error: aErr1 } = await supabase
           .from('applicants')
           .insert({
@@ -130,7 +131,7 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
       // Removido: espelho em applicants_test (legado)
 
       // 3) Card no Kanban (Comercial/feitas) com applicant_id de PRODUÇÃO
-      console.log('📋 [NovaFichaPJ] Criando card no Kanban para applicant:', applicantProd!.id);
+   dbg('pj', 'Criando card no Kanban');
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')

@@ -45,7 +45,8 @@ interface ModalEditarFichaProps {
 export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar, responsaveis = [], onRefetch, autoOpenExpanded = false }: ModalEditarFichaProps) {
   const devLog = (...args: any[]) => { if ((import.meta as any)?.env?.DEV) console.log(...args); };
   const [isPending, startTransition] = useTransition();
-  const ENABLE_APPLICANT_REALTIME = false;
+  // Reativar realtime para refletir alterações do Supabase no modal
+  const ENABLE_APPLICANT_REALTIME = true;
   const shallowEqual = (a: any, b: any) => {
     if (a === b) return true;
     if (!a || !b) return false;
@@ -1076,7 +1077,7 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   const handleOpenPrint = () => {
     if (!card?.id) return;
-    const url = ;
+    const url = `${window.location.origin}/ficha/${card.id}/print`;
     window.open(url, '_blank', 'noopener');
   };
 

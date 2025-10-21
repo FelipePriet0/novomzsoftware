@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canEditReanalysis } from "@/lib/access";
 import { supabase } from "@/integrations/supabase/client";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { dbg } from "@/lib/debug";
 import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
 import { usePfFichasTestConnection } from "@/hooks/usePfFichasTestConnection";
 import {
@@ -322,7 +323,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       
       // Filtrar pareceres deletados (soft delete)
       const activePareceres = migratedNotes.filter((p: NoteRecord) => !p.deleted);
-      if (import.meta.env.DEV) console.log('📊 [NovaFicha] Pareceres carregados:', migratedNotes.length, 'Ativos:', activePareceres.length);
+      dbg('realtime', 'Pareceres carregados', { total: migratedNotes.length, ativos: activePareceres.length });
       setPareceres(activePareceres);
     } catch {
       // ignore errors loading notes
@@ -516,7 +517,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
       if (Object.keys(diff).length > 0) {
         await supabase.from('applicants').update(diff).eq('id', resolvedApplicantId);
         lastApplicantsSavedRef.current = { ...last, ...diff };
-        if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] Applicants diff =', diff);
+        // Verbose autosave diff (opt-in)
+        dbg('autosave', 'Applicants diff', diff);
       }
       const pfSliceStr = JSON.stringify(pickPfSlice(v as ComercialFormValues));
       if (pfSliceStr !== lastPFSavedRef.current) {
@@ -524,7 +526,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           // savePersonalData aceita estrutura compatível com ComercialFormValues
           await savePersonalData(resolvedApplicantId, v as unknown as Parameters<typeof savePersonalData>[1]);
           lastPFSavedRef.current = pfSliceStr;
-          if (import.meta.env.DEV) console.log('[NovaFicha][DEBUG][FLUSH] PF saved for applicant =', resolvedApplicantId);
+          dbg('autosave', 'PF saved for applicant');
         } catch (e) {
           if (import.meta.env.DEV) console.error('[NovaFicha][DEBUG][FLUSH] PF save error:', e);
         }
@@ -560,25 +562,23 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
   // 🔴 REALTIME: Sincronizar pareceres quando o card for atualizado
   React.useEffect(() => {
     if (!applicationId) return;
-    
-    if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Configurando Realtime para pareceres do card:', applicationId);
+    dbg('realtime', 'Configurar pareceres Realtime');
     
     const channel = supabase
       .channel(`pareceres-nova-ficha-${applicationId}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'kanban_cards', filter: `id=eq.${applicationId}` },
-        (payload) => {
-          if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Card atualizado, recarregando pareceres:', payload);
-          loadPareceres();
-        }
+        () => { loadPareceres(); }
       )
       .subscribe((status) => {
-        if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Status da subscrição Realtime de pareceres:', status);
+        if (status === 'CHANNEL_ERROR') {
+          dbg('realtime', 'Pareceres Realtime error');
+        }
       });
     
     return () => {
-      if (import.meta.env.DEV) console.log('🔴 [NovaFicha] Removendo subscrição Realtime de pareceres');
+      dbg('realtime', 'Remover pareceres Realtime');
       supabase.removeChannel(channel);
     };
   }, [applicationId, loadPareceres]);
@@ -1200,8 +1200,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel className="text-sm font-medium text-gray-700">Nome</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Nome completo"
                     className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                   />
@@ -1258,8 +1260,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel className="text-sm font-medium text-gray-700">ID</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Digite o ID"
                     className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
                   />
@@ -1318,7 +1322,13 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Do PS</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Digite aqui..."
+                    className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                  />
                 </FormControl>
               </FormItem>
             )} />
@@ -1330,8 +1340,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Naturalidade</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Digite a naturalidade"
                     className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                   />
@@ -1342,9 +1354,11 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>UF</FormLabel>
                 <FormControl>
-                  <Input 
-                    maxLength={2} 
-                    {...field} 
+                  <Input
+                    maxLength={2}
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Ex: SP"
                     className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                   />
@@ -1355,7 +1369,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>E-mail</FormLabel>
                 <FormControl>
-                  <Input type="email" {...field} placeholder="Ex: nome@empresa.com" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" />
+                  <Input
+                    type="email"
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Ex: nome@empresa.com"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
                 </FormControl>
               </FormItem>
             )} />
@@ -1370,8 +1391,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Endereço (logradouro)</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Ex: Rua das Flores"
                     className="placeholder:text-[#018942] placeholder:opacity-70"
                   />
@@ -1382,8 +1405,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Nº</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="123"
                     className="placeholder:text-[#018942] placeholder:opacity-70"
                   />
@@ -1393,7 +1418,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.compl" render={({ field }) => (
               <FormItem>
                 <FormLabel>Complemento</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: Apt. 301" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Ex: Apt. 301"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.cep" render={({ field }) => (
@@ -1421,8 +1454,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Bairro</FormLabel>
                 <FormControl>
-                  <Input 
-                    {...field} 
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Bairro"
                     className="placeholder:text-[#018942] placeholder:opacity-70"
                   />
@@ -1432,7 +1467,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.cond" render={({ field }) => (
               <FormItem>
                 <FormLabel>Cond</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: Condomínio Jardim Europa" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Ex: Condomínio Jardim Europa"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.doPs" render={({ field }) => (
@@ -1441,6 +1484,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormControl>
                   <Input
                     {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Digite aqui..."
                     className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
                   />
@@ -1450,7 +1495,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.tempo" render={({ field }) => (
               <FormItem>
                 <FormLabel>Tempo</FormLabel>
-                <FormControl><Input {...field} placeholder="Ex: 2 anos" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Ex: 2 anos"
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="endereco.tipoMoradia" render={({ field }) => (
@@ -1475,7 +1528,15 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="endereco.tipoMoradiaObs" render={({ field }) => (
               <FormItem>
                 <FormLabel>Observações</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl>
+                  <Input
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Digite aqui..."
+                    className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </FormControl>
               </FormItem>
             )} />
           </div>
@@ -1650,8 +1711,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   <FormItem>
                     <FormLabel>Empresa</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
+                      <Input
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
                         placeholder="Ex: Vivo"
                         className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -1663,8 +1726,10 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   <FormItem>
                     <FormLabel>Plano</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
+                      <Input
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
                         placeholder="Ex: 300MB"
                         className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
                       />
@@ -1854,7 +1919,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           <FormField control={form.control} name="spc" render={({ field }) => (
             <FormItem>
               <FormControl>
-                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                <Textarea
+                  rows={4}
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Digite aqui..."
+                  className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                />
               </FormControl>
             </FormItem>
           )} />
@@ -1866,7 +1938,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
           <FormField control={form.control} name="pesquisador" render={({ field }) => (
             <FormItem>
               <FormControl>
-                <Textarea rows={4} {...field} placeholder="Digite aqui..." className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70" />
+                <Textarea
+                  rows={4}
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder="Digite aqui..."
+                  className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
+                />
               </FormControl>
             </FormItem>
           )} />
@@ -2064,7 +2143,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="outras.carneImpresso" render={({ field }) => (
               <FormItem>
                 <FormLabel>Carnê impresso?</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -2106,7 +2185,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="outras.administrativas.meio" render={({ field }) => (
               <FormItem>
                 <FormLabel>Meio</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value ?? ''}>
                   <FormControl>
                     <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
                   </FormControl>
@@ -2131,7 +2210,16 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="infoRelevantes.info" render={({ field }) => (
               <FormItem>
                 <FormLabel>Informações relevantes</FormLabel>
-                <FormControl><Textarea rows={4} {...field} placeholder="Digite aqui..." className="placeholder:text-[#018942] placeholder:opacity-70" /></FormControl>
+                <FormControl>
+                  <Textarea
+                    rows={4}
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="Digite aqui..."
+                    className="placeholder:text-[#018942] placeholder:opacity-70"
+                  />
+                </FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="infoRelevantes.infoMk" render={({ field }) => (
@@ -2141,6 +2229,8 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                   <Textarea
                     rows={4}
                     {...field}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
                     placeholder="Digite aqui..."
                     className="bg-red-500/10 border border-red-500 placeholder:text-[#018942] placeholder:opacity-70"
                   />

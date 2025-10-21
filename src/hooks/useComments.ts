@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { dbg } from '@/lib/debug';
 import { Comment } from '@/components/comments/CommentItem';
 import { toast } from '@/hooks/use-toast';
 
@@ -518,11 +519,11 @@ export function useComments(cardId: string) {
 
     // Evitar criar canais duplicados
     if (channelRef.current) {
-      console.log('⚠️ [useComments] Canal já existe, pulando criação');
+      dbg('realtime', 'comments: canal já existe – pulando');
       return;
     }
 
-    console.log('🔴 [useComments] Configurando Realtime para card:', cardId);
+    dbg('realtime', 'comments: configurar realtime');
     
     const channel = supabase
       .channel(`comments-${cardId}`)
@@ -534,22 +535,22 @@ export function useComments(cardId: string) {
           table: 'card_comments',
           filter: `card_id=eq.${cardId}`
         },
-        (payload) => {
-          console.log('🔴 [useComments] Mudança detectada no banco:', payload.eventType, payload);
-          
+        () => {
           // Recarregar comentários automaticamente quando houver qualquer mudança
           loadComments();
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [useComments] Status da subscrição Realtime:', status);
+        if (status === 'CHANNEL_ERROR') {
+          dbg('realtime', 'comments: realtime error');
+        }
       });
 
     channelRef.current = channel;
 
     // Cleanup ao desmontar
     return () => {
-      console.log('🔴 [useComments] Removendo subscrição Realtime');
+      dbg('realtime', 'comments: remover realtime');
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

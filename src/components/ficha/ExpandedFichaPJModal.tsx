@@ -98,6 +98,60 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
   const [expanded, setExpanded] = useState(false);
   const [pjSubmit, setPjSubmit] = useState<(() => void) | null>(null);
 
+  // Realtime: refletir alterações do applicants enquanto usuário não está editando
+  useEffect(() => {
+    if (!open) return;
+    const aid = applicantId; // preferir prop derivada
+    if (!aid) return;
+    const channel = (supabase as any)
+      .channel(`expanded-pj-applicant-${aid}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'applicants', filter: `id=eq.${aid}` },
+        (payload: any) => {
+          const a = payload?.new || {};
+          // Mapear para os campos equivalentes na ficha PJ
+          const vencStr = typeof a.venc === 'number' && !isNaN(a.venc) ? String(a.venc) : undefined;
+          const carneStr = typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : undefined;
+          const updates: Partial<PJFormValues> = {
+            empresa: {
+              razao: a.primary_name || '',
+              cnpj: a.cpf_cnpj || '',
+            } as any,
+            contatos: {
+              tel: a.phone || '',
+              whats: a.whatsapp || '',
+              email: a.email || '',
+            } as any,
+            solicitacao: {
+              quem: a.quem_solicitou || '',
+              tel: a.telefone_solicitante || '',
+              protocolo: a.protocolo_mk || '',
+              meio: a.meio || '',
+              planoAcesso: a.plano_acesso || undefined,
+              svaAvulso: a.sva_avulso || '',
+              venc: vencStr as any,
+              carneImpresso: carneStr as any,
+            } as any,
+            info: {
+              parecerAnalise: a.parecer_analise || '',
+              relevantes: a.info_relevantes || '',
+              spc: a.info_spc || '',
+              outrasPs: a.info_pesquisador || '',
+              mk: a.info_mk || '',
+            } as any,
+          };
+          // Não sobrescrever se usuário já começou a editar (hasChanges)
+          setInitialValues(prev => {
+            if (hasChanges) return prev || {} as any;
+            return { ...(prev || {} as any), ...updates } as any;
+          });
+        }
+      )
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
+  }, [open, applicantId, hasChanges]);
+
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
     try {
@@ -937,6 +991,13 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
     const id = applicationId;
     if (!id) return;
     const url = `${window.location.origin}/ficha/${id}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const handleOpenPrint = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}/print`;
     window.open(url, '_blank', 'noopener');
   };
 

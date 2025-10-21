@@ -71,6 +71,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canChangeStatus, isPremium } from "@/lib/access";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { supabase } from "@/integrations/supabase/client";
+import { dbg } from "@/lib/debug";
 
 // Types
 export type ColumnId =
@@ -469,6 +470,24 @@ export default function KanbanBoard() {
   const navigate = useNavigate();
 
   // Abrir card por query param (?openCardId=...)
+  useEffect(() => {
+    // Realtime: atualizar o board quando kanban_cards muda (INSERT/UPDATE/DELETE)
+    const channel = (supabase as any)
+      .channel('kanban-board-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kanban_cards' },
+        () => {
+          loadApplications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      (supabase as any).removeChannel(channel);
+    };
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(routeLocation.search);
     const openId = params.get('openCardId');
@@ -911,9 +930,9 @@ export default function KanbanBoard() {
     const cardId = active.id as string;
     const targetColumn = over.id as ColumnId;
 
-    // Bloquear movimentação para "Entrada" (somente e-fichas via backend)
+    // Bloquear movimentação para "Entrada" (gerada automaticamente pelo sistema)
     if (targetColumn === 'com_entrada') {
-      toast({ title: 'Movimento não permitido', description: 'Entrada é automática via e‑fichas', variant: 'destructive' });
+      toast({ title: 'Movimento não permitido', description: 'Entrada é gerada automaticamente pelo sistema', variant: 'destructive' });
       return;
     }
 
@@ -2091,11 +2110,11 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
-        if (import.meta.env.DEV) console.log('🆕 [KanbanBoard] Iniciando criação de ficha PF:', data);
+        dbg('kanban', 'Iniciando criação de ficha PF');
         
         // 1) Garantir applicant PF em PRODUÇÃO (para satisfazer FK do kanban_cards)
         const cpf = data.cpf.replace(/\D+/g, '');
-        if (import.meta.env.DEV) console.log('🔍 [KanbanBoard] CPF limpo:', cpf);
+        dbg('kanban', 'CPF normalizado calculado');
         
         let applicantProd: { id: string } | null = null;
         const { data: existingProd } = await (supabase as any)
@@ -2106,7 +2125,7 @@ useEffect(() => {
           .maybeSingle();
         
         if (existingProd?.id) {
-          if (import.meta.env.DEV) console.log('⚠️ [KanbanBoard] CPF já cadastrado! Bloqueando criação.', existingProd);
+          dbg('kanban', 'CPF já cadastrado – bloqueando criação');
           
           // 🚫 BLOQUEAR criação e avisar usuário
           toast({
@@ -2124,13 +2143,7 @@ useEffect(() => {
           // ❌ ABORTAR criação
           return;
         } else {
-          console.log('📝 [KanbanBoard] Criando novo applicant com dados:', {
-            person_type: 'PF',
-            primary_name: data.nome,
-            cpf_cnpj: cpf,
-            phone: data.telefone,
-            email: data.email || null,
-          });
+          dbg('kanban', 'Criando applicant PF');
           
           const { data: createdProd, error: aErrProd } = await (supabase as any)
             .from('applicants')
@@ -2139,6 +2152,7 @@ useEffect(() => {
               primary_name: data.nome,
               cpf_cnpj: cpf,
               phone: data.telefone,
+              whatsapp: data.whatsapp || null,
               email: data.email || null,
               // Naturalidade e UF são salvos em pf_fichas_test, não em applicants
             })
@@ -2150,14 +2164,14 @@ useEffect(() => {
             throw aErrProd;
           }
           
-          console.log('✅ [KanbanBoard] Applicant criado com sucesso! ID:', createdProd.id);
+          dbg('kanban', 'Applicant criado com sucesso');
           applicantProd = createdProd;
         }
 
         // Removido: espelho em applicants_test (legado)
 
         // 2) Card no Kanban (Comercial/feitas)
-        console.log('📋 [KanbanBoard] Criando card no Kanban com applicant_id:', applicantProd!.id);
+        dbg('kanban', 'Criando card no Kanban');
         const now = new Date();
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
@@ -2178,10 +2192,10 @@ useEffect(() => {
           console.error('❌ [KanbanBoard] ERRO ao criar card:', cErr);
           throw cErr;
         }
-        console.log('✅ [KanbanBoard] Card criado com sucesso! ID:', created.id);
+        dbg('kanban', 'Card criado com sucesso');
         
         // 3) Salvar dados básicos em pf_fichas_test (naturalidade e UF)
-        console.log('💾 [KanbanBoard] Salvando dados em pf_fichas_test...');
+        dbg('kanban', 'Salvando dados em pf_fichas_test');
         try {
           const { data: existingPfFicha } = await (supabase as any)
             .from('pf_fichas_test')
@@ -2204,8 +2218,7 @@ useEffect(() => {
           };
           
           if (existingPfFicha) {
-            console.log('♻️ [KanbanBoard] PF Ficha já existe, atualizando:', existingPfFicha.id);
-            console.log('📝 [KanbanBoard] Dados para atualização:', pfFichaData);
+            dbg('kanban', 'PF Ficha já existe, atualizando');
             
             const { error: updateErr } = await (supabase as any)
               .from('pf_fichas_test')
@@ -2215,14 +2228,10 @@ useEffect(() => {
             if (updateErr) {
               console.error('❌ [KanbanBoard] Erro ao atualizar pf_fichas_test:', updateErr);
             } else {
-              console.log('✅ [KanbanBoard] PF Ficha atualizada com sucesso!');
+              dbg('kanban', 'PF Ficha atualizada com sucesso');
             }
           } else {
-            console.log('🆕 [KanbanBoard] Criando nova PF Ficha');
-            console.log('📝 [KanbanBoard] Dados para inserção:', {
-              applicant_id: applicantProd!.id,
-              ...pfFichaData
-            });
+            dbg('kanban', 'Criando nova PF Ficha');
             
             const { error: insertErr } = await (supabase as any)
               .from('pf_fichas_test')
@@ -2234,7 +2243,7 @@ useEffect(() => {
             if (insertErr) {
               console.error('❌ [KanbanBoard] Erro ao criar pf_fichas_test:', insertErr);
             } else {
-              console.log('✅ [KanbanBoard] PF Ficha criada com sucesso!');
+              dbg('kanban', 'PF Ficha criada com sucesso');
             }
           }
         } catch (pfErr) {

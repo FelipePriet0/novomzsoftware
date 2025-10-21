@@ -74,6 +74,62 @@ export function ExpandedFichaModal({
   const [formApi, setFormApi] = useState<{ getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> } | null>(null);
   // Removido: fluxo applicants_test (legado)
   const [expanded, setExpanded] = useState(false);
+  
+  // Realtime: refletir alterações do applicants enquanto não há edição ativa
+  useEffect(() => {
+    if (!open || !applicantId) return;
+    const channel = (supabase as any)
+      .channel(`expanded-pf-applicant-${applicantId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'applicants', filter: `id=eq.${applicantId}` },
+        (payload: any) => {
+          const a = payload?.new || {};
+          const vencStr = typeof a.venc === 'number' && !isNaN(a.venc) ? String(a.venc) : undefined;
+          const carneStr = typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : undefined;
+          const mappedApplicant: Partial<ComercialFormValues> = {
+            cliente: {
+              nome: a.primary_name || '',
+              cpf: a.cpf_cnpj || '',
+              tel: a.phone || '',
+              whats: a.whatsapp || '',
+              email: a.email || '',
+            },
+            endereco: {
+              end: a.address_line || '',
+              n: a.address_number || '',
+              compl: a.address_complement || '',
+              cep: a.cep || '',
+              bairro: a.bairro || '',
+            },
+            outras: {
+              planoEscolhido: a.plano_acesso || '',
+              diaVencimento: vencStr as any,
+              carneImpresso: carneStr as any,
+              svaAvulso: a.sva_avulso || '',
+              administrativas: {
+                quemSolicitou: a.quem_solicitou || '',
+                fone: a.telefone_solicitante || '',
+                protocoloMk: a.protocolo_mk || '',
+                meio: a.meio || undefined,
+              } as any,
+            },
+            infoRelevantes: {
+              info: a.info_relevantes || '',
+              infoMk: a.info_mk || '',
+              parecerAnalise: a.parecer_analise || '',
+            },
+          };
+          // Evitar sobrescrever enquanto o usuário edita
+          setApplicantInitial(prev => {
+            if (hasChanges) return prev;
+            return mappedApplicant;
+          });
+        }
+      )
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
+  }, [open, applicantId, hasChanges]);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
