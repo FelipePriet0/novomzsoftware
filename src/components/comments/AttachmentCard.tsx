@@ -295,7 +295,7 @@ export function AttachmentCard({ attachment, onDownload, onPreview, onDelete }: 
 
       {/* Modal de Preview */}
       <Dialog open={showPreview} onOpenChange={handleClosePreview}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-5 w-5" />

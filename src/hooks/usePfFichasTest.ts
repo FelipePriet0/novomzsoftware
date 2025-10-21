@@ -36,13 +36,13 @@ interface PfFichaTest {
   emprego_do_ps?: string;
   estado_civil?: string;
   conjuge_obs?: string;
+  conjuge_idade?: number;
   conjuge_nome?: string;
   conjuge_telefone?: string;
   conjuge_whatsapp?: string;
   conjuge_cpf?: string;
   conjuge_naturalidade?: string;
   conjuge_uf?: string;
-  conjuge_obs2?: string;
   conjuge_do_ps?: string;
   pai_nome?: string;
   pai_reside?: string;

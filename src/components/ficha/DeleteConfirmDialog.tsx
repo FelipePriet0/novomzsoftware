@@ -32,7 +32,9 @@ export function DeleteConfirmDialog({
 
   // Monitorar mudanças no estado
   useEffect(() => {
-    console.log('🎭 [DEBUG] Estado mudou:', { step, reason, open });
+    if (import.meta?.env?.DEV) {
+      console.log('🎭 [DEBUG] Estado mudou:', { step, reason, open });
+    }
   }, [step, reason, open]);
 
 
@@ -49,7 +51,9 @@ export function DeleteConfirmDialog({
     onClose();
   };
 
-  console.log('🎭 [DEBUG] DeleteConfirmDialog renderizando - step:', step, 'open:', open);
+  if (import.meta?.env?.DEV) {
+    console.log('🎭 [DEBUG] DeleteConfirmDialog renderizando - step:', step, 'open:', open);
+  }
 
   return (
     <AlertDialog open={open} onOpenChange={handleCancel}>
@@ -103,7 +107,7 @@ export function DeleteConfirmDialog({
           {step === 'first' ? (
             <button 
               onClick={() => {
-                console.log('🔄 [DEBUG] Primeira etapa: clicou "Sim, Deletar" - indo para segunda etapa');
+                if (import.meta?.env?.DEV) console.log('🔄 [DEBUG] Primeira etapa: clicou "Sim, Deletar" - indo para segunda etapa');
                 setStep('second');
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 px-6 py-3 font-medium text-base"

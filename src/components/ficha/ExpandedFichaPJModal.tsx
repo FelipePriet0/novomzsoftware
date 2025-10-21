@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MentionableTextarea } from "@/components/ui/MentionableTextarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, X, Loader2, ArrowLeft } from "lucide-react";
+import { MoreVertical, X, Loader2, ArrowLeft, Maximize2, Minimize2, ExternalLink, Printer } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useDraftForm } from "@/hooks/useDraftForm";
-import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
-import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
+// Removido: conexões de teste
+// import { useApplicantsTestConnection } from "@/hooks/useApplicantsTestConnection";
+// import { usePjFichasTestConnection } from "@/hooks/usePjFichasTestConnection";
+import { useApplicantContacts } from "@/hooks/useApplicantContacts";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,8 @@ interface ExpandedFichaPJModalProps {
   companyName?: string;
   applicationId?: string;
   onRefetch?: () => void;
+  applicantId?: string;
+  asPage?: boolean;
 }
 
 type Parecer = {
@@ -48,7 +52,9 @@ type Parecer = {
   is_thread_starter?: boolean;
 };
 
-export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }: ExpandedFichaPJModalProps) {
+import { usePjFichasTestConnection } from '@/hooks/usePjFichasTestConnection';
+
+export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, applicantId: applicantIdProp, asPage = false }: ExpandedFichaPJModalProps) {
   const { profile } = useAuth();
   const { name: currentUserName } = useCurrentUser();
   const [pareceres, setPareceres] = useState<Parecer[]>([]);
@@ -71,10 +77,80 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const { isAutoSaving, lastSaved, saveDraft, clearEditingSession } = useDraftForm();
   const [lastFormSnapshot, setLastFormSnapshot] = useState<PJFormValues | null>(null);
-  // Dev-safe CRUD state (test tables)
-  const [applicantTestId, setApplicantTestId] = useState<string | null>(null);
-  const { ensureApplicantExists } = useApplicantsTestConnection();
+  // Removido: estado e hooks de tabelas de teste
+
+  // Descobrir applicant_id e preparar hook de contatos (preferir prop)
+  const [applicantId, setApplicantId] = useState<string | null>(applicantIdProp || null);
+  useEffect(() => {
+    (async () => {
+      if (applicantIdProp) { setApplicantId(applicantIdProp); return; }
+      if (!applicationId) { setApplicantId(null); return; }
+      const { data } = await (supabase as any)
+        .from('kanban_cards')
+        .select('applicant_id')
+        .eq('id', applicationId)
+        .maybeSingle();
+      setApplicantId((data as any)?.applicant_id || null);
+    })();
+  }, [applicationId, applicantIdProp]);
+  const { update: updateApplicantContacts } = useApplicantContacts(applicantId || undefined);
   const { saveCompanyData } = usePjFichasTestConnection();
+  const [expanded, setExpanded] = useState(false);
+  const [pjSubmit, setPjSubmit] = useState<(() => void) | null>(null);
+
+  // Realtime: refletir alterações do applicants enquanto usuário não está editando
+  useEffect(() => {
+    if (!open) return;
+    const aid = applicantId; // preferir prop derivada
+    if (!aid) return;
+    const channel = (supabase as any)
+      .channel(`expanded-pj-applicant-${aid}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'applicants', filter: `id=eq.${aid}` },
+        (payload: any) => {
+          const a = payload?.new || {};
+          // Mapear para os campos equivalentes na ficha PJ
+          const vencStr = typeof a.venc === 'number' && !isNaN(a.venc) ? String(a.venc) : undefined;
+          const carneStr = typeof a.carne_impresso === 'boolean' ? (a.carne_impresso ? 'Sim' : 'Não') : undefined;
+          const updates: Partial<PJFormValues> = {
+            empresa: {
+              razao: a.primary_name || '',
+              cnpj: a.cpf_cnpj || '',
+            } as any,
+            contatos: {
+              tel: a.phone || '',
+              whats: a.whatsapp || '',
+              email: a.email || '',
+            } as any,
+            solicitacao: {
+              quem: a.quem_solicitou || '',
+              tel: a.telefone_solicitante || '',
+              protocolo: a.protocolo_mk || '',
+              meio: a.meio || '',
+              planoAcesso: a.plano_acesso || undefined,
+              svaAvulso: a.sva_avulso || '',
+              venc: vencStr as any,
+              carneImpresso: carneStr as any,
+            } as any,
+            info: {
+              parecerAnalise: a.parecer_analise || '',
+              relevantes: a.info_relevantes || '',
+              spc: a.info_spc || '',
+              outrasPs: a.info_pesquisador || '',
+              mk: a.info_mk || '',
+            } as any,
+          };
+          // Não sobrescrever se usuário já começou a editar (hasChanges)
+          setInitialValues(prev => {
+            if (hasChanges) return prev || {} as any;
+            return { ...(prev || {} as any), ...updates } as any;
+          });
+        }
+      )
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
+  }, [open, applicantId, hasChanges]);
 
   const ensureCommercialFeitas = async (appId?: string) => {
     if (!appId) return;
@@ -177,49 +253,82 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
         if (import.meta?.env?.DEV) console.log('[PJ] Loading initial data for applicationId', applicationId);
         const cardPromise = supabase
           .from('kanban_cards')
-          .select('id, applicant_id, title, cpf_cnpj, phone, email')
+          .select('id, applicant_id')
           .eq('id', applicationId)
           .maybeSingle();
 
         const { data: card } = await cardPromise;
 
         let tradeName: string | undefined = undefined;
-        if ((card as any)?.applicant_id) {
-          const { data: pjFicha } = await supabase
-            .from('pj_fichas')
-            .select('trade_name')
-            .eq('applicant_id', (card as any).applicant_id)
-            .maybeSingle();
-          if (pjFicha && (pjFicha as any).trade_name) tradeName = (pjFicha as any).trade_name as string;
-        }
+        try {
+          if ((card as any)?.applicant_id) {
+            const { data: pjFicha, error } = await supabase
+              .from('pj_fichas')
+              .select('trade_name')
+              .eq('applicant_id', (card as any).applicant_id)
+              .maybeSingle();
+            if (!error && pjFicha && (pjFicha as any).trade_name) tradeName = (pjFicha as any).trade_name as string;
+          }
+        } catch (_) { /* ignore missing table/404 */ }
 
         if (!mounted) return;
         let defaults: Partial<PJFormValues> = {
           empresa: {
-            razao: (card as any)?.title || '',
-            cnpj: (card as any)?.cpf_cnpj || '',
+            razao: '',
+            cnpj: '',
             fantasia: tradeName || '',
           },
           contatos: {
-            tel: (card as any)?.phone || '',
-            whats: (card as any)?.phone || '',
-            email: (card as any)?.email || '',
+            tel: '',
+            whats: '',
+            email: '',
           },
         } as any;
-        // Tentar carregar rascunho salvo para esta aplicação e usuário
+        // Prefill com Applicants (quem_solicitou, telefone_solicitante, parecer_analise)
         try {
-          const { data: draft } = await supabase
-            .from('applications_drafts')
-            .select('other_data, application_id, user_id')
-            .eq('application_id', applicationId)
-            .maybeSingle();
-          const pjDraft = (draft as any)?.other_data?.pj as Partial<PJFormValues> | undefined;
-          if (pjDraft && typeof pjDraft === 'object') {
-            defaults = { ...defaults, ...pjDraft } as Partial<PJFormValues>;
+          if ((card as any)?.applicant_id) {
+            const { data: appl } = await supabase
+              .from('applicants')
+              .select('primary_name, cpf_cnpj, quem_solicitou, telefone_solicitante, parecer_analise, phone, whatsapp, email, carne_impresso, venc, plano_acesso, sva_avulso, meio, protocolo_mk, info_spc, info_pesquisador, info_relevantes, info_mk')
+              .eq('id', (card as any).applicant_id)
+              .maybeSingle();
+            if (appl) {
+              defaults = {
+                ...defaults,
+                empresa: {
+                  razao: (appl as any).primary_name || (defaults as any)?.empresa?.razao || '',
+                  cnpj: (appl as any).cpf_cnpj || (defaults as any)?.empresa?.cnpj || '',
+                  fantasia: (defaults as any)?.empresa?.fantasia || '',
+                },
+                contatos: {
+                  tel: (appl as any).phone || defaults.contatos?.tel || '',
+                  whats: (appl as any).whatsapp || defaults.contatos?.whats || '',
+                  email: (appl as any).email || defaults.contatos?.email || '',
+                },
+                solicitacao: {
+                  quem: (appl as any).quem_solicitou || '',
+                  tel: (appl as any).telefone_solicitante || '',
+                  meio: (appl as any).meio || '',
+                  protocolo: (appl as any).protocolo_mk || '',
+                  planoAcesso: (appl as any).plano_acesso || undefined,
+                  svaAvulso: (appl as any).sva_avulso || '',
+                  venc: typeof (appl as any).venc === 'number' ? String((appl as any).venc) : undefined,
+                  carneImpresso: typeof (appl as any).carne_impresso === 'boolean' ? ((appl as any).carne_impresso ? 'Sim' : 'Não') : undefined,
+                },
+                info: {
+                  ...(defaults as any).info,
+                  parecerAnalise: (appl as any).parecer_analise || (defaults as any)?.info?.parecerAnalise || '',
+                  relevantes: (appl as any).info_relevantes || (defaults as any)?.info?.relevantes || '',
+                  spc: (appl as any).info_spc || (defaults as any)?.info?.spc || '',
+                  outrasPs: (appl as any).info_pesquisador || (defaults as any)?.info?.outrasPs || '',
+                  mk: (appl as any).info_mk || (defaults as any)?.info?.mk || '',
+                },
+              } as any;
+            }
           }
-        } catch (_) {
-          // ignore
-        }
+        } catch (_) {}
+        // Tentar carregar rascunho salvo para esta aplicação e usuário
+        // drafts desativados: pular leitura de applications_drafts
         setInitialValues(defaults);
         if (import.meta?.env?.DEV) console.log('[PJ] Initial defaults ready');
         setIsInitialized(false);
@@ -280,6 +389,22 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       const { error } = await supabase.from('kanban_cards').update({ reanalysis_notes: serialized }).eq('id', applicationId);
       if (error) throw error;
       console.log('✅ [ExpandedPJ] Parecer adicionado com sucesso! Realtime vai sincronizar outros modais.');
+
+      // 🔁 Espelhar texto do parecer mais recente em applicants.parecer_analise
+      try {
+        const { data: kc } = await supabase
+          .from('kanban_cards')
+          .select('applicant_id')
+          .eq('id', applicationId)
+          .maybeSingle();
+        const aid = (kc as any)?.applicant_id as string | undefined;
+        if (aid) {
+          await supabase
+            .from('applicants')
+            .update({ parecer_analise: text })
+            .eq('id', aid);
+        }
+      } catch (_) {}
       // 🔔 Notificações de menções no parecer
       try {
         const matches = Array.from(text.matchAll(/@(\w+)/g)).map(m => m[1]);
@@ -294,15 +419,28 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
             for (const userId of targets) {
               if (userId === (profile?.id || '')) continue;
+              // Resolver título do card
+              let cardTitle = 'Cliente';
+              let applicantId: string | null = null;
+              try {
+                const { data: kc } = await (supabase as any)
+                  .from('kanban_cards')
+                  .select('applicant:applicant_id(id, primary_name)')
+                  .eq('id', applicationId)
+                  .maybeSingle();
+                cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+                applicantId = (kc as any)?.applicant?.id || null;
+              } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
                 .insert({
                   user_id: userId,
                   type: 'mention',
                   priority: 'low',
-                  title: 'Você foi mencionado',
-                  body: `Você foi mencionado em um parecer (@${mention}).`,
-                  meta: { cardId: applicationId, parecerId: newP.id },
+                  title: `${profile?.full_name || 'Colaborador'} mencionou você em um Parecer`,
+                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
+                  applicant_id: applicantId || undefined,
+                  meta: { cardId: applicationId, applicantId, parecerId: newP.id },
                   transient: false,
                 });
             }
@@ -455,15 +593,28 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             const targets = (profiles || []).map((p: any) => p.id).filter(Boolean);
             for (const userId of targets) {
               if (userId === (profile?.id || '')) continue;
+              // Resolver título do card
+              let cardTitle = 'Cliente';
+              let applicantId: string | null = null;
+              try {
+                const { data: kc } = await (supabase as any)
+                  .from('kanban_cards')
+                  .select('applicant:applicant_id(id, primary_name)')
+                  .eq('id', applicationId)
+                  .maybeSingle();
+                cardTitle = (kc as any)?.applicant?.primary_name || 'Cliente';
+                applicantId = (kc as any)?.applicant?.id || null;
+              } catch (_) {}
               await (supabase as any)
                 .from('inbox_notifications')
                 .insert({
                   user_id: userId,
                   type: 'mention',
                   priority: 'low',
-                  title: 'Você foi mencionado',
-                  body: `Você foi mencionado em uma resposta de parecer (@${mention}).`,
-                  meta: { cardId: applicationId, parentParecerId: replyingToParecerId },
+                  title: `${profile?.full_name || 'Colaborador'} respondeu o seu Parecer`,
+                  body: `${cardTitle}\n${String(text).replace(/\s+/g,' ').slice(0,140)}`,
+                  applicant_id: applicantId || undefined,
+                  meta: { cardId: applicationId, applicantId, parentParecerId: replyingToParecerId },
                   transient: false,
                 });
             }
@@ -655,40 +806,63 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       try {
         await ensureCommercialFeitas(applicationId);
         await saveDraft(draftPayload, applicationId, 'pj', false);
-        // Espelhar imediatamente nos campos do kanban_cards para sincronismo com "Editar Ficha"
+        // Atualizar applicants + pj_fichas_test (autosave)
         try {
-          const updates: any = {};
-          if (data?.empresa?.razao) updates.title = data.empresa.razao;
-          if (data?.empresa?.cnpj) updates.cpf_cnpj = data.empresa.cnpj;
-          if (data?.contatos?.tel) updates.phone = data.contatos.tel;
-          if (data?.contatos?.email) updates.email = data.contatos.email;
-          if (Object.keys(updates).length > 0) {
-            const { error } = await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
-            if (error) console.warn('[PJ Autosave] Update kanban_cards error:', error);
+          const aid = applicantId || (await (async () => {
+            const { data: kc } = await supabase
+              .from('kanban_cards')
+              .select('applicant_id')
+              .eq('id', applicationId)
+              .maybeSingle();
+            return (kc as any)?.applicant_id as string | undefined;
+          })());
+          if (aid) {
+            // Applicants
+            const contactUpdates: any = {};
+            if (data?.contatos?.tel) contactUpdates.phone = data.contatos.tel;
+            if (data?.contatos?.whats) contactUpdates.whatsapp = data.contatos.whats;
+            if (data?.solicitacao?.quem) contactUpdates.quem_solicitou = data.solicitacao.quem;
+            if (data?.solicitacao?.tel) contactUpdates.telefone_solicitante = data.solicitacao.tel;
+            if (Object.keys(contactUpdates).length) {
+              await updateApplicantContacts(contactUpdates);
+            }
+            const appUpdates: any = {};
+            // Razão social/CNPJ → Applicants
+            if (data?.empresa?.razao) appUpdates.primary_name = data.empresa.razao;
+            if (data?.empresa?.cnpj) appUpdates.cpf_cnpj = String(data.empresa.cnpj).replace(/\D+/g, '');
+            // Outros campos (e-mail/endereço/intake/preferências/infos)
+            if (data?.contatos?.email) appUpdates.email = data.contatos.email;
+            // Endereço
+            if (data?.endereco?.end) appUpdates.address_line = data.endereco.end;
+            if (data?.endereco?.n) appUpdates.address_number = data.endereco.n;
+            if (data?.endereco?.compl) appUpdates.address_complement = data.endereco.compl;
+            if (data?.endereco?.cep) appUpdates.cep = data.endereco.cep;
+            if (data?.endereco?.bairro) appUpdates.bairro = data.endereco.bairro;
+            // Intake
+            if (data?.solicitacao?.meio) appUpdates.meio = data.solicitacao.meio;
+            if (data?.solicitacao?.protocolo) appUpdates.protocolo_mk = data.solicitacao.protocolo;
+            // Preferências
+            if (data?.solicitacao?.planoAcesso) appUpdates.plano_acesso = data.solicitacao.planoAcesso;
+            if (data?.solicitacao?.svaAvulso) appUpdates.sva_avulso = data.solicitacao.svaAvulso;
+            if (data?.solicitacao?.venc) appUpdates.venc = Number(data.solicitacao.venc);
+            if (typeof data?.solicitacao?.carneImpresso !== 'undefined') {
+              appUpdates.carne_impresso = data.solicitacao.carneImpresso === 'Sim' ? true : data.solicitacao.carneImpresso === 'Não' ? false : null;
+            }
+            // Informações
+            if (data?.info?.relevantes) appUpdates.info_relevantes = data.info.relevantes;
+            if (data?.info?.spc) appUpdates.info_spc = data.info.spc;
+            if (data?.info?.outrasPs) appUpdates.info_pesquisador = data.info.outrasPs;
+            if (data?.info?.mk) appUpdates.info_mk = data.info.mk;
+            if (data?.info?.parecerAnalise) appUpdates.parecer_analise = data.info.parecerAnalise;
+            if (Object.keys(appUpdates).length > 0) {
+              await supabase.from('applicants').update(appUpdates).eq('id', aid);
+            }
+            // PJ ficha (pj_fichas_test)
+            try {
+              await saveCompanyData(aid, data as any);
+            } catch (_) {}
           }
-        } catch (e) {
-          console.warn('[PJ Autosave] Mirror error:', e);
-        }
-        // Dev-safe: mirror into pj_fichas_test (debounced)
-        try {
-          let testId = applicantTestId;
-          if (!testId) {
-            testId = await ensureApplicantExists({
-              id: applicationId,
-              person_type: 'PJ',
-              cnpj: data?.empresa?.cnpj,
-              razao: data?.empresa?.razao,
-              telefone: data?.contatos?.tel,
-              email: data?.contatos?.email,
-            });
-            if (testId && testId !== applicantTestId) setApplicantTestId(testId);
-          }
-          if (testId) {
-            await saveCompanyData(testId, data as any);
-          }
-        } catch (_) {
-          // non-blocking for development-safe persistence
-        }
+        } catch (_) {}
       } catch (_) {
         // ignore
       }
@@ -723,98 +897,64 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             await saveDraft({ other_data: { pj: formData } } as any, applicationId, 'pj', false);
           } catch (_) {}
           // Atualizar kanban_cards com os dados básicos
-          const updates: any = {};
-          if (formData.empresa?.razao) updates.title = formData.empresa.razao;
-          if (formData.empresa?.cnpj) updates.cpf_cnpj = formData.empresa.cnpj;
-          if (formData.contatos?.tel) updates.phone = formData.contatos.tel;
-          if (formData.contatos?.email) updates.email = formData.contatos.email;
-          // Plano/Venc da PJ
-          if (formData.solicitacao?.planoAcesso) updates.plano_acesso = formData.solicitacao.planoAcesso;
-          if (formData.solicitacao?.venc) updates.venc = Number(formData.solicitacao.venc);
+          // Campos da empresa agora são salvos em applicants, não em kanban_cards
+          // (removida atualização redundante de title, phone, email, cpf_cnpj)
           
-          if (Object.keys(updates).length > 0) {
-            await supabase.from('kanban_cards').update(updates).eq('id', applicationId);
-          }
-          
-          // Salvar dados específicos da ficha PJ na TABELA DE TESTE
-          // 1) Buscar/garantir applicant_test (por CNPJ)
-          let targetApplicantId: string | null = null;
+          // Atualizar applicants com campos do cliente (confirm)
           try {
-            const { data: existing } = await supabase
-              .from('applicants_test')
-              .select('id')
-              .eq('cpf_cnpj', formData.empresa?.cnpj || '')
-              .eq('person_type', 'PJ')
-              .maybeSingle();
-            if (existing?.id) {
-              targetApplicantId = existing.id;
-            } else {
-              const { data: created } = await supabase
-                .from('applicants_test')
-                .insert({
-                  person_type: 'PJ',
-                  primary_name: formData.empresa?.razao || '',
-                  cpf_cnpj: formData.empresa?.cnpj || '',
-                  phone: formData.contatos?.tel || '',
-                  email: formData.contatos?.email || '',
-                })
-                .select('id')
-                .single();
-              targetApplicantId = created?.id || null;
+            const aid = applicantId || (await (async () => {
+              const { data: kc } = await supabase
+                .from('kanban_cards')
+                .select('applicant_id')
+                .eq('id', applicationId)
+                .maybeSingle();
+              return (kc as any)?.applicant_id as string | undefined;
+            })());
+            if (aid) {
+              const contactUpdates: any = {};
+              if (formData?.contatos?.tel) contactUpdates.phone = formData.contatos.tel;
+              if (formData?.contatos?.whats) contactUpdates.whatsapp = formData.contatos.whats;
+              if (formData?.solicitacao?.quem) contactUpdates.quem_solicitou = formData.solicitacao.quem;
+              if (formData?.solicitacao?.tel) contactUpdates.telefone_solicitante = formData.solicitacao.tel;
+              if (Object.keys(contactUpdates).length) {
+                await updateApplicantContacts(contactUpdates);
+              }
+              const appUpdates: any = {};
+              // Razão social/CNPJ → Applicants
+              if (formData?.empresa?.razao) appUpdates.primary_name = formData.empresa.razao;
+              if (formData?.empresa?.cnpj) appUpdates.cpf_cnpj = String(formData.empresa.cnpj).replace(/\D+/g, '');
+              if (formData?.contatos?.email) appUpdates.email = formData.contatos.email;
+              // Endereço
+              if (formData?.endereco?.end) appUpdates.address_line = formData.endereco.end;
+              if (formData?.endereco?.n) appUpdates.address_number = formData.endereco.n;
+              if (formData?.endereco?.compl) appUpdates.address_complement = formData.endereco.compl;
+              if (formData?.endereco?.cep) appUpdates.cep = formData.endereco.cep;
+              if (formData?.endereco?.bairro) appUpdates.bairro = formData.endereco.bairro;
+              // Intake
+              if (formData?.solicitacao?.meio) appUpdates.meio = formData.solicitacao.meio;
+              if (formData?.solicitacao?.protocolo) appUpdates.protocolo_mk = formData.solicitacao.protocolo;
+              // Preferências
+              if (formData?.solicitacao?.planoAcesso) appUpdates.plano_acesso = formData.solicitacao.planoAcesso;
+              if (formData?.solicitacao?.svaAvulso) appUpdates.sva_avulso = formData.solicitacao.svaAvulso;
+              if (formData?.solicitacao?.venc) appUpdates.venc = Number(formData.solicitacao.venc);
+              if (typeof formData?.solicitacao?.carneImpresso !== 'undefined') {
+                appUpdates.carne_impresso = formData.solicitacao.carneImpresso === 'Sim' ? true : formData.solicitacao.carneImpresso === 'Não' ? false : null;
+              }
+              // Informações
+              if (formData?.info?.relevantes) appUpdates.info_relevantes = formData.info.relevantes;
+              if (formData?.info?.spc) appUpdates.info_spc = formData.info.spc;
+              if (formData?.info?.outrasPs) appUpdates.info_pesquisador = formData.info.outrasPs;
+              if (formData?.info?.mk) appUpdates.info_mk = formData.info.mk;
+              if (formData?.info?.parecerAnalise) appUpdates.parecer_analise = formData.info.parecerAnalise;
+              if (Object.keys(appUpdates).length > 0) {
+                await supabase.from('applicants').update(appUpdates).eq('id', aid);
+              }
+              // PJ ficha (pj_fichas_test)
+              try {
+                await saveCompanyData(aid, formData as any);
+              } catch (_) {}
             }
           } catch (_) {}
-
-          if (targetApplicantId) {
-            const pjDataTest = {
-              applicant_id: targetApplicantId,
-              razao_social: formData.empresa?.razao || '',
-              cnpj: formData.empresa?.cnpj || '',
-              data_abertura: formData.empresa?.abertura || '',
-              nome_fantasia: formData.empresa?.fantasia || '',
-              nome_fachada: formData.empresa?.fachada || '',
-              area_atuacao: formData.empresa?.area || '',
-              tipo_imovel: formData.endereco?.tipo || '',
-              obs_tipo_imovel: formData.endereco?.obsTipo || '',
-              tempo_endereco: formData.endereco?.tempo || '',
-              tipo_estabelecimento: formData.endereco?.estab || '',
-              obs_estabelecimento: formData.endereco?.obsEstab || '',
-              endereco_pessoal: formData.endereco?.endPs || '',
-              fones_os: formData.contatos?.fonesOs || '',
-              comprovante_status: formData.docs?.comprovante || '',
-              tipo_comprovante: formData.docs?.tipo || '',
-              em_nome_de: formData.docs?.emNomeDe || '',
-              possui_internet: formData.docs?.possuiInternet || '',
-              operadora_internet: formData.docs?.operadora || '',
-              plano_internet: formData.docs?.plano || '',
-              valor_internet: formData.docs?.valor || '',
-              contrato_social: formData.docs?.contratoSocial || '',
-              obs_contrato: formData.docs?.obsContrato || '',
-              socios: formData.socios || [],
-              protocolo_mk: formData.solicitacao?.protocolo || '',
-              informacoes_relevantes: formData.info?.relevantes || '',
-              outras_pessoas: formData.info?.outrasPs || '',
-              parecer_analise: formData.info?.parecerAnalise || '',
-            } as any;
-
-            // Upsert sem on_conflict (tabela não possui unique em applicant_id)
-            const { data: existingFicha } = await supabase
-              .from('pj_fichas_test')
-              .select('applicant_id')
-              .eq('applicant_id', targetApplicantId)
-              .maybeSingle();
-            if (existingFicha?.applicant_id) {
-              const { error: upErr } = await supabase
-                .from('pj_fichas_test')
-                .update(pjDataTest)
-                .eq('applicant_id', targetApplicantId);
-              if (upErr) throw upErr;
-            } else {
-              const { error: insErr } = await supabase
-                .from('pj_fichas_test')
-                .insert(pjDataTest);
-              if (insErr) throw insErr;
-            }
-          }
           
           toast({
             title: "Ficha PJ salva com sucesso",
@@ -847,6 +987,20 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
     onClose();
   };
 
+  const handleOpenInNewTab = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}`;
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const handleOpenPrint = () => {
+    const id = applicationId;
+    if (!id) return;
+    const url = `${window.location.origin}/ficha/${id}/print`;
+    window.open(url, '_blank', 'noopener');
+  };
+
   const handleSubmitWrapper = async (data: PJFormValues) => {
     if (applicationId) {
       setFormData(data);
@@ -856,34 +1010,164 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
       onClose();
     }
   };
+  
+  // Render as full page (without Dialog overlay)
+  if (asPage) {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        <div className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src="/src/assets/Logo MZNET (1).png" alt="MZNET Logo" className="h-8 w-auto" />
+              <div className="text-lg sm:text-xl font-semibold text-white">Ficha Comercial — Pessoa Jurídica</div>
+            </div>
+            <div className="flex items-center gap-2 print-hide">
+              <Button variant="ghost" size="sm" onClick={handleOpenPrint} className="h-8 px-2 text-white hover:bg-white/20 rounded-full" aria-label="Imprimir" title="Imprimir"><Printer className="h-4 w-4" /></Button>
+            </div>
+          </div>
+        </div>
+        <div
+          className={expanded 
+            ? "flex-1 overflow-y-auto min-h-0 space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-y-auto min-h-0 space-y-6 px-6 py-6"
+          }
+          onBlurCapture={async () => {
+            if (!applicationId || !lastFormSnapshot) return;
+            try {
+              await ensureCommercialFeitas(applicationId);
+              await saveDraft({ other_data: { pj: lastFormSnapshot } } as any, applicationId, 'pj', false);
+            } catch (_) {}
+          }}
+        >
+          {isLoadingInitial && (
+            <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carregando dados básicos...
+            </div>
+          )}
+          {!isLoadingInitial && (
+            <>
+            <FichaPJForm
+              defaultValues={initialValues || undefined}
+              onSubmit={handleSubmitWrapper}
+              onCancel={handleClose}
+              onFormChange={handleFormChange}
+              applicationId={applicationId}
+              onExpose={(api) => setPjSubmit(() => api.submit)}
+              hideInternalActions={true}
+              afterMkSlot={(
+                <section>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-base font-semibold">Pareceres da Análise</h3>
+                    <Button type="button" size="default" className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90" onClick={() => setShowNewParecerEditor(true)}>+ Adicionar Parecer</Button>
+                  </div>
+                  {showNewParecerEditor && (
+                    <div className="mt-2">
+                      <Textarea rows={3} value={newParecerText} onChange={(e) => setNewParecerText(e.target.value)} className="text-sm text-[#018942]" placeholder="Escreva um novo parecer..." />
+                      <div className="flex justify-end gap-2 mt-2">
+                        <Button size="sm" type="button" variant="secondary" onClick={() => { setShowNewParecerEditor(false); setNewParecerText(""); }} className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600">Cancelar</Button>
+                        <Button size="default" type="button" onClick={appendParecer} className="h-10 px-4 text-sm bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90">Salvar Parecer</Button>
+                      </div>
+                    </div>
+                  )}
+                  {pareceres.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Nenhum parecer registrado.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pareceres.map((p) => (
+                        <div key={p.id} className="rounded-md border p-3">
+                          <div className="text-xs text-muted-foreground mb-1">{new Date(p.created_at).toLocaleString('pt-BR')}</div>
+                          <div className="text-sm font-medium">{p.author_name} {p.author_role ? <span className="text-xs text-gray-500">({p.author_role})</span> : null}</div>
+                          <div className="text-sm mt-1 whitespace-pre-wrap">{p.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            />
+            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+              <Button
+                className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
+                onClick={handleClose}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+                onClick={() => pjSubmit?.()}
+              >
+                Salvar ficha PJ
+              </Button>
+            </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
-      <DialogContent className="max-w-[1200px] max-h-[95vh] overflow-hidden" onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader className="pb-2">
+      <DialogContent
+        aria-describedby={undefined}
+        className={expanded 
+          ? "!max-w-none w-[100vw] h-[100vh] sm:rounded-none overflow-hidden gap-0" 
+          : "max-w-[1200px] max-h-[95vh] overflow-hidden gap-0"
+        }
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        {/* Header simplificado para robustez do parser */}
+        <DialogHeader className="px-6 py-4 border-b bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <DialogTitle className="text-xl">Ficha Comercial — Pessoa Jurídica</DialogTitle>
-              {hasChanges && (
-                <div className="flex items-center gap-2 text-sm text-amber-600">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                  Alterações não salvas
-                </div>
-              )}
+              <img 
+                src="/src/assets/Logo MZNET (1).png" 
+                alt="MZNET Logo" 
+                className="h-8 w-auto"
+              />
+              <DialogTitle className="text-lg sm:text-xl font-semibold text-white">
+                Ficha Comercial — Pessoa Jurídica
+              </DialogTitle>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="h-8 w-8 p-0 text-[hsl(var(--brand))] hover:bg-[hsl(var(--brand)/0.08)]"
-              aria-label="Fechar"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(e => !e)}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                aria-label={expanded ? 'Minimizar' : 'Expandir'}
+                title={expanded ? 'Minimizar' : 'Expandir'}
+              >
+                {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenInNewTab}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                aria-label="Abrir em nova aba"
+                title="Abrir em nova aba"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClose}
+                className="h-8 w-8 p-0 text-white hover:bg-white/20 rounded-full"
+                aria-label="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </DialogHeader>
         <div
-          className="flex-1 overflow-hidden space-y-6"
+          className={expanded 
+            ? "flex-1 overflow-y-auto min-h-0 space-y-4 sm:space-y-6 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 bg-white" 
+            : "flex-1 overflow-y-auto min-h-0 space-y-6 px-6 py-6"
+          }
           onBlurCapture={async () => {
             if (!applicationId || !lastFormSnapshot) return;
             try {
@@ -905,6 +1189,8 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
               onCancel={handleClose}
               onFormChange={handleFormChange}
               applicationId={applicationId}
+              onExpose={(api) => setPjSubmit(() => api.submit)}
+              hideInternalActions={expanded}
               afterMkSlot={(
               <section>
                 <div className="flex items-center justify-between mb-2">
@@ -1068,6 +1354,23 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch }
             />
           )}
         </div>
+        {expanded && (
+          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-3 sm:px-4 md:px-6 py-3 flex items-center justify-end gap-2">
+            <Button
+              variant="ghost"
+              className="text-gray-700"
+              onClick={handleClose}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#018942] hover:bg-[#018942]/90 text-white"
+              onClick={() => pjSubmit?.()}
+            >
+              Salvar ficha PJ
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
     

@@ -361,97 +361,151 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
         handleCancel();
       }
     }}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="text-xl font-semibold">Adicionar Tarefa</SheetTitle>
+      <SheetContent side="right" className="w-full sm:max-w-lg p-0 flex flex-col h-full">
+        {/* Header com gradiente moderno */}
+        <SheetHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden flex-shrink-0">
+        <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
+          <div className="relative">
+            <SheetTitle className="text-xl font-semibold text-white">
+              {editingTask ? 'Editar Tarefa' : 'Adicionar Tarefa'}
+            </SheetTitle>
+            <p className="text-green-100 text-sm mt-1">
+              {editingTask ? 'Atualize os detalhes da tarefa' : 'Crie uma nova tarefa para a equipe'}
+            </p>
+          </div>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-          {/* Campo: De */}
-          <div className="space-y-2">
-            <label htmlFor="createdBy" className="text-sm font-medium">
-              De:
-            </label>
-            <div className="flex h-12 w-full items-center rounded-[30px] border-2 border-[#018942] bg-gray-50 px-5 py-3 text-sm text-gray-700">
-              {currentUserName || 'Carregando...'}
+        {/* Body scrollable */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Seção: Atribuição */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+              Atribuição da Tarefa
+            </h3>
+            <div className="space-y-4">
+              {/* Campo: De */}
+              <div className="space-y-2">
+                <label htmlFor="createdBy" className="text-sm font-medium text-gray-700">
+                  De:
+                </label>
+                <div className="flex h-11 w-full items-center rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-sm text-gray-700">
+                  {currentUserName || 'Carregando...'}
+                </div>
+              </div>
+
+              {/* Campo: Para */}
+              <div className="space-y-2">
+                <label htmlFor="assignedTo" className="text-sm font-medium text-gray-700">
+                  Para:
+                </label>
+                <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isLoadingUsers}>
+                  <SelectTrigger 
+                    id="assignedTo" 
+                    className="rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900"
+                  >
+                    <SelectValue 
+                      placeholder={isLoadingUsers ? "Carregando..." : "Selecione um colaborador"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.length === 0 && !isLoadingUsers && (
+                      <div className="p-2 text-xs text-gray-500">Nenhum colaborador encontrado</div>
+                    )}
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id} className="hover:bg-green-50">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          {user.full_name} · <span className="text-xs text-gray-500">{user.role}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  {isLoadingUsers ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Carregando colaboradores...
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-green-600">●</span>
+                      {users.length} colaborador(es) disponível(is)
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Campo: Para */}
-          <div className="space-y-2">
-            <label htmlFor="assignedTo" className="text-sm font-medium">
-              Para:
-            </label>
-            <Select value={assignedTo} onValueChange={setAssignedTo} disabled={isLoadingUsers}>
-              <SelectTrigger 
-                id="assignedTo" 
-                className="border-2 border-[#018942] [&>span]:text-[#018942] data-[placeholder]:text-[#018942]"
-              >
-                <SelectValue 
-                  placeholder={isLoadingUsers ? "Carregando..." : "Selecione um colaborador"}
-                  className="text-[#018942] placeholder:text-[#018942]"
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {users.length === 0 && !isLoadingUsers && (
-                  <div className="p-2 text-xs text-[#018942]">Nenhum colaborador encontrado</div>
-                )}
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.full_name} ({user.role})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-[#018942]">
-              {isLoadingUsers ? '⏳ Carregando colaboradores...' : `📊 ${users.length} colaborador(es) disponível(is)`}
-            </p>
+          {/* Seção: Descrição da Tarefa */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              Descrição da Tarefa
+            </h3>
+            <div className="space-y-2">
+              <label htmlFor="description" className="text-sm font-medium text-gray-700">
+                Descreva a tarefa:
+              </label>
+              <Textarea
+                id="description"
+                placeholder="Ex.: Reagendar instalação para o dia 12/10 às 14h."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                className="resize-none rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+              />
+              <p className="text-xs text-gray-500">
+                Seja claro e específico sobre o que precisa ser feito
+              </p>
+            </div>
           </div>
 
-          {/* Campo: Descrição da Tarefa */}
-          <div className="space-y-2">
-            <label htmlFor="description" className="text-sm font-medium">
-              Descrição da Tarefa:
-            </label>
-            <Textarea
-              id="description"
-              placeholder="Ex.: Reagendar instalação para o dia 12/10 às 14h."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="resize-none border-2 border-[#018942] text-[#018942] placeholder:text-[#018942] focus:ring-[#018942]"
-            />
-          </div>
-
-          {/* Campo: Prazo (Opcional) */}
-          <div className="space-y-2">
-            <label htmlFor="deadline" className="text-sm font-medium">
-              Prazo (Opcional):
-            </label>
-            <input
-              type="datetime-local"
-              id="deadline"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="flex h-12 w-full items-center rounded-[30px] border-2 border-[#018942] bg-white px-5 py-3 text-sm text-[#018942] placeholder:text-[#018942] shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0"
-            />
+          {/* Seção: Prazo */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+              Prazo
+            </h3>
+            <div className="space-y-2">
+              <label htmlFor="deadline" className="text-sm font-medium text-gray-700">
+                Data e hora limite (Opcional):
+              </label>
+              <input
+                type="datetime-local"
+                id="deadline"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="flex h-11 w-full items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#018942] focus:border-[#018942]"
+              />
+              {deadline && (
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <span className="text-purple-600">●</span>
+                  Prazo definido para {new Date(deadline).toLocaleString('pt-BR')}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Botões de Ação */}
-          <div className="flex gap-3 pt-4">
+          <div className="sticky bottom-0 left-0 right-0 -mx-6 bg-white border-t border-gray-200 z-10">
+            <div className="px-6 py-4 flex gap-3">
             <Button
               type="button"
               variant="outline"
               onClick={handleCancel}
               disabled={isSubmitting}
-              className="flex-1 bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
+              className="flex-1 bg-white hover:bg-gray-50 text-gray-700 border-gray-300 hover:border-gray-400 rounded-lg transition-all duration-200"
             >
               {editingTask ? 'Descartar Alterações' : 'Cancelar'}
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 bg-[#018942] hover:bg-[#018942]/90 text-white"
+              className="flex-1 bg-gradient-to-r from-[#018942] to-[#016b35] hover:from-[#016b35] hover:to-[#014d28] text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
             >
               {isSubmitting ? (
                 <>
@@ -462,8 +516,10 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
                 editingTask ? 'Salvar Alterações' : 'Criar Tarefa'
               )}
             </Button>
+            </div>
           </div>
         </form>
+        </div>
       </SheetContent>
 
       {/* Diálogo de Confirmação para Mudanças Não Salvas */}
@@ -494,4 +550,3 @@ export function AddTaskModal({ open, onClose, cardId, onCommentCreate, parentCom
     </Sheet>
   );
 }
-

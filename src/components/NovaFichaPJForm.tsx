@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { dbg } from "@/lib/debug";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,8 +46,10 @@ const schema = z.object({
   trade_name: z.string().min(1, "Obrigatório"),
   cnpj: z.string().min(18, "CNPJ inválido"),
   email: z.string().email("E-mail inválido"),
-  phone: z.string().min(14, "Telefone inválido"),
-  contact_name: z.string().min(1, "Obrigatório"),
+  // Contatos da empresa (opcionais)
+  contact_phone: z.string().optional(),
+  contact_whatsapp: z.string().optional(),
+  // Removidos: Nome do Solicitante e Tel do Solicitante (usar Modal PJ)
 });
 
 type PJForm = z.infer<typeof schema>;
@@ -69,31 +72,54 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
       trade_name: "",
       cnpj: "",
       email: "",
-      phone: "",
-      contact_name: "",
+      contact_phone: "",
+      contact_whatsapp: "",
     }
   });
 
   const handleSubmit = form.handleSubmit(async (values) => {
     try {
       // 1) Garantir applicant PJ em PRODUÇÃO (kanban_cards exige FK não nulo)
+      const cnpj = values.cnpj.replace(/\D+/g, '');
+      dbg('pj', 'CNPJ normalizado');
+      
       let applicantProd: { id: string } | null = null;
       const { data: existingProd } = await supabase
         .from('applicants')
-        .select('id')
-        .eq('cpf_cnpj', values.cnpj)
+        .select('id, primary_name, phone, email, created_at')
+        .eq('cpf_cnpj', cnpj)
         .eq('person_type', 'PJ')
         .maybeSingle();
+      
       if (existingProd?.id) {
-        applicantProd = existingProd as any;
+        dbg('pj', 'CNPJ já cadastrado – bloqueando criação');
+        
+        // 🚫 BLOQUEAR criação e avisar usuário
+        toast({
+          title: '⚠️ CNPJ já cadastrado',
+          description: `Já existe um cadastro para este CNPJ:\n\n` +
+            `Razão Social: ${existingProd.primary_name}\n` +
+            `Telefone: ${existingProd.phone || 'Não informado'}\n` +
+            `Email: ${existingProd.email || 'Não informado'}\n` +
+            `Cadastrado em: ${new Date(existingProd.created_at).toLocaleDateString('pt-BR')}\n\n` +
+            `Não é possível criar nova ficha com CNPJ duplicado.`,
+          variant: 'destructive',
+          duration: 8000, // 8 segundos para ler
+        });
+        
+        // ❌ ABORTAR criação
+        return;
       } else {
+        dbg('pj', 'Criando applicant PJ');
         const { data: createdProd, error: aErr1 } = await supabase
           .from('applicants')
           .insert({
             person_type: 'PJ',
             primary_name: values.corporate_name,
-            cpf_cnpj: values.cnpj,
-            phone: values.phone,
+            cpf_cnpj: cnpj, // Usar CNPJ limpo (sem formatação)
+            // Contatos principais da empresa
+            phone: values.contact_phone || null,
+            whatsapp: values.contact_whatsapp || null,
             email: values.email,
           })
           .select('id')
@@ -102,43 +128,10 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
         applicantProd = createdProd as any;
       }
 
-      // 1b) Garantir ESPELHO em applicants_test (para testes)
-      let applicantTestId: string | null = null;
-      const { data: existingTest } = await supabase
-        .from('applicants_test')
-        .select('id')
-        .eq('cpf_cnpj', values.cnpj)
-        .eq('person_type', 'PJ')
-        .maybeSingle();
-      if (existingTest?.id) {
-        applicantTestId = existingTest.id;
-      } else {
-        const { data: createdTest } = await supabase
-          .from('applicants_test')
-          .insert({
-            person_type: 'PJ',
-            primary_name: values.corporate_name,
-            cpf_cnpj: values.cnpj,
-            phone: values.phone,
-            email: values.email,
-          })
-          .select('id')
-          .single();
-        applicantTestId = createdTest?.id || null;
-      }
-
-      // 2) Detalhes PJ mínimos (TESTE) apontando para applicants_test
-      if (applicantTestId) {
-        await supabase
-          .from('pj_fichas_test')
-          .insert({ 
-            applicant_id: applicantTestId, 
-            nome_fantasia: values.trade_name || null, 
-            contato_tecnico: values.contact_name 
-          });
-      }
+      // Removido: espelho em applicants_test (legado)
 
       // 3) Card no Kanban (Comercial/feitas) com applicant_id de PRODUÇÃO
+   dbg('pj', 'Criando card no Kanban');
       const now = new Date();
       const { data: createdCard, error: cErr } = await supabase
         .from('kanban_cards')
@@ -149,24 +142,21 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
           stage: 'feitas',
           created_by: profile?.id || null,
           assignee_id: null,
-          title: values.corporate_name,
-          cpf_cnpj: values.cnpj,
-          phone: values.phone,
-          email: values.email,
           received_at: now.toISOString(),
-          source: 'software_pj',
+          // Campos removidos: title, cpf_cnpj, phone, email, source
+          // Dados vêm de applicants via FK applicant_id
         })
-        .select('id, title, cpf_cnpj, phone, email, received_at')
+        .select('id, applicant_id, received_at')
         .single();
       if (cErr) throw cErr;
 
       toast({ title: 'Ficha PJ criada' });
       onCreated?.({
         id: createdCard.id,
-        title: createdCard.title,
-        cpf_cnpj: createdCard.cpf_cnpj ?? undefined,
-        phone: createdCard.phone ?? undefined,
-        email: createdCard.email ?? undefined,
+        title: values.corporate_name, // Dados vêm do form/applicants, não do card
+        cpf_cnpj: cnpj,
+        phone: values.contact_phone ?? undefined,
+        email: values.email,
         received_at: createdCard.received_at ?? undefined,
         applicant_id: applicantProd!.id,
       });
@@ -178,63 +168,152 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
 
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle>Dados Cadastrais Básicos</DialogTitle>
+      <DialogContent aria-describedby={undefined} className="sm:max-w-2xl p-0 overflow-hidden">
+        {/* Header com gradiente moderno */}
+        <DialogHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
+          <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
+          <div className="relative flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+              <span className="text-white text-lg font-bold">🏢</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <img 
+                src="/src/assets/Logo MZNET (1).png" 
+                alt="MZNET Logo" 
+                className="h-8 w-auto"
+              />
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white">
+                  Nova Ficha - Pessoa Jurídica
+                </DialogTitle>
+                <p className="text-green-100 text-sm mt-1">
+                  Dados cadastrais básicos da empresa
+                </p>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={handleSubmit} className="space-y-6 mz-form">
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <FormField control={form.control} name="corporate_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Razão Social</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="trade_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome Fantasia</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="cnpj" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CNPJ</FormLabel>
-                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} placeholder="00.000.000/0000-00" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>E-mail</FormLabel>
-                  <FormControl><Input type="email" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="phone" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Telefone</FormLabel>
-                  <FormControl><Input value={field.value} onChange={(e)=> field.onChange(maskPhone(e.target.value))} placeholder="(00) 00000-0000" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="contact_name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nome completo (contato)</FormLabel>
-                  <FormControl><Input {...field} placeholder="Nome completo do contato" /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              </section>
-            
+          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* Seção: Dados da Empresa */}
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                Dados da Empresa
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="corporate_name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Razão Social</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: Empresa LTDA"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="trade_name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Nome Fantasia</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        placeholder="Ex: Empresa Legal"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="cnpj" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">CNPJ</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value} 
+                        onChange={(e)=> field.onChange(maskCNPJ(e.target.value))} 
+                        placeholder="00.000.000/0000-00"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">E-mail</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="email" 
+                        {...field} 
+                        placeholder="empresa@exemplo.com"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
 
-            <div className="flex justify-between pt-2">
-              <Button type="button" variant="secondary" onClick={() => (onBack ? onBack() : onClose())}>Voltar</Button>
-              <Button type="submit" className="bg-[#018942] text-white hover:-translate-y-0.5 hover:shadow-[0_10px_18px_rgba(0,0,0,0.25)]">Criar Ficha PJ</Button>
+            {/* Seção: Contatos */}
+            <div className="bg-gray-50 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                Contatos
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="contact_phone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">Telefone</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value || ''} 
+                        onChange={(e)=> field.onChange(maskPhone(e.target.value))} 
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="contact_whatsapp" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium text-gray-700">WhatsApp</FormLabel>
+                    <FormControl>
+                      <Input 
+                        value={field.value || ''} 
+                        onChange={(e)=> field.onChange(maskPhone(e.target.value))} 
+                        placeholder="(11) 99999-9999"
+                        className="mt-1 rounded-lg border-gray-300 focus:border-[#018942] focus:ring-[#018942] text-gray-900 placeholder-gray-500"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => (onBack ? onBack() : onClose())}
+                className="flex-1 bg-white hover:bg-gray-50 text-gray-700 border-gray-300 hover:border-gray-400 rounded-lg transition-all duration-200"
+              >
+                Voltar
+              </Button>
+              <Button 
+                type="submit" 
+                className="flex-1 bg-gradient-to-r from-[#018942] to-[#016b35] hover:from-[#016b35] hover:to-[#014d28] text-white rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                Criar Ficha PJ
+              </Button>
             </div>
           </form>
         </Form>

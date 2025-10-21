@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { MentionableTextarea } from '@/components/ui/MentionableTextarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Paperclip, ArrowLeft, Trash2, ListTodo } from 'lucide-react';
 import { format } from 'date-fns';
-import { CommentItem, Comment } from './CommentItem';
-import { AttachmentList } from '@/components/attachments/AttachmentDisplay';
+import type { Comment } from './CommentItem';
 import { AttachmentUploadModal } from '@/components/attachments/AttachmentUploadModal';
 import { useAttachments } from '@/hooks/useAttachments';
 import { cn } from '@/lib/utils';
@@ -15,6 +12,8 @@ import { CommentContentRenderer } from './CommentContentRenderer';
 import { AddTaskModal } from '@/components/tasks/AddTaskModal';
 import { useTasks } from '@/hooks/useTasks';
 import { supabase } from '@/integrations/supabase/client';
+import type { Task, CreateTaskInput } from '@/types/tasks';
+import type { UploadAttachmentData } from '@/hooks/useAttachments';
 
 export interface CommentsListProps {
   cardId: string;
@@ -22,11 +21,11 @@ export interface CommentsListProps {
   currentUserName: string;
   currentUserRole?: string;
   comments: Comment[];
-  onAddComment: (content: string, attachments?: string[]) => Promise<Comment | null> | void;
+  onAddComment?: (content: string, attachments?: string[]) => Promise<Comment | null> | void;
   onReply: (parentId: string, content: string, attachments?: string[]) => Promise<Comment | null> | void;
   onEdit?: (commentId: string, content: string) => void;
-  onDelete?: (commentId: string) => void;
-  onEditTask?: (task: any) => void; // Callback para editar tarefa
+  onDelete?: (commentId: string) => Promise<boolean> | boolean;
+  onEditTask?: (task: Task) => void; // Callback para editar tarefa
   onRefetch?: () => void;
   // Removido sistema de empresas - todos podem acessar anexos
 }
@@ -44,33 +43,24 @@ export function CommentsList({
   onEditTask,
   onRefetch
 }: CommentsListProps) {
-  const [newComment, setNewComment] = useState('');
+  // Removido campo de novo comentário não utilizado
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [deletingComment, setDeletingComment] = useState<string | null>(null);
-  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [showReplyAttachmentModal, setShowReplyAttachmentModal] = useState(false);
-  const [pendingReplyAttachments, setPendingReplyAttachments] = useState<any[]>([]);
+  const [pendingReplyAttachments, setPendingReplyAttachments] = useState<UploadAttachmentData[]>([]);
   const [showReplyTaskModal, setShowReplyTaskModal] = useState(false);
   const [taskParentCommentId, setTaskParentCommentId] = useState<string | null>(null);
-  const [hasPendingTask, setHasPendingTask] = useState(false);
   
   // Estados para edição de tarefa
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Carregar tarefas UMA VEZ para TODOS os comentários (otimização crítica!)
   const { tasks, updateTaskStatus, loadTasks } = useTasks(undefined, cardId);
-  console.log('📋 [CommentsList] Tarefas carregadas centralizadamente:', tasks.length);
-  
-  // Debug: Mostrar quando as tarefas mudam
-  useEffect(() => {
-    console.log('🔄 [CommentsList] Lista de tarefas atualizada:', tasks);
-  }, [tasks]);
 
   // Função para lidar com edição de tarefa
-  const handleEditTask = (task: any) => {
-    console.log('✏️ handleEditTask - Dados da tarefa recebidos:', task);
+  const handleEditTask = (task: Task) => {
     setEditingTask(task);
     setShowEditTaskModal(true);
   };
@@ -90,33 +80,17 @@ export function CommentsList({
     uploadAttachment,
     deleteAttachment,
     getDownloadUrl,
-    formatFileSize,
-    getFileIcon,
     loadAttachments
   } = useAttachments(cardId);
 
   // Função para obter anexos de um comentário específico
   const getAttachmentsForComment = (commentId: string, commentCardId: string, content?: string) => {
-    console.log('🔍 getAttachmentsForComment chamada:', {
-      commentId,
-      commentCardId,
-      content: content?.substring(0, 100) + '...',
-      totalAttachments: attachments.length,
-      attachmentsDetails: attachments.map(a => ({
-        id: a.id,
-        file_name: a.file_name,
-        deleted_at: a.deleted_at,
-        deleted_by: a.deleted_by,
-        comment_id: a.comment_id
-      }))
-    });
 
     // 1. PRIMEIRO: Tentar filtrar por comment_id (anexos novos com vínculo correto)
     let commentAttachments = attachments.filter(attachment => 
       attachment.comment_id === commentId
     );
 
-    console.log('🔍 Anexos por comment_id:', commentAttachments.length);
 
     // 2. SEGUNDO: Se não encontrar e o comentário mencionar anexo, usar fallback
     const mentionsAttachment = !!content && (
@@ -128,7 +102,6 @@ export function CommentsList({
 
     // 3. TERCEIRO: Se não encontrar anexos por comment_id, tentar fallback para TODOS os anexos do card
     if (commentAttachments.length === 0 && content && mentionsAttachment) {
-      console.log('🔍 Usando fallback para anexos sem comment_id');
       
       // Extrair nome do arquivo do texto do comentário
       const fileNameMatch = (
@@ -139,11 +112,9 @@ export function CommentsList({
       
       if (fileNameMatch) {
         const fileName = fileNameMatch[1].trim();
-        console.log('🔍 Nome do arquivo extraído:', fileName);
         
         // Buscar TODOS os anexos que NÃO têm comment_id (anexos órfãos)
         const attachmentsWithoutComment = attachments.filter(a => !a.comment_id);
-        console.log('🔍 Anexos sem comment_id:', attachmentsWithoutComment.length);
         
         // Filtrar por nome de arquivo EXATO
         let candidateAttachments = attachmentsWithoutComment.filter(attachment => 
@@ -151,17 +122,6 @@ export function CommentsList({
           attachment.file_name?.toLowerCase() === fileName.toLowerCase()
         );
         
-        console.log('🔍 Candidatos por nome de arquivo:', {
-          fileName,
-          candidates: candidateAttachments.length,
-          candidatesList: candidateAttachments.map(a => ({ 
-            id: a.id, 
-            file_name: a.file_name, 
-            file_path: a.file_path,
-            card_id: a.card_id,
-            created_at: a.created_at
-          }))
-        });
         
         // Se tem múltiplos matches, filtrar por card_id
         if (candidateAttachments.length > 1) {
@@ -170,11 +130,6 @@ export function CommentsList({
           );
           
           if (filteredByCardId.length > 0) {
-            console.log('🔍 Filtrando por card_id:', {
-              commentCardId,
-              beforeFilter: candidateAttachments.length,
-              afterFilter: filteredByCardId.length
-            });
             candidateAttachments = filteredByCardId;
           }
         }
@@ -185,24 +140,12 @@ export function CommentsList({
             new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
           )[0]];
           
-          console.log('✅ Anexo selecionado via fallback:', {
-            fileName,
-            selected: commentAttachments.map(a => ({ 
-              id: a.id, 
-              file_name: a.file_name, 
-              file_path: a.file_path,
-              created_at: a.created_at
-            }))
-          });
-        } else {
-          console.log('❌ Nenhum anexo encontrado para:', fileName);
         }
       }
     }
     
     // 4. QUARTO: Se ainda não encontrou nada, tentar mostrar TODOS os anexos recentes do card
     if (commentAttachments.length === 0 && content && mentionsAttachment) {
-      console.log('🔍 Fallback final: Mostrando anexos recentes do card');
       
       // Buscar anexos recentes do mesmo card (últimos 5 minutos)
       const recentAttachments = attachments.filter(attachment => {
@@ -216,22 +159,9 @@ export function CommentsList({
       });
       
       if (recentAttachments.length > 0) {
-        console.log('🔍 Anexos recentes encontrados:', recentAttachments.length);
         commentAttachments = recentAttachments.slice(0, 1); // Pegar apenas o mais recente
       }
     }
-    
-    console.log('🔍 RESULTADO FINAL:', {
-      commentId,
-      totalAttachments: attachments.length,
-      commentAttachments: commentAttachments.length,
-      attachmentDetails: commentAttachments.map(a => ({ 
-        id: a.id, 
-        file_name: a.file_name, 
-        file_path: a.file_path,
-        comment_id: a.comment_id
-      }))
-    });
     
     return commentAttachments;
   };
@@ -279,37 +209,14 @@ export function CommentsList({
 
   const organizedComments = organizeComments(comments);
 
-  const handleAddComment = () => {
-    if (newComment.trim()) {
-      onAddComment(newComment.trim());
-      setNewComment('');
-    }
-  };
-
-
   const handleDownloadAttachment = async (filePath: string, fileName: string) => {
     try {
-      console.log('📥 [CommentsList] handleDownloadAttachment called with:', { 
-        filePath, 
-        fileName,
-        filePathType: typeof filePath,
-        fileNameType: typeof fileName
-      });
-      
       const url = await getDownloadUrl(filePath);
       
-      console.log('📥 [CommentsList] Download URL obtained:', { 
-        url, 
-        urlType: typeof url,
-        success: !!url 
-      });
-      
       if (url) {
-        console.log('✅ [CommentsList] Abrindo URL para download:', url);
         const newTab = window.open(url, '_blank');
         
         if (!newTab) {
-          console.error('❌ [CommentsList] Pop-up bloqueado! Tentando download direto...');
           // Fallback: criar link e clicar
           const link = document.createElement('a');
           link.href = url;
@@ -318,15 +225,10 @@ export function CommentsList({
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          console.log('✅ [CommentsList] Download via link direto iniciado');
-        } else {
-          console.log('✅ [CommentsList] Nova aba aberta com sucesso');
         }
-      } else {
-        console.error('❌ [CommentsList] Failed to get download URL for:', filePath);
       }
     } catch (error) {
-      console.error('❌ [CommentsList] Error downloading attachment:', error);
+      // silencioso para UX
     }
   };
 
@@ -335,51 +237,24 @@ export function CommentsList({
       await deleteAttachment(attachmentId);
       await loadAttachments();
     } catch (error) {
-      console.error('Error deleting attachment:', error);
+      // silencioso para UX
     }
   };
 
-  const canDeleteAttachment = () => true; // Qualquer um pode deletar conforme solicitado
-
   // Funções para gerenciar resposta
   const handleReplyClick = (commentId: string) => {
-    console.log('🔍 DEBUG handleReplyClick:', {
-      commentId,
-      allComments: comments.map(c => ({ id: c.id, level: c.level, threadId: c.threadId })),
-      targetComment: comments.find(c => c.id === commentId)
-    });
     setReplyingTo(commentId);
     setReplyContent('');
   };
 
   const handleReplySubmit = async () => {
-    console.log('🔍 DEBUG handleReplySubmit INICIADO:', {
-      replyContent: replyContent.trim(),
-      replyingTo,
-      hasOnReply: !!onReply,
-      contentLength: replyContent.trim().length,
-      hasPendingAttachments: pendingReplyAttachments.length > 0,
-      pendingAttachments: pendingReplyAttachments,
-      targetComment: comments.find(c => c.id === replyingTo),
-      allComments: comments.map(c => ({ id: c.id, level: c.level, threadId: c.threadId, parentId: c.parentId }))
-    });
-    
     // Permitir resposta apenas com anexos, tarefa OU com texto
     const hasContent = replyContent.trim().length > 0;
     const hasAttachments = pendingReplyAttachments.length > 0;
     // Note: tarefas já criam comentário automaticamente via onCommentCreate
     
-    console.log('🔍 DEBUG Validação:', {
-      hasContent,
-      hasAttachments,
-      canSubmit: (hasContent || hasAttachments) && replyingTo && !!onReply
-    });
-    
     if ((hasContent || hasAttachments) && replyingTo && onReply) {
       try {
-        console.log('🔍 DEBUG: Chamando onReply...');
-        const startTime = Date.now();
-        
         // Se não houver texto mas houver anexos, criar um comentário indicando o anexo
         const contentToSend = hasContent 
           ? replyContent.trim() 
@@ -387,60 +262,29 @@ export function CommentsList({
         
         const result = await onReply(replyingTo, contentToSend);
         
-        const endTime = Date.now();
-        console.log('🔍 DEBUG: onReply executado:', {
-          result,
-          executionTime: `${endTime - startTime}ms`,
-          success: !!result
-        });
-        
         if (result) {
-          console.log('🔍 DEBUG: Resposta criada com sucesso:', result);
-          
           // Fazer upload dos anexos pendentes após criar o comentário
           if (pendingReplyAttachments.length > 0) {
-            console.log('🔍 DEBUG: Fazendo upload de anexos pendentes...');
-            for (const pendingAttachment of pendingReplyAttachments) {
-              try {
-                // Criar anexo associado ao comentário de resposta
-                const attachmentData = {
-                  file: pendingAttachment,
-                  commentId: result.id, // Associar ao comentário recém-criado
-                  customFileName: pendingAttachment.name.replace(/\.[^/.]+$/, '')
-                } as any;
-                await uploadAttachment(attachmentData);
-              } catch (error) {
-                console.error('🚨 ERRO ao fazer upload de anexo pendente:', error);
-              }
-            }
-            await loadAttachments(); // Recarregar anexos
             
-            // Chamar onRefetch para atualizar comentários instantaneamente
-            if (onRefetch) {
-              console.log('🔍 DEBUG: Chamando onRefetch para atualização instantânea...');
-              onRefetch();
-            }
+            // 🚀 OTIMIZAÇÃO: Paralelizar uploads (antes sequencial)
+            const uploadPromises = pendingReplyAttachments.map(async (pendingAttachment) => {
+              try {
+                await uploadAttachment({
+                  ...pendingAttachment,
+                  commentId: result.id,
+                });
+              } catch (error) {/* silencioso */}
+            });
+            
+            await Promise.all(uploadPromises);
+            await loadAttachments(); // Recarregar anexos
           }
           
-          console.log('🔍 DEBUG: Limpando estado...');
           setReplyingTo(null);
           setReplyContent('');
           setPendingReplyAttachments([]); // Limpar anexos pendentes
-          setReplyAttachments([]); // Limpar anexos de resposta
-          console.log('🔍 DEBUG: Estado limpo com sucesso');
-        } else {
-          console.error('🚨 ERRO: onReply retornou null/undefined');
         }
-      } catch (error) {
-        console.error('🚨 ERRO em handleReplySubmit:', error);
-        console.error('🚨 Stack trace:', error.stack);
-      }
-    } else {
-      console.log('🔍 DEBUG: Condições não atendidas para submit:', {
-        hasContent: !!replyContent.trim(),
-        hasReplyingTo: !!replyingTo,
-        hasOnReply: !!onReply
-      });
+      } catch (error) {/* silencioso */}
     }
   };
 
@@ -448,7 +292,6 @@ export function CommentsList({
     setReplyingTo(null);
     setReplyContent('');
     setPendingReplyAttachments([]); // Limpar anexos pendentes
-    setReplyAttachments([]); // Limpar anexos de resposta
   };
 
   // Funções para gerenciar exclusão de comentários
@@ -459,25 +302,12 @@ export function CommentsList({
   const handleDeleteConfirm = async () => {
     if (deletingComment && onDelete) {
       try {
-        console.log('🔍 DEBUG: Excluindo comentário:', deletingComment);
         const success = await onDelete(deletingComment);
-        console.log('🔍 DEBUG: Resultado da exclusão:', success);
         
         if (success) {
           setDeletingComment(null);
-          
-          // IMPORTANTE: Recarregar comentários após exclusão
-          // para garantir sincronização com o banco de dados
-          if (onRefetch) {
-            console.log('🔍 DEBUG: Chamando onRefetch após exclusão...');
-            setTimeout(() => {
-              onRefetch();
-            }, 100);
-          }
         }
-      } catch (error) {
-        console.error('🚨 ERRO ao excluir comentário:', error);
-      }
+      } catch (error) {/* silencioso */}
     }
   };
 
@@ -490,32 +320,22 @@ export function CommentsList({
     setShowReplyAttachmentModal(true);
   };
 
-  const handleReplyAttachmentUpload = async (data: any) => {
+  const handleReplyAttachmentUpload = async (data: UploadAttachmentData) => {
     try {
-      console.log('📎 DEBUG: Iniciando upload de anexo para resposta:', data);
-      
       // Criar resposta na conversa encadeada automaticamente
       if (replyingTo && onReply) {
         const commentContent = `📎 **Anexo adicionado**\n\n` +
           `📄 **Arquivo:** ${data.customFileName || data.file.name}\n` +
           (data.description ? `📝 **Descrição:** ${data.description}\n` : '') +
           `📎 Anexo adicionado: ${data.customFileName || data.file.name}`;
-        
-        console.log('📎 DEBUG: Criando resposta na conversa:', {
-          parentId: replyingTo,
-          content: commentContent
-        });
-        
+
         // Criar o comentário primeiro
         const result = await onReply(replyingTo, commentContent);
         
         if (result) {
-          console.log('📎 DEBUG: Resposta criada com sucesso:', result);
-          
           // Agora fazer upload do anexo e vincular ao comentário
           try {
             const uploadedAttachment = await uploadAttachment(data);
-            console.log('📎 DEBUG: Anexo enviado com sucesso:', uploadedAttachment);
             
             // Vincular anexo ao comentário criado
             if (uploadedAttachment && result.id) {
@@ -524,29 +344,16 @@ export function CommentsList({
                 .update({ comment_id: result.id })
                 .eq('id', uploadedAttachment.id);
               
-              if (updateError) {
-                console.error('📎 ERROR: Erro ao vincular anexo ao comentário:', updateError);
-              } else {
-                console.log('📎 DEBUG: Anexo vinculado ao comentário com sucesso');
-              }
+              if (updateError) {/* silencioso */}
             }
-          } catch (uploadError) {
-            console.error('📎 ERROR: Erro no upload do anexo:', uploadError);
-          }
+          } catch (uploadError) {/* silencioso */}
           
           // Fechar modal e resetar estado
           setShowReplyAttachmentModal(false);
           setReplyingTo(null);
-          
-          // Atualizar comentários
-          if (onRefetch) {
-            onRefetch();
-          }
         }
       }
-    } catch (error) {
-      console.error('📎 ERROR: Erro ao fazer upload de anexo para resposta:', error);
-    }
+    } catch (error) {/* silencioso */}
   };
 
   // Função para obter cor do thread
@@ -561,18 +368,10 @@ export function CommentsList({
     try {
       const colorIndex = parseInt(threadId.slice(-1), 16) % threadColors.length;
       return threadColors[colorIndex] || 'bg-gray-500';
-    } catch (error) {
-      console.warn('Error parsing threadId:', threadId, error);
-      return 'bg-gray-500';
-    }
+    } catch (error) { return 'bg-gray-500'; }
   };
 
-  // Função para obter índice do thread
-  const getThreadIndex = (threadId: string) => {
-    const uniqueThreads = [...new Set(comments.map(c => c.threadId || c.id))];
-    const index = uniqueThreads.indexOf(threadId) + 1;
-    return index;
-  };
+  // (removido) getThreadIndex não utilizado
 
   // Função para agrupar comentários por thread
   const getGroupedComments = () => {
@@ -603,13 +402,6 @@ export function CommentsList({
   const canReplyToComment = (comment: Comment) => {
     const MAX_LEVEL = 7;
     const canReply = comment.level < MAX_LEVEL;
-    console.log('🔍 DEBUG canReplyToComment:', {
-      commentId: comment.id,
-      level: comment.level,
-      maxLevel: MAX_LEVEL,
-      canReply,
-      threadId: comment.threadId
-    });
     return canReply;
   };
 
@@ -912,7 +704,6 @@ export function CommentsList({
         onClose={() => {
           setShowReplyTaskModal(false);
           setTaskParentCommentId(null);
-          setHasPendingTask(false);
         }}
         cardId={cardId}
         parentCommentId={taskParentCommentId || undefined}
@@ -925,13 +716,9 @@ export function CommentsList({
             if (result) {
               setShowReplyTaskModal(false);
               setTaskParentCommentId(null);
-              setHasPendingTask(false);
               setReplyingTo(null); // Fechar campo de resposta
               
-              // Atualizar comentários
-              if (onRefetch) {
-                onRefetch();
-              }
+              // Realtime cuidará da atualização da lista de comentários
             }
             
             return result || null;
@@ -946,19 +733,8 @@ export function CommentsList({
         onClose={handleCloseEditTaskModal}
         cardId={cardId}
         editingTask={editingTask}
-        onTaskUpdate={async (taskId: string, updates: any) => {
-          // Recarregar tarefas E comentários para refletir mudanças
-          console.log('🔄 [CommentsList] Recarregando tarefas e comentários após atualização...');
-          
-          // 1. Recarregar tarefas (para atualizar os cards de tarefa)
+        onTaskUpdate={async (taskId: string, updates: Partial<CreateTaskInput>) => {
           await loadTasks();
-          console.log('✅ [CommentsList] Tarefas recarregadas');
-          
-          // 2. Recarregar comentários (para atualizar conversas)
-          if (onRefetch) {
-            onRefetch();
-          }
-          console.log('✅ [CommentsList] Comentários recarregados - PROCESSO COMPLETO! 🎉');
           return true;
         }}
       />

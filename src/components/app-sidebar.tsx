@@ -31,7 +31,8 @@ type NavItem = {
 
 const sidebarDimensions: CSSProperties = {
   "--sidebar-width": "14rem",
-  "--sidebar-width-icon": "5.5rem",
+  "--sidebar-width-icon": "4rem", // Largura quando oculto
+  "--sidebar-width-expanded": "14rem", // Largura quando expandido
 };
 
 const navigationItems: NavItem[] = [
@@ -49,92 +50,89 @@ export function AppSidebar() {
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const renderItem = (item: NavItem) => {
-    const active = item.end ? currentPath === item.url : currentPath.startsWith(item.url);
-
-    return (
-      <SidebarMenuItem key={item.title} className="w-full">
-        <SidebarMenuButton
-          asChild
-          isActive={active}
-          tooltip={item.title}
-          className={cn(
-            "relative flex h-12 w-full items-center gap-3 rounded-full border border-[var(--overlay-white-25)]",
-            "bg-[var(--overlay-white-12)] px-4 text-[color:var(--overlay-white-90)] transition-all duration-200 backdrop-blur-md",
-            "hover:border-[var(--overlay-white-55)] hover:bg-[var(--overlay-white-35)] hover:text-[hsl(var(--neutral-white))]",
-            "focus-visible:ring-2 focus-visible:ring-[var(--overlay-white-55)] focus-visible:ring-offset-0",
-            "data-[active=true]:border-[var(--overlay-white-90)] data-[active=true]:bg-[var(--overlay-white-35)]",
-            "data-[active=true]:text-[hsl(var(--neutral-white))] data-[active=true]:shadow-[0_12px_32px_hsl(var(--brand)/0.38)]",
-            "after:absolute after:right-[-14px] after:h-10 after:w-1.5 after:rounded-full after:bg-[hsl(var(--neutral-white))] after:opacity-0 after:transition-opacity",
-            "data-[active=true]:after:opacity-100",
-            "group-data-[collapsible=icon]:!w-12 group-data-[collapsible=icon]:!px-0 group-data-[collapsible=icon]:justify-center",
-            "group-data-[collapsible=icon]:rounded-3xl group-data-[collapsible=icon]:border-[var(--overlay-white-25)]",
-            "group-data-[collapsible=icon]:bg-[var(--overlay-white-12)] group-data-[collapsible=icon]:shadow-none group-data-[collapsible=icon]:after:hidden"
-          )}
-        >
-          <NavLink
-            to={item.url}
-            end={item.end}
-            aria-label={item.title}
-            className="flex h-full w-full items-center justify-start gap-3 transition-colors group-data-[collapsible=icon]:justify-center"
-          >
-            <item.icon className="h-5 w-5" aria-hidden="true" />
-            <span className="text-sm font-medium tracking-wide text-[color:var(--overlay-white-92)] group-data-[collapsible=icon]:hidden">
-              {item.title}
-            </span>
-          </NavLink>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
-    );
-  };
-
   return (
-    <Sidebar
-      collapsible="none"
-      variant="sidebar"
-      style={sidebarDimensions}
-      className={cn(
-        // Verde sólido diretamente no container quando collapsible="none"
-        "bg-[hsl(var(--brand))] text-white",
-        // E fallback para variantes que usam o wrapper interno
-        "[&_[data-sidebar=sidebar]]:bg-[hsl(var(--brand))]",
-        "[&_[data-sidebar=sidebar]]:text-[hsl(var(--neutral-white))]",
-        "[&_[data-sidebar=content]]:px-0"
-      )}
-    >
-      {/* Toggle button removido: sidebar permanece sempre aberta */}
-
-      <SidebarContent className="flex h-full flex-col items-center justify-between gap-0 px-0 py-6">
-        <div className="flex flex-col items-center gap-8">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-3xl border border-[var(--overlay-white-35)] bg-[var(--overlay-white-12)] text-base font-bold uppercase tracking-[0.3em] text-[color:var(--overlay-white-92)]">
-              MZ
+    <>
+      {/* Trigger invisível para detectar hover */}
+      <div className="fixed left-0 top-0 z-40 h-full w-4 hover:w-16 transition-all duration-300 group">
+        {/* Sidebar flutuante que aparece no hover */}
+        <div className={cn(
+          "fixed left-2 top-6 bottom-6 z-50 transition-all duration-300 ease-out",
+          "bg-gradient-to-b from-[#018942] via-[#016b35] to-[#014d28] text-white",
+          "rounded-2xl shadow-2xl backdrop-blur-xl border border-white/20",
+          "w-0 opacity-0 overflow-hidden",
+          "group-hover:w-64 group-hover:opacity-100",
+          "flex flex-col items-center justify-between py-6"
+        )}>
+          {/* Conteúdo do sidebar */}
+          <div className="flex flex-col items-center gap-8 w-full px-4">
+            {/* Logo Section */}
+            <div className="flex flex-col items-center gap-3 relative">
+              <div className="relative">
+                <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl"></div>
+                <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-white/30 to-white/10 backdrop-blur-md border border-white/40 text-lg font-bold uppercase tracking-[0.3em] text-white shadow-lg">
+                  MZ
+                </div>
+              </div>
+              <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+                <span className="text-xs font-semibold tracking-widest text-white">
+                  Net
+                </span>
+                <div className="h-px w-8 bg-gradient-to-r from-transparent via-white/40 to-transparent"></div>
+              </div>
             </div>
-            <span className="text-[0.65rem] uppercase tracking-[0.5em] text-[color:var(--overlay-white-60)] group-data-[state=collapsed]:hidden">
-              Net
-            </span>
+
+            {/* Navigation Items */}
+            <div className="flex flex-col items-center gap-3 w-full">
+              {navigationItems.map((item) => {
+                const active = item.end ? currentPath === item.url : currentPath.startsWith(item.url);
+                
+                return (
+                  <div key={item.title} className="w-full">
+                    <NavLink
+                      to={item.url}
+                      end={item.end}
+                      aria-label={item.title}
+                      className={cn(
+                        "relative flex h-12 w-full items-center gap-3 rounded-xl border transition-all duration-300 group/item",
+                        "backdrop-blur-md px-4",
+                        // Estado normal
+                        "border-white/20 bg-white/10 text-white/80",
+                        // Hover
+                        "hover:border-white/40 hover:bg-white/20 hover:text-white hover:scale-[1.02] hover:shadow-lg",
+                        // Estado ativo
+                        active && "border-white/60 bg-white/25 text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]",
+                        // Indicador lateral
+                        "after:absolute after:right-2 after:h-8 after:w-1 after:rounded-full after:bg-white after:opacity-0 after:transition-all after:duration-300",
+                        active && "after:opacity-100 after:shadow-[0_0_12px_rgba(255,255,255,0.5)]"
+                      )}
+                    >
+                      <div className={cn(
+                        "flex items-center justify-center transition-all duration-300",
+                        active && "scale-110"
+                      )}>
+                        <item.icon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <span className={cn(
+                        "text-sm font-medium tracking-wide transition-all duration-300",
+                        active ? "text-white font-semibold" : "text-white/90",
+                        "opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
+                      )}>
+                        {item.title}
+                      </span>
+                      {active && (
+                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75">
+                          <ChevronRight className="h-4 w-4 text-white/60" />
+                        </div>
+                      )}
+                    </NavLink>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-
-          <SidebarGroup className="w-full p-0">
-            <SidebarGroupContent className="flex w-full justify-center">
-              <SidebarMenu className="flex w-full flex-col items-center gap-5">
-                {navigationItems.map(renderItem)}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
         </div>
-
-        {utilityItems.length > 0 && (
-          <SidebarGroup className="w-full p-0">
-            <SidebarGroupContent className="flex w-full justify-center">
-              <SidebarMenu className="flex w-full flex-col items-center gap-5">
-                {utilityItems.map(renderItem)}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-      </SidebarContent>
-    </Sidebar>
+      </div>
+    </>
   );
 }
 

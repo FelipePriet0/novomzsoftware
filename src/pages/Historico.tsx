@@ -190,12 +190,18 @@ const Historico = () => {
                 placeholder="Data inicial"
                 value={startDate}
                 onChange={(v) => setStartDate(v)}
+                allowTyping={false}
+                showIcon={true}
+                forceFlatpickr={true}
               />
 
               <DatePicker
                 placeholder="Data final"
                 value={endDate}
                 onChange={(v) => setEndDate(v)}
+                allowTyping={false}
+                showIcon={true}
+                forceFlatpickr={true}
               />
 
               <div className="flex gap-2">

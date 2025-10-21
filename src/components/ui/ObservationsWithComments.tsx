@@ -40,13 +40,6 @@ export function ObservationsWithComments({
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   
-  // Debug: verificar se o profile está sendo carregado
-  console.log('🔍 ObservationsWithComments - Debug:', { 
-    profile: profile?.full_name, 
-    profileId: profile?.id,
-    cardId 
-  });
-  
   const {
     comments,
     isLoading: isLoadingComments,
@@ -61,66 +54,25 @@ export function ObservationsWithComments({
 
 
   const handleReply = async (parentId: string, content: string) => {
-    console.log('🔍 DEBUG ObservationsWithComments handleReply:', {
-      parentId,
-      content,
-      profileId: profile?.id,
-      currentUserName,
-      profileRole: profile?.role
-    });
-    
-    if (!profile?.id) {
-      console.error('🚨 ERRO: profile.id não encontrado');
-      return null;
-    }
-    
+    if (!profile?.id) return null;
     try {
-      console.log('🔍 DEBUG: Chamando replyToComment...');
-      const result = await replyToComment(
+      return await replyToComment(
         parentId,
         content,
         profile.id,
         currentUserName || profile.full_name || 'Usuário',
         profile.role
       );
-      console.log('🔍 DEBUG: replyToComment resultado:', result);
-      return result; // IMPORTANTE: Retornar o resultado para o CommentsList
-    } catch (error) {
-      console.error('🚨 ERRO em handleReply:', error);
+    } catch {
       return null;
     }
   };
 
   const handleDelete = async (commentId: string) => {
-    console.log('🔍 DEBUG ObservationsWithComments handleDelete:', {
-      commentId,
-      profileId: profile?.id,
-      currentUserName,
-      profileRole: profile?.role
-    });
-    
-    if (!profile?.id) {
-      console.error('🚨 ERRO: profile.id não encontrado');
-      return false;
-    }
-    
+    if (!profile?.id) return false;
     try {
-      console.log('🔍 DEBUG: Chamando deleteComment...');
-      const result = await deleteComment(commentId);
-      console.log('🔍 DEBUG: deleteComment resultado:', result);
-      
-      // IMPORTANTE: Recarregar comentários do banco após exclusão
-      // para garantir sincronização com o estado real
-      if (result && onRefetch) {
-        console.log('🔍 DEBUG: Chamando onRefetch para recarregar comentários...');
-        setTimeout(() => {
-          onRefetch();
-        }, 100);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('🚨 ERRO em handleDelete:', error);
+      return await deleteComment(commentId);
+    } catch {
       return false;
     }
   };
@@ -136,19 +88,12 @@ export function ObservationsWithComments({
           value={value}
           onChange={onChange}
           onKeyDown={async (e) => {
-            console.log('🔍 DEBUG: Tecla pressionada:', e.key);
             if (e.key === 'Enter' && !e.shiftKey) {
-              console.log('🔍 DEBUG: Enter detectado, iniciando criação de comentário...');
               e.preventDefault();
               const text = value.trim();
-              console.log('🔍 DEBUG: Texto:', text);
-              console.log('🔍 DEBUG: hasCommentsError:', hasCommentsError);
-              console.log('🔍 DEBUG: cardId:', cardId);
-              console.log('🔍 DEBUG: profile:', profile);
               
               if (text && !hasCommentsError) {
                 try {
-                  console.log('🔍 DEBUG: Chamando createComment...');
                   const result = await createComment({
                     cardId: cardId,
                     authorId: profile?.id || '',
@@ -158,18 +103,12 @@ export function ObservationsWithComments({
                     level: 0,
                     threadId: `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` // Gerar thread_id único para nova conversa
                   });
-                  console.log('🔍 DEBUG: createComment resultado:', result);
                   
                   // Limpar o campo após criar a conversa
                   onChange({
                     target: { name, value: '' }
                   } as React.ChangeEvent<HTMLTextAreaElement>);
-                  console.log('🔍 DEBUG: Campo limpo com sucesso');
-                } catch (error) {
-                  console.error('🚨 ERRO ao criar conversa:', error);
-                }
-              } else {
-                console.log('🔍 DEBUG: Condições não atendidas - text:', !!text, 'hasCommentsError:', hasCommentsError);
+                } catch {}
               }
             }
           }}
@@ -228,7 +167,7 @@ export function ObservationsWithComments({
             onAddComment={undefined}
             onReply={handleReply}
             onDelete={handleDelete}
-            onRefetch={onRefetch}
+            // Realtime sincroniza comentários; sem onRefetch explícito
           />
         </div>
       )}

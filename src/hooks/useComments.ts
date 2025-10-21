@@ -1,5 +1,6 @@
-﻿import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { dbg } from '@/lib/debug';
 import { Comment } from '@/components/comments/CommentItem';
 import { toast } from '@/hooks/use-toast';
 
@@ -22,6 +23,7 @@ export function useComments(cardId: string) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Extrair @menÃ§Ãµes do texto
   const extractMentions = (text: string): string[] => {
@@ -37,6 +39,7 @@ export function useComments(cardId: string) {
   };
 
   // Enviar notificações (somente: menções)
+  // Estrutura nova: título com autor, corpo com Nome do Card + snippet do conteúdo
   const sendNotifications = async (content: string, authorId: string, parentComment?: Comment) => {
     try {
       const mentions = extractMentions(content);
@@ -44,6 +47,33 @@ export function useComments(cardId: string) {
       // Notificar usuários mencionados via inbox_notifications
       for (const mention of mentions) {
         try {
+          // Resolver autor (nome) e título do card
+          let authorName = 'Colaborador';
+          try {
+            const { data: author } = await (supabase as any)
+              .from('profiles')
+              .select('full_name')
+              .eq('id', authorId)
+              .maybeSingle();
+            if (author?.full_name) authorName = author.full_name;
+          } catch {}
+
+          let cardTitle = 'Cliente';
+          let applicantId: string | null = null;
+          try {
+            const { data: kc } = await (supabase as any)
+              .from('kanban_cards')
+              .select('applicant:applicant_id(id, primary_name)')
+              .eq('id', cardId)
+              .maybeSingle();
+            cardTitle = kc?.applicant?.primary_name || 'Cliente';
+            applicantId = kc?.applicant?.id || null;
+          } catch {}
+
+          const snippet = String(content || '')
+            .replace(/\s+/g, ' ')
+            .slice(0, 140);
+
           // Encontrar perfil por início do nome (menções usam primeira palavra)
           const { data: profiles } = await (supabase as any)
             .from('profiles')
@@ -59,11 +89,12 @@ export function useComments(cardId: string) {
                 user_id: userId,
                 type: 'mention',
                 priority: 'low',
-                title: 'Você foi mencionado',
-                body: `Você foi mencionado em um comentário (@${mention}).`,
-                meta: { cardId },
-                transient: false,
-              });
+                title: `${authorName} mencionou você em um comentário`,
+                body: `${cardTitle}\n${snippet}`,
+                 applicant_id: applicantId || undefined,
+                 meta: { cardId, applicantId },
+                 transient: false,
+               });
           }
         } catch (e) {
           // Fallback silencioso: ainda mostra toast local
@@ -486,7 +517,13 @@ export function useComments(cardId: string) {
   useEffect(() => {
     if (!cardId) return;
 
-    console.log('🔴 [useComments] Configurando Realtime para card:', cardId);
+    // Evitar criar canais duplicados
+    if (channelRef.current) {
+      dbg('realtime', 'comments: canal já existe – pulando');
+      return;
+    }
+
+    dbg('realtime', 'comments: configurar realtime');
     
     const channel = supabase
       .channel(`comments-${cardId}`)
@@ -498,21 +535,26 @@ export function useComments(cardId: string) {
           table: 'card_comments',
           filter: `card_id=eq.${cardId}`
         },
-        (payload) => {
-          console.log('🔴 [useComments] Mudança detectada no banco:', payload.eventType, payload);
-          
+        () => {
           // Recarregar comentários automaticamente quando houver qualquer mudança
           loadComments();
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [useComments] Status da subscrição Realtime:', status);
+        if (status === 'CHANNEL_ERROR') {
+          dbg('realtime', 'comments: realtime error');
+        }
       });
+
+    channelRef.current = channel;
 
     // Cleanup ao desmontar
     return () => {
-      console.log('🔴 [useComments] Removendo subscrição Realtime');
-      supabase.removeChannel(channel);
+      dbg('realtime', 'comments: remover realtime');
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
   }, [cardId, loadComments]);
 

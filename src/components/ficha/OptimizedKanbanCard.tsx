@@ -30,7 +30,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canIngressar, canChangeStatus } from "@/lib/access";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { CardItem } from "@/components/KanbanBoard";
+import type { CardItem } from "@/components/KanbanBoard";
 
 interface OptimizedKanbanCardProps {
   card: CardItem;
@@ -46,6 +46,7 @@ interface OptimizedKanbanCardProps {
   isDragging?: boolean;
   onAttachmentClick?: (cardId: string) => void;
   onCardClick?: (card: CardItem) => void;
+  isFocused?: boolean;
 }
 
 export function OptimizedKanbanCard({ 
@@ -62,6 +63,7 @@ export function OptimizedKanbanCard({
   isDragging = false,
   onAttachmentClick,
   onCardClick,
+  isFocused = false,
 }: OptimizedKanbanCardProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -95,9 +97,11 @@ export function OptimizedKanbanCard({
   const formatDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
+      // Formatar em UTC para evitar "voltar 1 dia" em fusos negativos
       return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
+        timeZone: 'UTC',
       });
     } catch {
       return '';
@@ -174,16 +178,17 @@ export function OptimizedKanbanCard({
             target.closest('[role="menuitem"]') ||
             target.closest('.dropdown-menu') ||
             target.closest('[data-radix-collection-item]')) {
-          console.log('🚫 [DEBUG] Clicou no dropdown, bloqueando card click');
+        if (import.meta?.env?.DEV) console.log('🚫 [DEBUG] Clicou no dropdown, bloqueando card click');
           return;
         }
         // Prevent click during drag
         if (isDraggingHook) {
           return;
         }
-        console.log('✅ [DEBUG] Clicou no card, abrindo edição');
+        if (import.meta?.env?.DEV) console.log('✅ [DEBUG] Clicou no card, abrindo edição');
         onCardClick?.(card);
       }}
+      data-card-id={card.id}
       className={cn(
         // Cursor logic (like Trello):
         // - Default cursor: Normal cursor for clicking
@@ -191,7 +196,8 @@ export function OptimizedKanbanCard({
         isDraggingHook ? "cursor-grabbing" : "",
         "border border-border bg-card hover:shadow-md transition-shadow duration-200",
         isDraggingHook && "opacity-90 shadow-xl rotate-1 z-50",
-        isOverdue && "border-destructive/50 bg-destructive/5"
+        isOverdue && "border-destructive/50 bg-destructive/5",
+        isFocused && "ring-2 ring-[hsl(var(--brand))] ring-offset-2"
       )}
     >
       <CardContent className="p-3 space-y-2">
@@ -262,13 +268,15 @@ export function OptimizedKanbanCard({
           </div>
         )}
 
-        {/* Schedule Info */}
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1 text-muted-foreground">
-            <Calendar className="h-3 w-3" />
-            <span>Prazo: {formatDate(card.deadline)}</span>
+        {/* Schedule Info: mostra apenas se houver "Instalação agendada" (due_at) */}
+        {card.hasDueAt && (
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span>Prazo: {formatDate(card.deadline)}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Company & Vendor */}
         <div className="flex items-center justify-between">
@@ -371,7 +379,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={handleIngressarAction}
                   disabled={actionLoading === "Ingressar"}
-                  className="h-7 text-xs px-2"
+                  className="h-7 text-xs px-2 bg-[#018942] hover:bg-[#018942]/90 text-white border-[#018942] hover:border-[#018942]/90"
                   data-action-button
                 >
                   {actionLoading === "Ingressar" ? "..." : "Ingressar"}
@@ -385,7 +393,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={() => handleDecisionAction("aprovar", onAprovar)}
                   disabled={actionLoading === "Aprovar"}
-                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700"
+                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                   data-action-button
                 >
                   <Check className="w-3 h-3 mr-1" />
@@ -407,7 +415,7 @@ export function OptimizedKanbanCard({
                   variant="outline"
                   onClick={() => handleDecisionAction("reanalisar", onReanalisar)}
                   disabled={actionLoading === "Reanalisar"}
-                  className="h-7 text-xs px-2"
+                  className="h-7 text-xs px-2 bg-[#fbbf24] hover:bg-[#f59e0b]/90 text-white border-[#f59e0b] hover:border-[#f59e0b]/90"
                   data-action-button
                 >
                   <RotateCcw className="w-3 h-3 mr-1" />
@@ -423,7 +431,7 @@ export function OptimizedKanbanCard({
                   variant="default"
                   onClick={() => handleDecisionAction("aprovar", onAprovar)}
                   disabled={actionLoading === "Aprovar"}
-                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700"
+                  className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                   data-action-button
                 >
                   <Check className="w-3 h-3 mr-1" />

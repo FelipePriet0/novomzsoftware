@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   DndContext,
   DragEndEvent,
@@ -39,16 +40,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Calendar } from "@/components/ui/calendar";
+import DatePicker from "@/components/ui/DatePicker";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Calendar as CalendarIcon, UserPlus, Search, Edit, User } from "lucide-react";
+import { Calendar as CalendarIcon, UserPlus, Search, Edit, User, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import ModalEditarFicha from "@/components/ui/ModalEditarFicha";
 import NovaFichaComercialForm, { ComercialFormValues } from "@/components/NovaFichaComercialForm";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 
 // New secure ficha creation components
 import { ConfirmCreateModal } from "@/components/ficha/ConfirmCreateModal";
@@ -69,7 +71,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canChangeStatus, isPremium } from "@/lib/access";
 import { useDraftPersistence } from "@/hooks/useDraftPersistence";
 import { supabase } from "@/integrations/supabase/client";
-import { useLocation } from "react-router-dom";
+import { dbg } from "@/lib/debug";
 
 // Types
 export type ColumnId =
@@ -173,10 +175,12 @@ type CommercialStage = Extract<ColumnId, `com_${string}`>;
 type CommercialStageDB = 'entrada' | 'feitas' | 'aguardando' | 'canceladas' | 'concluidas';
 
 export default function KanbanBoard() {
+  const devLog = (...args: any[]) => { if (import.meta?.env?.DEV) console.log(...args); };
   const [cards, setCards] = useState<CardItem[]>(initialCards);
   const [query, setQuery] = useState("");
-  const [responsavelFiltro, setResponsavelFiltro] = useState<string>("todos");
+  const [responsavelFiltro, setResponsavelFiltro] = useState<string[]>([]);
   const [prazoFiltro, setPrazoFiltro] = useState<PrazoFiltro>("todos");
+  const [prazoOpenTick, setPrazoOpenTick] = useState(0);
   const [prazoData, setPrazoData] = useState<Date | null>(null);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [atribuidasFiltro, setAtribuidasFiltro] = useState<AtribuidasFilter>('none');
@@ -220,6 +224,8 @@ export default function KanbanBoard() {
     action: 'aprovar' | 'negar' | 'reanalisar';
     card: CardItem;
   } | null>(null);
+  // Focus/highlight card without opening modal (via query param)
+  const [focusedCardId, setFocusedCardId] = useState<string | null>(null);
   const [resumeSessionChecked, setResumeSessionChecked] = useState(false);
   
   // Estado para feedback visual do drag and drop
@@ -280,6 +286,7 @@ export default function KanbanBoard() {
     return () => window.removeEventListener('focus', onFocus);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const [isScrolling, setIsScrolling] = useState(false);
   
   // Estados para sistema de anexos
@@ -289,6 +296,8 @@ export default function KanbanBoard() {
   const { name: currentUserName } = useCurrentUser();
   const { profile } = useAuth();
   const { checkForExistingSession } = useDraftPersistence();
+  // Ref para rolagem horizontal (estilo Trello)
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   
   // Hook para gerenciar anexos do card selecionado
   const { 
@@ -308,6 +317,7 @@ export default function KanbanBoard() {
   // Load cards from Supabase (kanban_cards + applicants)
   const loadApplications = async () => {
     try {
+      // Primeira tentativa: consulta com relacionamentos (se DB suportar)
       const { data, error } = await (supabase as any)
         .from("kanban_cards")
         .select(`
@@ -317,38 +327,35 @@ export default function KanbanBoard() {
           person_type,
           assignee_id,
           created_by,
-          title,
-          cpf_cnpj,
-          phone,
-          email,
           received_at,
           due_at,
-          source,
-          applicant:applicant_id ( id, primary_name, city, uf, email ),
+          applicant:applicant_id ( id, primary_name, cpf_cnpj, phone, email ),
           assignee:assignee_id ( id, full_name ),
           creator:created_by ( id, full_name )
         `)
         .is('deleted_at', null)
         .order("created_at", { ascending: false });
+
       if (error) throw error;
       if (!data) return;
+
       const mapped: CardItem[] = (data as any[]).map((row: any) => {
         const receivedAt = row.received_at ? new Date(row.received_at).toISOString() : new Date().toISOString();
-      const hasDueAt = !!row.due_at;
-      const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
-      return {
-        id: row.id,
-        nome: row.title ?? row.applicant?.primary_name ?? 'Cliente',
-          cpf: row.cpf_cnpj ?? '',
+        const hasDueAt = !!row.due_at;
+        const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
+        return {
+          id: row.id,
+          nome: row.applicant?.primary_name ?? 'Cliente',
+          cpf: row.applicant?.cpf_cnpj ?? '',
           receivedAt,
           deadline,
           hasDueAt,
           responsavel: row.assignee?.full_name ?? undefined,
           responsavelId: row.assignee_id ?? undefined,
-          telefone: row.phone ?? undefined,
-          email: row.email ?? row.applicant?.email ?? undefined,
-          naturalidade: row.applicant?.city ?? undefined,
-          uf: row.applicant?.uf ?? undefined,
+          telefone: row.applicant?.phone ?? undefined,
+          email: row.applicant?.email ?? undefined,
+          naturalidade: undefined,
+          uf: undefined,
           applicantId: row.applicant?.id ?? undefined,
           personType: row.person_type ?? undefined,
           parecer: '',
@@ -380,56 +387,277 @@ export default function KanbanBoard() {
           area: row.area as 'comercial' | 'analise',
         } as CardItem;
       });
-      console.log('Loaded cards:', mapped.length);
-      console.log('Cards by column:', mapped.map(c => ({ id: c.id, nome: c.nome, columnId: c.columnId })));
+      // Debug logs removidos para reduzir ruído no console
       setCards(mapped);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[Kanban] Falha ao carregar aplicações", e);
+      // Fallback: remover relacionamentos para evitar 500 quando FKs não existem
+      console.warn('[Kanban] Relações ausentes ou indisponíveis; usando fallback simples.', e);
+      try {
+        const { data: baseRows, error: baseErr } = await (supabase as any)
+          .from('kanban_cards')
+          .select('id, area, stage, person_type, assignee_id, created_by, received_at, due_at, applicant_id')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
+        if (baseErr) throw baseErr;
+        const applicantIds = Array.from(new Set((baseRows || []).map((r: any) => r.applicant_id).filter(Boolean)));
+        let applicantsById: Record<string, any> = {};
+        if (applicantIds.length > 0) {
+          const { data: apps, error: appsErr } = await (supabase as any)
+            .from('applicants')
+            .select('id, primary_name, cpf_cnpj, phone, email')
+            .in('id', applicantIds);
+          if (!appsErr && Array.isArray(apps)) {
+            applicantsById = Object.fromEntries(apps.map((a: any) => [a.id, a]));
+          }
+        }
+        const mapped: CardItem[] = (baseRows || []).map((row: any) => {
+          const receivedAt = row.received_at ? new Date(row.received_at).toISOString() : new Date().toISOString();
+          const hasDueAt = !!row.due_at;
+          const deadline = hasDueAt ? new Date(row.due_at).toISOString() : receivedAt;
+          const app = row.applicant_id ? applicantsById[row.applicant_id] : null;
+          return {
+            id: row.id,
+            nome: app?.primary_name || 'Cliente',
+            cpf: app?.cpf_cnpj || '',
+            receivedAt,
+            deadline,
+            hasDueAt,
+            responsavel: undefined,
+            responsavelId: row.assignee_id || undefined,
+            telefone: app?.phone || undefined,
+            email: app?.email || undefined,
+            naturalidade: undefined,
+            uf: undefined,
+            applicantId: row.applicant_id || undefined,
+            personType: row.person_type || undefined,
+            parecer: '',
+            vendedorNome: undefined,
+            analystName: undefined,
+            createdById: row.created_by || undefined,
+            columnId: ((): ColumnId => {
+              if (row.area === 'comercial') {
+                const stageMap: Record<string, ColumnId> = {
+                  'entrada': 'com_entrada',
+                  'feitas': 'com_feitas',
+                  'aguardando_doc': 'com_aguardando',
+                  'canceladas': 'com_canceladas',
+                  'concluidas': 'com_concluidas'
+                };
+                return stageMap[row.stage] || 'com_entrada';
+              } else {
+                return (row.stage as ColumnId) || 'recebido';
+              }
+            })(),
+            createdAt: receivedAt,
+            updatedAt: receivedAt,
+            lastMovedAt: receivedAt,
+            labels: [],
+            commercialStage: row.area === 'comercial' ? ((): any => {
+              const m: any = { entrada: 'entrada', feitas: 'feitas', aguardando_doc: 'aguardando', canceladas: 'canceladas', concluidas: 'concluidas' };
+              return m[row.stage] ?? 'entrada';
+            })() : undefined,
+            area: row.area as 'comercial' | 'analise',
+          } as CardItem;
+        });
+        setCards(mapped);
+      } catch (e2) {
+        console.error('[Kanban] Falha no fallback ao carregar aplicações', e2);
+      }
     }
   };
 
+  const routeLocation = useLocation();
+  const navigate = useNavigate();
+
   // Abrir card por query param (?openCardId=...)
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    // Realtime: atualizar o board quando kanban_cards muda (INSERT/UPDATE/DELETE)
+    const channel = (supabase as any)
+      .channel('kanban-board-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kanban_cards' },
+        () => {
+          loadApplications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      (supabase as any).removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search);
     const openId = params.get('openCardId');
     if (!openId) return;
     (async () => {
       try {
+        // Primeira tentativa com relacionamento
         const { data, error } = await (supabase as any)
           .from('kanban_cards')
-          .select('id, title, cpf_cnpj, phone, email, received_at')
+          .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
           .eq('id', openId)
           .maybeSingle();
-        if (!error && data) {
+        let cardRow: any = data;
+        let applicant: any = data?.applicant;
+        if (error) throw error;
+        // Se relacionamento indisponível, tentar fallback
+        if (!data || !applicant) {
+          const { data: base, error: baseErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, person_type, area, stage, applicant_id')
+            .eq('id', openId)
+            .maybeSingle();
+          if (baseErr) throw baseErr;
+          cardRow = base;
+          if (base?.applicant_id) {
+            const { data: a } = await (supabase as any)
+              .from('applicants')
+              .select('id, primary_name, cpf_cnpj, phone, email')
+              .eq('id', base.applicant_id)
+              .maybeSingle();
+            applicant = a;
+          }
+        }
+        if (cardRow) {
           const nc: CardItem = {
-            id: data.id,
-            nome: data.title,
-            cpf: data.cpf_cnpj || '',
-            receivedAt: data.received_at || new Date().toISOString(),
-            deadline: data.received_at || new Date().toISOString(),
+            id: cardRow.id,
+            nome: applicant?.primary_name || 'Cliente',
+            cpf: applicant?.cpf_cnpj || '',
+            receivedAt: cardRow.received_at || new Date().toISOString(),
+            deadline: cardRow.received_at || new Date().toISOString(),
             responsavel: undefined,
             responsavelId: undefined,
-            telefone: data.phone || undefined,
-            email: data.email || undefined,
+            telefone: applicant?.phone || undefined,
+            email: applicant?.email || undefined,
             naturalidade: undefined,
             uf: undefined,
-            applicantId: undefined,
+            applicantId: applicant?.id || undefined,
+            personType: (cardRow as any)?.person_type || undefined,
             parecer: '',
-            columnId: 'recebido',
+            columnId: ((cardRow as any)?.area === 'comercial') ? ((): any => {
+              const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
+              return stageMap[(cardRow as any)?.stage] || 'com_entrada';
+            })() : 'recebido',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             lastMovedAt: new Date().toISOString(),
             labels: [],
-            area: 'analise',
+            area: ((cardRow as any)?.area || 'analise') as any,
           } as any;
           setMockCard(nc);
           setAutoOpenExpandedNext(true);
+          const next = new URLSearchParams(routeLocation.search);
+          next.delete('openCardId');
+          navigate({ pathname: (routeLocation as any).pathname || '/', search: next.toString() ? `?${next.toString()}` : '' }, { replace: true });
         }
       } catch {}
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [routeLocation.search]);
+
+  // Abrir card por applicant (?openApplicantId=...)
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search);
+    const openApplicantId = params.get('openApplicantId');
+    if (!openApplicantId) return;
+    (async () => {
+      try {
+        // Tentar com relacionamento
+        const { data, error } = await (supabase as any)
+          .from('kanban_cards')
+          .select('id, received_at, person_type, area, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
+          .eq('applicant_id', openApplicantId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        let cardRow: any = data;
+        let applicant: any = data?.applicant;
+        if (error) throw error;
+        // Fallback sem relacionamento
+        if (!cardRow) {
+          const { data: base, error: baseErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, person_type, area, stage, applicant_id')
+            .eq('applicant_id', openApplicantId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (baseErr) throw baseErr;
+          cardRow = base;
+          if (base?.applicant_id) {
+            const { data: a } = await (supabase as any)
+              .from('applicants')
+              .select('id, primary_name, cpf_cnpj, phone, email')
+              .eq('id', base.applicant_id)
+              .maybeSingle();
+            applicant = a;
+          }
+        }
+        if (cardRow) {
+          const nc: CardItem = {
+            id: cardRow.id,
+            nome: applicant?.primary_name || 'Cliente',
+            cpf: applicant?.cpf_cnpj || '',
+            receivedAt: cardRow.received_at || new Date().toISOString(),
+            deadline: cardRow.received_at || new Date().toISOString(),
+            responsavel: undefined,
+            responsavelId: undefined,
+            telefone: applicant?.phone || undefined,
+            email: applicant?.email || undefined,
+            naturalidade: undefined,
+            uf: undefined,
+            applicantId: applicant?.id,
+            personType: (cardRow as any)?.person_type || undefined,
+            parecer: '',
+            columnId: ((cardRow as any)?.area === 'comercial') ? ((): any => {
+              const stageMap: Record<string, any> = { entrada: 'com_entrada', feitas: 'com_feitas', aguardando_doc: 'com_aguardando', canceladas: 'com_canceladas', concluidas: 'com_concluidas' };
+              return stageMap[(cardRow as any)?.stage] || 'com_entrada';
+            })() : 'recebido',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastMovedAt: new Date().toISOString(),
+            labels: [],
+            area: ((cardRow as any)?.area || 'analise') as any,
+          } as any;
+          setMockCard(nc);
+          setAutoOpenExpandedNext(true);
+          const next = new URLSearchParams(routeLocation.search);
+          next.delete('openApplicantId');
+          navigate({ pathname: (routeLocation as any).pathname || '/', search: next.toString() ? `?${next.toString()}` : '' }, { replace: true });
+        }
+      } catch {}
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeLocation.search]);
+
+  // Focar card por applicantId ou cardId sem abrir modal
+  useEffect(() => {
+    const params = new URLSearchParams(routeLocation.search);
+    const focusApplicantId = params.get('focusApplicantId');
+    const focusCardId = params.get('focusCardId');
+    if (!focusApplicantId && !focusCardId) return;
+
+    // Aguarda carregamento dos cards
+    const id = focusCardId || cards.find(c => c.applicantId === focusApplicantId)?.id || null;
+    if (id) {
+      setFocusedCardId(id);
+      // Tentar rolar até o card
+      setTimeout(() => {
+        const el = document.querySelector(`[data-card-id="${id}"]`);
+        if (el && 'scrollIntoView' in el) {
+          (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+      }, 100);
+      // Remover destaque após alguns segundos
+      const t = setTimeout(() => setFocusedCardId(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [routeLocation.search, cards]);
 
   // Função para atualizar o estado local em tempo real
   const handleStatusChange = (cardId: string, newStatus: string) => {
@@ -501,28 +729,40 @@ export default function KanbanBoard() {
 
   // Derived lists
   const responsaveisOptions = useMemo(() => {
-    const set = new Set(cards.map((c) => c.responsavel).filter(Boolean) as string[]);
+    const set = new Set<string>();
+    for (const c of cards) {
+      if (c.responsavel) set.add(c.responsavel);
+      if (c.vendedorNome) set.add(c.vendedorNome);
+    }
     return Array.from(set);
   }, [cards]);
 
   // Resolve o ID do responsável selecionado a partir do nome
   const resolvedResponsavelId = useMemo(() => {
-    if (!responsavelFiltro || responsavelFiltro === 'todos') return null;
-    // Primeiro tenta mapear pelos cards carregados
+    if (!Array.isArray(responsavelFiltro) || responsavelFiltro.length !== 1) return null;
+    const selected = responsavelFiltro[0];
+    // Tenta resolver pelo analista (assignee)
     for (const c of cards) {
-      if ((c.responsavel || '') === responsavelFiltro && c.responsavelId) {
+      if ((c.responsavel || '') === selected && c.responsavelId) {
         return c.responsavelId;
+      }
+    }
+    // Tenta resolver pelo vendedor (criador da ficha)
+    for (const c of cards) {
+      if ((c.vendedorNome || '') === selected && c.createdById) {
+        return c.createdById;
       }
     }
     return null;
   }, [responsavelFiltro, cards]);
 
-  // Carrega ids de cards com tarefas atribuídas ou menções ao responsável selecionado
+  // Carrega ids de cards com tarefas atribuídas ou menções (desvinculado do filtro Responsável; usa o selecionado OU o usuário atual)
   useEffect(() => {
     (async () => {
       try {
         // Reset quando não aplicável
-        if (atribuidasFiltro === 'none' || !resolvedResponsavelId) {
+        const targetUserId = resolvedResponsavelId || profile?.id || null;
+        if (atribuidasFiltro === 'none' || !targetUserId) {
           setAtribuidasCardIds(new Set());
           return;
         }
@@ -536,15 +776,17 @@ export default function KanbanBoard() {
             .from('card_tasks')
             .select('card_id')
             .is('deleted_at', null)
-            .eq('assigned_to', resolvedResponsavelId)
+            .eq('assigned_to', targetUserId)
             .in('card_id', visibleIds);
           if (error) throw error;
           setAtribuidasCardIds(new Set((data || []).map((r: any) => r.card_id)));
         } else if (atribuidasFiltro === 'mentions') {
-          // Extrai um token simples do nome para procurar por @Token
-          const token = (responsavelFiltro || '').split(' ')[0];
+          // Extrai um token simples do nome (selecionado ou do usuário atual) para procurar por @Token
+          const fallbackName = profile?.full_name || '';
+          const selectedName = Array.isArray(responsavelFiltro) && responsavelFiltro.length === 1 ? responsavelFiltro[0] : fallbackName;
+          const token = (selectedName || '').split(' ')[0];
           if (!token) { setAtribuidasCardIds(new Set()); return; }
-          // 1) Comentários/threads (card_comments)
+          // 1) Comentários/threads (card_comments) - servidor
           const { data: cData, error: cErr } = await (supabase as any)
             .from('card_comments')
             .select('card_id')
@@ -553,40 +795,27 @@ export default function KanbanBoard() {
             .ilike('content', `%@${token}%`);
           if (cErr) throw cErr;
           const commentIds = new Set((cData || []).map((r: any) => r.card_id));
-          // 2) Pareceres (reanalysis_notes em kanban_cards)
+          // 2) Pareceres (reanalysis_notes em kanban_cards) - evitar 404: filtrar no cliente
           let parecerIds = new Set<string>();
-          try {
-            // Tentar filtrar no servidor
-            const { data: rnData, error: rnErr } = await (supabase as any)
-              .from('kanban_cards')
-              .select('id, reanalysis_notes')
-              .in('id', visibleIds)
-              .ilike('reanalysis_notes', `%@${token}%`);
-            if (!rnErr) {
-              parecerIds = new Set((rnData || []).map((r: any) => r.id));
-            } else {
-              // Fallback: carregar e filtrar no cliente
-              const { data: rnAll, error: rnAllErr } = await (supabase as any)
-                .from('kanban_cards')
-                .select('id, reanalysis_notes')
-                .in('id', visibleIds);
-              if (!rnAllErr) {
-                const matched = (rnAll || []).filter((row: any) => {
-                  const raw = row.reanalysis_notes;
-                  let arr: any[] = [];
-                  if (Array.isArray(raw)) arr = raw as any[];
-                  else if (typeof raw === 'string') { try { arr = JSON.parse(raw) || []; } catch {}
-                  }
-                  return (arr || []).some((p: any) => !p?.deleted && typeof p?.text === 'string' && p.text.includes(`@${token}`));
-                }).map((row: any) => row.id);
-                parecerIds = new Set(matched);
+          const { data: rnAll, error: rnAllErr } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, reanalysis_notes')
+            .in('id', visibleIds);
+          if (!rnAllErr) {
+            const matched = (rnAll || []).filter((row: any) => {
+              const raw = row.reanalysis_notes;
+              let arr: any[] = [];
+              if (Array.isArray(raw)) arr = raw as any[];
+              else if (typeof raw === 'string') { try { arr = JSON.parse(raw) || []; } catch {}
               }
-            }
-          } catch (_) {
-            // Ignorar erros e seguir somente com comentários
+              return (arr || []).some((p: any) => !p?.deleted && typeof p?.text === 'string' && p.text.includes(`@${token}`));
+            }).map((row: any) => row.id);
+            parecerIds = new Set(matched);
           }
           // União dos conjuntos
-          const union = new Set<string>([...commentIds, ...parecerIds]);
+          const commentIdsArray = Array.from(commentIds) as string[];
+          const parecerIdsArray = Array.from(parecerIds) as string[];
+          const union = new Set<string>([...commentIdsArray, ...parecerIdsArray]);
           setAtribuidasCardIds(union);
         }
       } catch (_) {
@@ -642,27 +871,39 @@ export default function KanbanBoard() {
     
     if (!active.rect.current.translated) return;
     
-    const { top, bottom } = active.rect.current.translated;
-    const container = document.querySelector('.kanban-container');
-    
-    if (!container) return;
-    
-    const containerRect = container.getBoundingClientRect();
-    const scrollThreshold = 100;
-    
-    // Scroll para cima se próximo do topo
-    if (top < containerRect.top + scrollThreshold) {
-      container.scrollBy({ top: -10, behavior: 'smooth' });
-      setIsScrolling(true);
+    const { top, bottom, left, right } = active.rect.current.translated;
+    // Container vertical (página) e horizontal (colunas)
+    const pageContainer = document.querySelector('.kanban-container');
+    const hContainer = scrollRef.current;
+
+    const vThreshold = 100;
+    const hThreshold = 140;
+
+    let didScroll = false;
+
+    if (pageContainer) {
+      const rect = pageContainer.getBoundingClientRect();
+      if (top < rect.top + vThreshold) {
+        pageContainer.scrollBy({ top: -10, behavior: 'smooth' });
+        didScroll = true;
+      } else if (bottom > rect.bottom - vThreshold) {
+        pageContainer.scrollBy({ top: 10, behavior: 'smooth' });
+        didScroll = true;
+      }
     }
-    // Scroll para baixo se próximo da parte inferior
-    else if (bottom > containerRect.bottom - scrollThreshold) {
-      container.scrollBy({ top: 10, behavior: 'smooth' });
-      setIsScrolling(true);
+
+    if (hContainer) {
+      const rect = hContainer.getBoundingClientRect();
+      if (left < rect.left + hThreshold) {
+        hContainer.scrollBy({ left: -16, behavior: 'smooth' });
+        didScroll = true;
+      } else if (right > rect.right - hThreshold) {
+        hContainer.scrollBy({ left: 16, behavior: 'smooth' });
+        didScroll = true;
+      }
     }
-    else {
-      setIsScrolling(false);
-    }
+
+    setIsScrolling(didScroll);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -689,9 +930,9 @@ export default function KanbanBoard() {
     const cardId = active.id as string;
     const targetColumn = over.id as ColumnId;
 
-    // Bloquear movimentação para "Entrada" (somente e-fichas via backend)
+    // Bloquear movimentação para "Entrada" (gerada automaticamente pelo sistema)
     if (targetColumn === 'com_entrada') {
-      toast({ title: 'Movimento não permitido', description: 'Entrada é automática via e‑fichas', variant: 'destructive' });
+      toast({ title: 'Movimento não permitido', description: 'Entrada é gerada automaticamente pelo sistema', variant: 'destructive' });
       return;
     }
 
@@ -752,25 +993,40 @@ export default function KanbanBoard() {
 
   const filteredCards = useMemo(() => {
     return cards.filter((c) => {
-      const matchesQuery = `${c.nome} ${c.responsavel ?? ""} ${c.parecer}`
+      // Busca global: somente pelo nome do titular (nome da ficha)
+      const matchesQuery = (c.nome || '')
         .toLowerCase()
         .includes(query.toLowerCase());
 
       const matchesResp =
-        responsavelFiltro === "todos" || (c.responsavel ?? "") === responsavelFiltro;
+        (responsavelFiltro.length === 0)
+        || responsavelFiltro.includes(c.responsavel ?? "")
+        || responsavelFiltro.includes(c.vendedorNome ?? "");
 
       // Filtragem de prazo deve seguir "Instalação agendada para" (due_at)
+      // Comparações em UTC para evitar atraso de 1 dia por fuso
       if (prazoFiltro !== 'todos' && !c.hasDueAt) return false;
       const deadlineDate = new Date(c.deadline);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const deadlineMid = new Date(deadlineDate.getFullYear(), deadlineDate.getMonth(), deadlineDate.getDate());
-      const isHoje = deadlineMid.getTime() === today.getTime();
-      const amanha = new Date(today);
-      amanha.setDate(amanha.getDate() + 1);
-      const isAmanha = deadlineMid.getTime() === amanha.getTime();
-      const isAtrasado = deadlineDate < new Date();
-      const matchesData = prazoData ? (deadlineMid.getTime() === new Date(prazoData.getFullYear(), prazoData.getMonth(), prazoData.getDate()).getTime()) : false;
+      const deadlineUTC = Date.UTC(
+        deadlineDate.getUTCFullYear(),
+        deadlineDate.getUTCMonth(),
+        deadlineDate.getUTCDate(),
+        0, 0, 0, 0
+      );
+      const now = new Date();
+      const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
+      const tomorrowUTC = todayUTC + 24 * 60 * 60 * 1000;
+      const isHoje = deadlineUTC === todayUTC;
+      const isAmanha = deadlineUTC === tomorrowUTC;
+      const isAtrasado = todayUTC > deadlineUTC; // atraso por data, não por horário
+      const matchesData = prazoData
+        ? (deadlineUTC === Date.UTC(
+            prazoData.getUTCFullYear(),
+            prazoData.getUTCMonth(),
+            prazoData.getUTCDate(),
+            0, 0, 0, 0
+          ))
+        : false;
 
       const matchesPrazo =
         prazoFiltro === "todos"
@@ -784,8 +1040,7 @@ export default function KanbanBoard() {
                          (viewFilter === "mine" && c.responsavelId === profile?.id);
 
       // Filtro "Atribuídas" exige responsável selecionado
-      const matchesAtribuidas = atribuidasFiltro === 'none'
-        || (responsavelFiltro !== 'todos' && atribuidasCardIds.has(c.id));
+      const matchesAtribuidas = atribuidasFiltro === 'none' || atribuidasCardIds.has(c.id);
 
       return matchesQuery && matchesResp && matchesPrazo && matchesView && matchesAtribuidas;
     });
@@ -902,11 +1157,11 @@ useEffect(() => {
     try {
       const card = cards.find(c => c.id === cardId);
       if (!card) {
-        console.log('Card not found:', cardId);
+        devLog('Card not found:', cardId);
         return;
       }
       
-      console.log('Moving card:', cardId, 'from', card.columnId, 'to', target);
+      devLog('Moving card:', cardId, 'from', card.columnId, 'to', target);
       
       // Determinar área e stage baseado na coluna de destino
       let toArea: 'comercial' | 'analise';
@@ -932,21 +1187,15 @@ useEffect(() => {
       if (target === 'com_concluidas') {
         toArea = 'analise';
         toStage = 'recebido';
-        console.log('Card concluído no comercial -> movendo para recebido no analise');
+        devLog('Card concluído no comercial -> movendo para recebido no analise');
       }
       
-      // LÓGICA ESPECIAL: Transição Automática para Finalizado
-      // Se está indo para "aprovado" ou "negado" no analise, deve ir para "finalizado"
-      if (target === 'aprovado' || target === 'negado') {
-        toArea = 'analise';
-        toStage = 'finalizado';
-        console.log('Card aprovado/negado -> movendo automaticamente para finalizado');
-      }
+      // Removido: NÃO mover automaticamente para "finalizado" ao aprovar/negar
       
       // VALIDAÇÃO: Impedir que cards voltem para "entrada" no comercial
       // Se o card já passou pelo comercial (tem commercialStage definido), não pode voltar para entrada
       if (target === 'com_entrada' && card.commercialStage && card.commercialStage !== 'entrada') {
-        console.log('Card já processado no comercial - impedindo volta para entrada');
+        devLog('Card já processado no comercial - impedindo volta para entrada');
         toast({
           title: "Movimento não permitido",
           description: "Cards já processados não podem voltar para 'Entrada'",
@@ -957,7 +1206,7 @@ useEffect(() => {
       
       // VALIDAÇÃO: Impedir que cards do analise voltem para comercial (fluxo unidirecional)
       if (card.area === 'analise' && toArea === 'comercial') {
-        console.log('Card do analise não pode voltar para comercial - fluxo unidirecional');
+        devLog('Card do analise não pode voltar para comercial - fluxo unidirecional');
         toast({
           title: "Movimento não permitido", 
           description: "Cards em análise seguem fluxo unidirecional: Análise → Finalizado",
@@ -975,12 +1224,12 @@ useEffect(() => {
       };
       
       // Atualização otimista imediata da UI
-      console.log('Updating UI optimistically...');
+      devLog('Updating UI optimistically...');
       setCards(prev => {
         const updated = prev.map(c => {
           if (c.id !== cardId) return c;
           
-          console.log('Updating card:', c.id, 'from', c.columnId, 'to', target);
+          devLog('Updating card:', c.id, 'from', c.columnId, 'to', target);
           
           // Determinar a coluna correta baseada na lógica especial
           let finalColumnId = target;
@@ -990,10 +1239,7 @@ useEffect(() => {
             finalColumnId = 'recebido';
           }
           
-          // Se está indo para "aprovado" ou "negado", deve ir para "finalizado"
-          if (target === 'aprovado' || target === 'negado') {
-            finalColumnId = 'finalizado';
-          }
+          // Manter destino real (aprovado/negado) sem forçar "finalizado"
           
           const updatedCard = {
             ...c,
@@ -1041,7 +1287,7 @@ useEffect(() => {
               c.id === cardId ? { ...c, columnId: target, commercialStage: toStage === 'aguardando_doc' ? 'aguardando' : toStage } : c
             );
             localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
-            console.log('Card position saved to localStorage');
+            devLog('Card position saved to localStorage');
             // Enfileirar movimento para re-tentativa
             enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
             toast({
@@ -1053,21 +1299,17 @@ useEffect(() => {
           }
           
           // Manter a atualização da UI (não fazer rollback)
-          console.log('Card moved successfully to', target, '(local fallback)');
+          devLog('Card moved successfully to', target, '(local fallback)');
           // Recarregar dados mesmo no fallback
-          setTimeout(() => {
-            loadApplications();
-          }, 100);
+          setTimeout(() => { loadApplications(); }, 200);
         } else {
-          console.log('Card moved successfully to', target);
+          devLog('Card moved successfully to', target);
           // Recarregar dados para garantir sincronização
-          setTimeout(() => {
-            loadApplications();
-          }, 100);
+          setTimeout(() => { loadApplications(); }, 200);
         }
       } catch (dbError) {
         console.error('Database error:', dbError);
-        console.log('Using fallback: saving to localStorage');
+        devLog('Using fallback: saving to localStorage');
         
         // Fallback: salvar no localStorage
         try {
@@ -1076,7 +1318,7 @@ useEffect(() => {
             c.id === cardId ? { ...c, columnId: target, commercialStage: toStage === 'aguardando_doc' ? 'aguardando' : toStage } : c
           );
           localStorage.setItem('kanban_cards_fallback', JSON.stringify(updatedCards));
-          console.log('Card position saved to localStorage');
+          devLog('Card position saved to localStorage');
           enqueueFallbackMove({ cardId, toArea, toStage, comment: label, at: new Date().toISOString() });
           toast({
             title: 'Conexão instável – usando fallback',
@@ -1099,11 +1341,9 @@ useEffect(() => {
           return;
         }
         
-        console.log('Card moved successfully to', target, '(local fallback)');
+        devLog('Card moved successfully to', target, '(local fallback)');
         // Recarregar dados mesmo no fallback
-        setTimeout(() => {
-          loadApplications();
-        }, 100);
+        setTimeout(() => { loadApplications(); }, 200);
       }
 
     } catch (error) {
@@ -1214,44 +1454,29 @@ useEffect(() => {
   }
 
   async function openEdit(card: CardItem) {
-    console.log('🔍 Abrindo card:', card.id);
-    // Garantir que abriremos somente o modal de "Editar Ficha" (não o expandido)
+    devLog('🔍 Abrindo card:', card.id);
+    // Abrir imediatamente com dados atuais (melhor percepção de velocidade)
     setAutoOpenExpandedNext(false);
+    setMockCard(card);
     
+    // Atualizar em background com dados frescos (não bloquear UI)
     try {
-      // Buscar dados frescos do banco SEMPRE que abrir o modal
       const { data: freshCard, error } = await (supabase as any)
         .from('kanban_cards')
         .select('*')
         .eq('id', card.id)
         .is('deleted_at', null)
         .single();
-      
-      if (error) {
-        console.error('❌ Erro ao buscar card do banco:', error);
-        // Se houver erro, usar card do cache local
-        setMockCard(card);
-        return;
+      if (!error && freshCard) {
+        devLog('✅ Dados frescos do banco carregados:', freshCard);
+        const updatedCard: CardItem = {
+          ...card,
+          parecer: freshCard.reanalysis_notes || freshCard.comments || freshCard.comments_short || '',
+        };
+        setMockCard(updatedCard);
       }
-      
-      console.log('✅ Dados frescos do banco carregados:', freshCard);
-      
-      // Usar os dados frescos do banco
-      const updatedCard: CardItem = {
-        ...card,
-        parecer: freshCard.reanalysis_notes || freshCard.comments || freshCard.comments_short || '',
-        // Atualizar outros campos que podem ter mudado
-        nome: freshCard.title || card.nome,
-        telefone: freshCard.phone || card.telefone,
-        email: freshCard.email || card.email,
-      };
-      
-      setMockCard(updatedCard);
     } catch (error) {
-      console.error('❌ Erro ao abrir card:', error);
-      // Fallback para dados do cache
-      setAutoOpenExpandedNext(false);
-      setMockCard(card);
+      devLog('❌ Erro ao buscar dados frescos (ignorando):', error);
     }
   }
 
@@ -1312,10 +1537,16 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on approve:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI otimista: permanecer em "aprovado"
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'aprovado',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      // Background refresh to sync
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Ficha aprovada",
@@ -1351,10 +1582,15 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on deny:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI otimista: permanecer em "negado"
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'negado',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Ficha negada",
@@ -1390,10 +1626,15 @@ useEffect(() => {
         if (import.meta?.env?.DEV) console.error('RPC error on reanalyze:', error);
         throw error;
       }
-      
-      if (import.meta?.env?.DEV) console.log('Status change successful, reloading applications...');
-      // Reload applications instead of whole page
-      await loadApplications();
+
+      // Update UI optimistically to reanálise
+      setCards(prev => prev.map(c => c.id === card.id ? {
+        ...c,
+        area: 'analise',
+        columnId: 'reanalise',
+        lastMovedAt: new Date().toISOString(),
+      } : c));
+      setTimeout(() => { loadApplications(); }, 250);
 
       toast({
         title: "Enviado para reanálise",
@@ -1460,117 +1701,203 @@ useEffect(() => {
 
   return (
     <section className="space-y-6 animate-fade-in kanban-container">
-      <Card className="shadow-md bg-white text-[#018942]" style={{ boxShadow: "var(--shadow-elegant)" }}>
-        <CardHeader />
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-[#018942]" />
+      {/* Header com gradiente e melhor hierarquia visual */}
+      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white shadow-xl">
+        <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
+        <div className="relative p-6">
+          {/* Filtros com design melhorado e alinhamento */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-end">
+            {/* Barra de pesquisar com design moderno */}
+            <div className="relative group">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 group-focus-within:text-white transition-colors" />
               <Input
-                placeholder="Busca global (nome, parecer, responsável)"
+                placeholder="Buscar titular (nome da ficha)"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-9 bg-white text-[#018942] placeholder-[#018942]/70 border-[#018942]"
+                className="pl-9 bg-white/10 backdrop-blur-sm text-white placeholder-white/70 border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200"
               />
             </div>
-            <div className="flex items-center gap-1">
-              <Label>Área</Label>
+            
+            {/* Área com design melhorado */}
+            <div>
               <Select value={kanbanArea} onValueChange={(v: KanbanArea) => setKanbanArea(v)}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
                   <SelectValue placeholder="Área" />
                 </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="comercial">Comercial</SelectItem>
-                  <SelectItem value="analise">Análise</SelectItem>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="comercial" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      Comercial
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="analise" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      Análise
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
-              <Label className="min-w-24">Responsável</Label>
-              <Select value={responsavelFiltro} onValueChange={setResponsavelFiltro}>
-                <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                  <SelectValue placeholder="Filtrar" />
-                </SelectTrigger>
-                <SelectContent className="z-50">
-                  <SelectItem value="todos">Todos</SelectItem>
+            
+            {/* Responsável com design melhorado */}
+            <div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-white/10 backdrop-blur-sm text-white border-white/20 hover:bg-white/20 hover:border-white/40 w-full h-11 justify-between transition-all duration-200">
+                    <span className="truncate">{responsavelFiltro.length === 0 ? 'Todos' : responsavelFiltro.join(', ')}</span>
+                    <ChevronDown className="ml-2 h-4 w-4 opacity-70 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[260px] max-w-[90vw] bg-white border-gray-200">
+                  <DropdownMenuItem className="pl-8 hover:bg-green-50" onClick={() => setResponsavelFiltro([])}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      Todos
+                    </div>
+                  </DropdownMenuItem>
                   {responsaveisOptions.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
+                    <DropdownMenuCheckboxItem
+                      key={r}
+                      className="truncate hover:bg-green-50"
+                      checked={responsavelFiltro.includes(r)}
+                      onCheckedChange={(checked) => {
+                        setResponsavelFiltro((prev) => {
+                          const set = new Set(prev);
+                          if (checked) set.add(r); else set.delete(r);
+                          return Array.from(set);
+                        });
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        {r}
+                      </div>
+                    </DropdownMenuCheckboxItem>
                   ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            
+            {/* Prazo com design melhorado */}
+            <div>
+              <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { 
+                setPrazoFiltro(v);
+                if (v === 'data') {
+                  setTimeout(() => setPrazoOpenTick((t) => t + 1), 0);
+                }
+              }}>
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="todos" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      Todos
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="hoje" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      Agendada para hoje
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="amanha" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      Agendada para amanhã
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="atrasados" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      Atrasado
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="data" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      Escolher Data…
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-1">
-              <Label>Prazo</Label>
-              <div className="flex items-center gap-2">
-                <Select value={prazoFiltro} onValueChange={(v: PrazoFiltro) => { setPrazoFiltro(v); }}>
-                  <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                    <SelectValue placeholder="Prazo" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50">
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="hoje">Agendada para hoje</SelectItem>
-                    <SelectItem value="amanha">Agendada para amanhã</SelectItem>
-                    <SelectItem value="atrasados">Atrasado</SelectItem>
-                    <SelectItem value="data">Escolher Data…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {prazoFiltro === 'data' && (
-                  <div className="rounded-md border border-[#018942]/40 p-1 bg-white">
-                    <Calendar
-                      mode="single"
-                      selected={prazoData ?? undefined}
-                      onSelect={(d) => { setPrazoData(d ?? null); }}
-                      classNames={{
-                        day: "h-9 w-9 p-0 font-normal text-[#018942] aria-selected:opacity-100",
-                        head_cell: "text-[#018942] rounded-md w-9 font-normal text-[0.8rem]",
-                        nav_button: "h-7 w-7 p-0 border border-[#018942] text-[#018942] bg-transparent hover:bg-[#018942]/10",
-                      }}
-                      initialFocus
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <Label className="min-w-24">Atribuídas</Label>
-                <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
-                  <SelectTrigger className="bg-white text-[#018942] border-[#018942]">
-                    <SelectValue placeholder="Escolha" />
-                  </SelectTrigger>
-                  <SelectContent className="z-50">
-                    <SelectItem value="none">—</SelectItem>
-                    <SelectItem value="mentions">@Menções</SelectItem>
-                    <SelectItem value="tasks">Tarefas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {atribuidasFiltro !== 'none' && responsavelFiltro === 'todos' && (
-                <div className="mt-1 text-xs text-gray-500">Selecione um responsável para aplicar este filtro.</div>
-              )}
+            
+            {/* Atribuídas com design melhorado */}
+            <div>
+              <Select value={atribuidasFiltro} onValueChange={(v: AtribuidasFilter) => setAtribuidasFiltro(v)}>
+                <SelectTrigger className="bg-white/10 backdrop-blur-sm text-white border-white/20 focus:border-white/40 focus:bg-white/20 w-full h-11 transition-all duration-200">
+                  <SelectValue placeholder="Escolha" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-white border-gray-200">
+                  <SelectItem value="none" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      —
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="mentions" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      Minhas menções
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="tasks" className="hover:bg-green-50">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      Minhas tarefas
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex gap-2 flex-wrap">
-              <Badge className="bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]">Em Análise</Badge>
-              <Badge className="bg-[hsl(var(--success))] text-white">Aprovado</Badge>
-              <Badge className="bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]">Atrasado</Badge>
+          
+          {/* DatePicker condicional para Prazo */}
+          {prazoFiltro === 'data' && (
+            <div className="mt-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20 p-4 max-w-[280px]">
+              <DatePicker
+                key={prazoOpenTick}
+                value={(() => {
+                  if (!prazoData) return '';
+                  const y = prazoData.getUTCFullYear();
+                  const m = String(prazoData.getUTCMonth() + 1).padStart(2, '0');
+                  const d = String(prazoData.getUTCDate()).padStart(2, '0');
+                  return `${y}-${m}-${d}`;
+                })()}
+                onChange={(iso) => {
+                  if (!iso) { setPrazoData(null); return; }
+                  const [yy, mm, dd] = iso.split('-').map((s) => parseInt(s, 10));
+                  if (!yy || !mm || !dd) { setPrazoData(null); return; }
+                  const dt = new Date(Date.UTC(yy, mm - 1, dd, 0, 0, 0, 0));
+                  setPrazoData(dt);
+                }}
+                showIcon={true}
+                allowTyping={false}
+                forceFlatpickr={true}
+                autoOpen={true}
+                className="w-full"
+              />
             </div>
+          )}
+
+          {/* CTA Nova Ficha com design moderno */}
+          <div className="mt-6 flex items-center justify-end">
             <Button 
               variant="pill" 
               size="xl" 
-              className="hover-scale bg-[hsl(var(--brand))] text-white hover:bg-[hsl(var(--brand))/0.9] border border-transparent" 
+              className="hover-scale bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border border-white/30 hover:border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 group" 
               onClick={() => setShowConfirmCreate(true)}
             >
-              <UserPlus className="mr-2 h-4 w-4" />
+              <UserPlus className="mr-2 h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
               Nova ficha
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Legacy dialog removido para backend enxuto */}
 
@@ -1591,6 +1918,7 @@ useEffect(() => {
                       nome: form.nome ?? c.nome,
                       telefone: form.telefone || undefined,
                       // Atualiza apenas a data de instalação agendada (meia-noite UTC para evitar deriva de fuso)
+                      hasDueAt: Boolean(form.agendamento),
                       deadline: form.agendamento ? (() => {
                         const parts = String(form.agendamento).split('-').map((x) => parseInt(x, 10));
                         const y = parts[0], m = parts[1], d = parts[2];
@@ -1614,30 +1942,50 @@ useEffect(() => {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* Contêiner horizontal de colunas com design moderno */}
+        <div className="relative">
+          <div
+            ref={scrollRef}
+            className="overflow-x-auto overflow-y-visible scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+          >
+            <div className="flex items-start gap-6 min-h-[200px] w-max pr-6 pb-4">
           {(kanbanArea === 'comercial' ? COMMERCIAL_COLUMNS : COLUMNS).map((col) => (
+                <div key={col.id} className="min-w-[340px] w-[340px] max-w-[360px]">
             <ColumnDropArea 
-              key={col.id} 
               columnId={col.id}
               isDragOver={dragOverColumn === col.id}
               activeId={activeId}
             >
-              <div className="rounded-xl border bg-card">
-                <div
-                  className="px-4 py-3 border-b flex items-center justify-between"
-                  style={{ backgroundImage: "var(--gradient-primary)", color: "hsl(var(--primary-foreground))" }}
-                >
-                  <h2 className="font-semibold">{col.title}</h2>
-                  <Badge variant="secondary" className="bg-white text-[#018942]">
-                    {getCardsWithPlaceholder(
-                      kanbanArea === 'comercial'
-                        ? (commercialByColumn.get(col.id) || [])
-                        : (analysisByColumn.get(col.id) || []),
-                      col.id
-                    ).length}
-                  </Badge>
+                    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all duration-200 h-full">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-2xl">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${
+                              col.id.includes('entrada') ? 'bg-blue-500' :
+                              col.id.includes('feitas') ? 'bg-green-500' :
+                              col.id.includes('aguardando') ? 'bg-yellow-500' :
+                              col.id.includes('canceladas') ? 'bg-red-500' :
+                              col.id.includes('concluidas') ? 'bg-purple-500' :
+                              col.id.includes('recebido') ? 'bg-blue-500' :
+                              col.id.includes('analise') ? 'bg-orange-500' :
+                              col.id.includes('aprovado') ? 'bg-green-500' :
+                              col.id.includes('negado') ? 'bg-red-500' :
+                              col.id.includes('finalizado') ? 'bg-purple-500' :
+                              'bg-gray-500'
+                            }`}></div>
+                            <h2 className="font-semibold text-gray-800 truncate">{col.title}</h2>
+                          </div>
+                          <Badge variant="secondary" className="bg-white text-gray-700 border border-gray-200 shadow-sm">
+                            {getCardsWithPlaceholder(
+                              kanbanArea === 'comercial'
+                                ? (commercialByColumn.get(col.id) || [])
+                                : (analysisByColumn.get(col.id) || []),
+                              col.id
+                            ).length}
+                          </Badge>
+                        </div>
                 </div>
-                <div className="p-3">
+                <div className="p-4 bg-gray-50/50">
                   <SortableContext
                     items={getCardsWithPlaceholder(
                       kanbanArea === 'comercial'
@@ -1647,14 +1995,27 @@ useEffect(() => {
                     ).map((c) => c.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="min-h-[120px] space-y-3">
+                    <div className="min-h-[140px] space-y-3">
                       {getCardsWithPlaceholder(
                         kanbanArea === 'comercial'
                           ? (commercialByColumn.get(col.id) || [])
                           : (analysisByColumn.get(col.id) || []),
                         col.id
-                      )
-                         .map((card) => (
+                      ).length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                          <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mb-3">
+                            <div className="w-6 h-6 bg-gray-300 rounded"></div>
+                          </div>
+                          <p className="text-sm font-medium">Nenhuma ficha</p>
+                          <p className="text-xs text-gray-400">Arraste fichas aqui</p>
+                        </div>
+                      ) : (
+                        getCardsWithPlaceholder(
+                          kanbanArea === 'comercial'
+                            ? (commercialByColumn.get(col.id) || [])
+                            : (analysisByColumn.get(col.id) || []),
+                          col.id
+                        ).map((card) => (
                              <OptimizedKanbanCard
                                key={card.id}
                                card={card}
@@ -1673,14 +2034,21 @@ useEffect(() => {
                                isDragging={activeId === card.id}
                                onAttachmentClick={handleAttachmentClick}
                                onCardClick={handleCardClick}
+                                     isFocused={focusedCardId === card.id}
                              />
-                         ))}
+                         ))
+                      )}
                     </div>
                   </SortableContext>
                 </div>
               </div>
             </ColumnDropArea>
-          ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+
         </div>
       </DndContext>
 
@@ -1742,18 +2110,41 @@ useEffect(() => {
     }}
     onSubmit={async (data) => {
       try {
+        dbg('kanban', 'Iniciando criação de ficha PF');
+        
         // 1) Garantir applicant PF em PRODUÇÃO (para satisfazer FK do kanban_cards)
         const cpf = data.cpf.replace(/\D+/g, '');
+        dbg('kanban', 'CPF normalizado calculado');
+        
         let applicantProd: { id: string } | null = null;
         const { data: existingProd } = await (supabase as any)
           .from('applicants')
-          .select('id')
+          .select('id, primary_name, phone, email, created_at')
           .eq('cpf_cnpj', cpf)
           .eq('person_type', 'PF')
           .maybeSingle();
+        
         if (existingProd?.id) {
-          applicantProd = { id: existingProd.id };
+          dbg('kanban', 'CPF já cadastrado – bloqueando criação');
+          
+          // 🚫 BLOQUEAR criação e avisar usuário
+          toast({
+            title: '⚠️ CPF já cadastrado',
+            description: `Já existe um cadastro para este CPF:\n\n` +
+              `Nome: ${existingProd.primary_name}\n` +
+              `Telefone: ${existingProd.phone || 'Não informado'}\n` +
+              `Email: ${existingProd.email || 'Não informado'}\n` +
+              `Cadastrado em: ${new Date(existingProd.created_at).toLocaleDateString('pt-BR')}\n\n` +
+              `Não é possível criar nova ficha com CPF duplicado.`,
+            variant: 'destructive',
+            duration: 8000, // 8 segundos para ler
+          });
+          
+          // ❌ ABORTAR criação
+          return;
         } else {
+          dbg('kanban', 'Criando applicant PF');
+          
           const { data: createdProd, error: aErrProd } = await (supabase as any)
             .from('applicants')
             .insert({
@@ -1761,38 +2152,26 @@ useEffect(() => {
               primary_name: data.nome,
               cpf_cnpj: cpf,
               phone: data.telefone,
+              whatsapp: data.whatsapp || null,
               email: data.email || null,
-              city: data.naturalidade,
-              uf: data.uf,
+              // Naturalidade e UF são salvos em pf_fichas_test, não em applicants
             })
             .select('id')
             .single();
-          if (aErrProd) throw aErrProd;
+          
+          if (aErrProd) {
+            console.error('❌ [KanbanBoard] ERRO ao criar applicant:', aErrProd);
+            throw aErrProd;
+          }
+          
+          dbg('kanban', 'Applicant criado com sucesso');
           applicantProd = createdProd;
         }
 
-        // 2) Garantir espelho na tabela de TESTE (find-or-create)
-        const { data: existingTest } = await (supabase as any)
-          .from('applicants_test')
-          .select('id')
-          .eq('cpf_cnpj', cpf)
-          .eq('person_type', 'PF')
-          .maybeSingle();
-        if (!existingTest?.id) {
-          await (supabase as any)
-            .from('applicants_test')
-            .insert({
-              person_type: 'PF',
-              primary_name: data.nome,
-              cpf_cnpj: cpf,
-              phone: data.telefone,
-              email: data.email || null,
-              city: data.naturalidade,
-              uf: data.uf,
-            });
-        }
+        // Removido: espelho em applicants_test (legado)
 
         // 2) Card no Kanban (Comercial/feitas)
+        dbg('kanban', 'Criando card no Kanban');
         const now = new Date();
         const { data: created, error: cErr } = await (supabase as any)
           .from('kanban_cards')
@@ -1802,34 +2181,104 @@ useEffect(() => {
             area: 'comercial',
             stage: 'feitas',
             created_by: profile?.id || null,
-            title: data.nome,
-            cpf_cnpj: data.cpf.replace(/\D+/g, ''),
-            phone: data.telefone,
-            email: data.email || null,
             received_at: now.toISOString(),
-            source: 'software_pf',
+            // Campos removidos: title, cpf_cnpj, phone, email, source
+            // Dados vêm de applicants via FK applicant_id
           })
-          .select('id, title, phone, email, cpf_cnpj, received_at, stage')
+          .select('id, applicant_id, received_at, stage')
           .single();
-        if (cErr) throw cErr;
+        
+        if (cErr) {
+          console.error('❌ [KanbanBoard] ERRO ao criar card:', cErr);
+          throw cErr;
+        }
+        dbg('kanban', 'Card criado com sucesso');
+        
+        // 3) Salvar dados básicos em pf_fichas_test (naturalidade e UF)
+        dbg('kanban', 'Salvando dados em pf_fichas_test');
+        try {
+          const { data: existingPfFicha } = await (supabase as any)
+            .from('pf_fichas_test')
+            .select('id')
+            .eq('applicant_id', applicantProd!.id)
+            .maybeSingle();
+          
+          const birthDate = data.nascimento ? (() => {
+            const parts = data.nascimento.split('/');
+            if (parts.length === 3) {
+              return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd/mm/yyyy -> yyyy-mm-dd
+            }
+            return null;
+          })() : null;
+          
+          const pfFichaData = {
+            naturalidade: data.naturalidade,
+            uf_naturalidade: data.uf,
+            birth_date: birthDate
+          };
+          
+          if (existingPfFicha) {
+            dbg('kanban', 'PF Ficha já existe, atualizando');
+            
+            const { error: updateErr } = await (supabase as any)
+              .from('pf_fichas_test')
+              .update(pfFichaData)
+              .eq('id', existingPfFicha.id);
+            
+            if (updateErr) {
+              console.error('❌ [KanbanBoard] Erro ao atualizar pf_fichas_test:', updateErr);
+            } else {
+              dbg('kanban', 'PF Ficha atualizada com sucesso');
+            }
+          } else {
+            dbg('kanban', 'Criando nova PF Ficha');
+            
+            const { error: insertErr } = await (supabase as any)
+              .from('pf_fichas_test')
+              .insert({
+                applicant_id: applicantProd!.id,
+                ...pfFichaData
+              });
+            
+            if (insertErr) {
+              console.error('❌ [KanbanBoard] Erro ao criar pf_fichas_test:', insertErr);
+            } else {
+              dbg('kanban', 'PF Ficha criada com sucesso');
+            }
+          }
+        } catch (pfErr) {
+          console.error('❌ [KanbanBoard] Exceção ao salvar em pf_fichas_test:', pfErr);
+          // Não bloquear o fluxo se falhar
+        }
+        
         // Abrir modal de edição (ficha) com o card criado (busca completa após reload)
         setShowBasicInfo(false);
         setAutoOpenExpandedNext(true);
         toast({ title: 'Ficha criada com sucesso!' });
         await loadApplications();
-        // Seleciona card recém-criado para editar
-        const nc = (prevCards => prevCards.find(c => c.id === created.id))(cards) || (
-          (await (supabase as any).from('kanban_cards').select('id, title, cpf_cnpj, phone, email, received_at, stage').eq('id', created.id).single()).data
-            ? {
-                id: created.id,
-                nome: created.title,
-                cpf: created.cpf_cnpj || '',
-                receivedAt: created.received_at,
-                deadline: created.received_at,
+        // Seleciona card recém-criado para editar (busca completa após reload com JOIN)
+        const nc = cards.find(c => c.id === created.id);
+        if (nc) {
+          setMockCard(nc as any);
+        } else {
+          // Fallback: buscar com JOIN completo
+          const { data: fullCard } = await (supabase as any)
+            .from('kanban_cards')
+            .select('id, received_at, stage, applicant:applicant_id(id, primary_name, cpf_cnpj, phone, email)')
+            .eq('id', created.id)
+            .single();
+          
+          if (fullCard) {
+            const fallbackCard = {
+              id: fullCard.id,
+              nome: fullCard.applicant?.primary_name || 'Cliente',
+              cpf: fullCard.applicant?.cpf_cnpj || '',
+              receivedAt: fullCard.received_at,
+              deadline: fullCard.received_at,
                 responsavel: undefined,
                 responsavelId: undefined,
-                telefone: created.phone || undefined,
-                email: created.email || undefined,
+              telefone: fullCard.applicant?.phone || undefined,
+              email: fullCard.applicant?.email || undefined,
                 naturalidade: data.naturalidade,
                 uf: data.uf,
                 applicantId: applicantProd!.id,
@@ -1840,8 +2289,10 @@ useEffect(() => {
                 lastMovedAt: new Date().toISOString(),
                 labels: [],
                 vendedorNome: currentUserName,
-              } as any : null);
-        if (nc) setMockCard(nc as any);
+            } as any;
+            setMockCard(fallbackCard);
+          }
+        }
       } catch (e: any) {
         if (import.meta?.env?.DEV) console.error('Erro ao criar PF:', e);
         toast({ title: 'Erro ao criar ficha', description: e.message || String(e), variant: 'destructive' });
@@ -1862,20 +2313,40 @@ useEffect(() => {
       setShowNovaPj(false);
       setAutoOpenExpandedNext(true);
       await loadApplications();
-      // Build minimal card object to open editor immediately
+      // Build minimal card object to open editor imediatamente (dados via Applicants)
+      let nome = 'Cliente';
+      let cpf = '';
+      let telefone: string | undefined = undefined;
+      let email: string | undefined = undefined;
+      if (created.applicant_id) {
+        try {
+          const { data: appl } = await (supabase as any)
+            .from('applicants')
+            .select('primary_name, cpf_cnpj, phone, email')
+            .eq('id', created.applicant_id)
+            .maybeSingle();
+          if (appl) {
+            nome = appl.primary_name || nome;
+            cpf = appl.cpf_cnpj || '';
+            telefone = appl.phone || undefined;
+            email = appl.email || undefined;
+          }
+        } catch {}
+      }
       const newCard: CardItem = {
         id: created.id,
-        nome: created.title,
-        cpf: created.cpf_cnpj || '',
+        nome,
+        cpf,
         receivedAt: created.received_at || new Date().toISOString(),
         deadline: created.received_at || new Date().toISOString(),
         responsavel: undefined,
         responsavelId: undefined,
-        telefone: created.phone || undefined,
-        email: created.email || undefined,
+        telefone,
+        email,
         naturalidade: undefined,
         uf: undefined,
         applicantId: created.applicant_id,
+        personType: 'PJ',
         parecer: '',
         columnId: 'com_feitas',
         createdAt: new Date().toISOString(),
@@ -1901,9 +2372,6 @@ useEffect(() => {
             console.log('🗑️ [DEBUG] Soft delete de card:', cardToDelete.id, 'motivo:', reason);
             
             // SOFT DELETE (não deleta permanentemente!)
-            console.log('🔍 [DEBUG] Profile ID:', profile?.id);
-            console.log('🔍 [DEBUG] Fazendo UPDATE no banco...');
-            
             const { error } = await (supabase as any)
               .from('kanban_cards')
               .update({
@@ -1912,8 +2380,6 @@ useEffect(() => {
                 deletion_reason: reason
               })
               .eq('id', cardToDelete.id);
-              
-            console.log('🔍 [DEBUG] Resultado do UPDATE:', { error });
 
             if (error) {
               console.error('🚨 [DEBUG] Erro ao fazer soft delete:', error);

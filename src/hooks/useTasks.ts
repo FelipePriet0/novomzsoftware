@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { Task, CreateTaskInput } from '@/types/tasks';
 
 export function useTasks(userId?: string, cardId?: string) {
+  const devLog = (...args: any[]) => { if ((import.meta as any)?.env?.DEV) console.log(...args); };
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { profile } = useAuth();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Carregar tarefas (useCallback para evitar re-criação infinita)
   const loadTasks = useCallback(async () => {
@@ -72,8 +74,8 @@ export function useTasks(userId?: string, cardId?: string) {
         assigned_to_name: task.assigned_to_profile?.full_name || 'Usuário',
       }));
 
-      console.log('📋 Tarefas carregadas do banco:', mappedTasks.length, 'tarefas');
-      console.log('📋 Dados das tarefas:', mappedTasks);
+      devLog('📋 Tarefas carregadas do banco:', mappedTasks.length, 'tarefas');
+      devLog('📋 Dados das tarefas:', mappedTasks);
       setTasks(mappedTasks);
     } catch (err: any) {
       console.error('Error loading tasks:', err);
@@ -106,7 +108,7 @@ export function useTasks(userId?: string, cardId?: string) {
     }
 
     try {
-      console.log('✅ [useTasks] Criando tarefa com comment_id:', commentId);
+      devLog('✅ [useTasks] Criando tarefa com comment_id:', commentId);
       
       const { data: result, error: createError } = await (supabase as any)
         .from('card_tasks')
@@ -155,18 +157,38 @@ export function useTasks(userId?: string, cardId?: string) {
 
       setTasks(prev => [newTask, ...prev]);
 
-      // 🔔 Notificar usuário atribuído (inbox) — tipo: task_assigned
+      // 🔔 Notificar usuário atribuído (inbox) — tipo: task_assigned (novo formato)
       try {
         if (newTask.assigned_to && newTask.assigned_to !== profile.id) {
+          // Resolver título do card
+          let cardTitle = 'Cliente';
+          let applicantId: string | null = null;
+          try {
+            const { data: kc } = await (supabase as any)
+              .from('kanban_cards')
+              .select('applicant:applicant_id(id, primary_name)')
+              .eq('id', newTask.card_id)
+              .maybeSingle();
+            cardTitle = kc?.applicant?.primary_name || 'Cliente';
+            applicantId = kc?.applicant?.id || null;
+          } catch {}
+
+          const actorName = (profile?.full_name || 'Colaborador');
+          const deadlineLine = newTask.deadline
+            ? `Para ${new Date(newTask.deadline).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+            : null;
+          const desc = String(newTask.description || '').replace(/\s+/g, ' ').slice(0, 140);
+          const bodyLines = [cardTitle, deadlineLine, desc].filter(Boolean).join('\n');
           await (supabase as any)
             .from('inbox_notifications')
             .insert({
               user_id: newTask.assigned_to,
               type: 'task_assigned',
               priority: 'medium',
-              title: 'Nova tarefa atribuída',
-              body: (newTask.description || 'Tarefa atribuída a você').slice(0, 140),
-              meta: { cardId: newTask.card_id, taskId: newTask.id },
+              title: `${actorName} criou uma nova tarefa para você`,
+              body: bodyLines,
+              applicant_id: applicantId || undefined,
+              meta: { cardId: newTask.card_id, taskId: newTask.id, applicantId },
               transient: false,
             });
         }
@@ -184,7 +206,7 @@ export function useTasks(userId?: string, cardId?: string) {
   // Atualizar status da tarefa
   const updateTaskStatus = async (taskId: string, status: 'pending' | 'completed'): Promise<boolean> => {
     try {
-      console.log('✅ [useTasks] Atualizando status da tarefa:', { taskId, status });
+      devLog('✅ [useTasks] Atualizando status da tarefa:', { taskId, status });
       
       const updateData: any = {
         status,
@@ -198,7 +220,7 @@ export function useTasks(userId?: string, cardId?: string) {
       }
 
       // 1. Atualização otimista imediata (UI instantânea)
-      console.log('⚡ [useTasks] Atualizando checkbox otimisticamente...');
+      devLog('⚡ [useTasks] Atualizando checkbox otimisticamente...');
       setTasks(prev =>
         prev.map(task =>
           task.id === taskId
@@ -213,7 +235,7 @@ export function useTasks(userId?: string, cardId?: string) {
       );
 
       // 2. Salvar no banco de dados (sem bloquear a UI)
-      console.log('📤 [useTasks] Enviando UPDATE para Supabase:', { taskId, updateData });
+      devLog('📤 [useTasks] Enviando UPDATE para Supabase:', { taskId, updateData });
       
       const { data: updateResult, error: updateError } = await (supabase as any)
         .from('card_tasks')
@@ -221,7 +243,7 @@ export function useTasks(userId?: string, cardId?: string) {
         .eq('id', taskId)
         .select();
 
-      console.log('📥 [useTasks] Resposta do Supabase:', { 
+      devLog('📥 [useTasks] Resposta do Supabase:', { 
         success: !updateError, 
         error: updateError,
         result: updateResult,
@@ -253,8 +275,8 @@ export function useTasks(userId?: string, cardId?: string) {
         throw updateError;
       }
 
-      console.log('✅ [useTasks] Status atualizado no banco com sucesso');
-      console.log('✅ [useTasks] Linhas afetadas:', updateResult?.length || 0);
+      devLog('✅ [useTasks] Status atualizado no banco com sucesso');
+      devLog('✅ [useTasks] Linhas afetadas:', updateResult?.length || 0);
       return true;
     } catch (err: any) {
       console.error('❌ [useTasks] Erro ao atualizar status da tarefa:', err);
@@ -266,7 +288,7 @@ export function useTasks(userId?: string, cardId?: string) {
   // Atualizar tarefa completa
   const updateTask = async (taskId: string, updates: Partial<CreateTaskInput>): Promise<boolean> => {
     try {
-      console.log('📝 [useTasks] Atualizando tarefa no banco...', { taskId, updates });
+      devLog('📝 [useTasks] Atualizando tarefa no banco...', { taskId, updates });
       
       const updateData = {
         ...updates,
@@ -274,7 +296,7 @@ export function useTasks(userId?: string, cardId?: string) {
       };
 
       // 1. Atualização otimista no estado local (UI instantânea)
-      console.log('⚡ [useTasks] Atualizando UI otimisticamente...');
+      devLog('⚡ [useTasks] Atualizando UI otimisticamente...');
       setTasks(prevTasks => 
         prevTasks.map(task => {
           if (task.id === taskId) {
@@ -287,7 +309,7 @@ export function useTasks(userId?: string, cardId?: string) {
               updatedTask.assigned_to_name = 'Carregando...';
             }
             
-            console.log('✨ [useTasks] Tarefa atualizada otimisticamente:', updatedTask);
+            devLog('✨ [useTasks] Tarefa atualizada otimisticamente:', updatedTask);
             return updatedTask;
           }
           return task;
@@ -329,7 +351,7 @@ export function useTasks(userId?: string, cardId?: string) {
       }
 
       // 3. Sincronizar com dados reais do banco (incluindo nomes atualizados)
-      console.log('✅ [useTasks] Tarefa salva no banco, sincronizando dados completos...');
+      devLog('✅ [useTasks] Tarefa salva no banco, sincronizando dados completos...');
       if (updatedData) {
         const syncedTask: Task = {
           id: updatedData.id,
@@ -351,7 +373,7 @@ export function useTasks(userId?: string, cardId?: string) {
           prevTasks.map(task => task.id === taskId ? syncedTask : task)
         );
         
-        console.log('✅ [useTasks] Tarefa sincronizada com dados do banco:', syncedTask);
+        devLog('✅ [useTasks] Tarefa sincronizada com dados do banco:', syncedTask);
       }
 
       return true;
@@ -365,7 +387,7 @@ export function useTasks(userId?: string, cardId?: string) {
   // Deletar tarefa (SOFT DELETE)
   const deleteTask = async (taskId: string): Promise<boolean> => {
     try {
-      console.log('🗑️ [useTasks] Soft delete da tarefa:', taskId);
+      devLog('🗑️ [useTasks] Soft delete da tarefa:', taskId);
       
       const { error: deleteError } = await (supabase as any)
         .from('card_tasks')
@@ -378,10 +400,10 @@ export function useTasks(userId?: string, cardId?: string) {
       if (deleteError) throw deleteError;
 
       // Recarregar tarefas do banco para garantir sincronização
-      console.log('🔄 [useTasks] Recarregando tarefas após exclusão...');
+      devLog('🔄 [useTasks] Recarregando tarefas após exclusão...');
       await loadTasks();
       
-      console.log('✅ [useTasks] Tarefa deletada com sucesso');
+      devLog('✅ [useTasks] Tarefa deletada com sucesso');
       return true;
     } catch (err: any) {
       console.error('❌ [useTasks] Erro ao deletar tarefa:', err);
@@ -402,7 +424,13 @@ export function useTasks(userId?: string, cardId?: string) {
     // Só ativar Realtime quando filtrar por cardId (não por userId)
     if (!cardId) return;
 
-    console.log('🔴 [useTasks] Configurando Realtime para card:', cardId);
+    // Evitar criar canais duplicados
+    if (channelRef.current) {
+      devLog('⚠️ [useTasks] Canal já existe, pulando criação');
+      return;
+    }
+
+    devLog('🔴 [useTasks] Configurando Realtime para card:', cardId);
     
     const channel = supabase
       .channel(`tasks-${cardId}`)
@@ -415,22 +443,27 @@ export function useTasks(userId?: string, cardId?: string) {
           filter: `card_id=eq.${cardId}`
         },
         (payload) => {
-          console.log('🔴 [useTasks] Mudança detectada no banco:', payload.eventType, payload);
+          devLog('🔴 [useTasks] Mudança detectada no banco:', payload.eventType, payload);
           
           // Recarregar tarefas automaticamente quando houver qualquer mudança
           loadTasks();
         }
       )
       .subscribe((status) => {
-        console.log('🔴 [useTasks] Status da subscrição Realtime:', status);
+        devLog('🔴 [useTasks] Status da subscrição Realtime:', status);
       });
+
+    channelRef.current = channel;
 
     // Cleanup ao desmontar
     return () => {
-      console.log('🔴 [useTasks] Removendo subscrição Realtime');
-      supabase.removeChannel(channel);
+      devLog('🔴 [useTasks] Removendo subscrição Realtime');
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [cardId]);
+  }, [cardId, loadTasks]);
 
   return {
     tasks,

@@ -34,26 +34,50 @@ export function useInbox() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
 
   const fetchAll = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
     setError(null);
     try {
+      // primeira página (reseta paginação)
       const { data, error } = await supabase
         .from('inbox_notifications')
         .select('*')
         .eq('user_id', profile.id)
-        .order('priority', { ascending: true })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, pageSize - 1);
       if (error) throw error;
       setItems((data || []) as InboxItem[]);
+      setPage(1);
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
       setLoading(false);
     }
   }, [profile?.id]);
+
+  const fetchMore = useCallback(async () => {
+    if (!profile?.id) return;
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('inbox_notifications')
+      .select('*')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) return;
+    if (!data || data.length === 0) return;
+    setItems(prev => {
+      const map = new Map(prev.map(i => [i.id, i]));
+      for (const it of data as InboxItem[]) map.set(it.id, it);
+      return Array.from(map.values()).sort((a,b)=> new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    });
+    setPage(p => p + 1);
+  }, [profile?.id, page]);
 
   const create = useCallback(async (input: Omit<InboxItem, 'id' | 'created_at' | 'user_id'>) => {
     if (!profile?.id) throw new Error('Sem usuário');
@@ -105,17 +129,29 @@ export function useInbox() {
     if (!profile?.id) return;
     const channel = supabase
       .channel(`inbox-${profile.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbox_notifications', filter: `user_id=eq.${profile.id}` }, () => {
-        fetchAll();
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inbox_notifications', filter: `user_id=eq.${profile.id}` }, (payload: any) => {
+        const row = payload.new as InboxItem;
+        if (!row) return;
+        setItems(prev => [row, ...prev.filter(i => i.id !== row.id)].slice(0, pageSize * Math.max(1, page)));
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'inbox_notifications', filter: `user_id=eq.${profile.id}` }, (payload: any) => {
+        const row = payload.new as InboxItem;
+        if (!row) return;
+        setItems(prev => prev.map(i => i.id === row.id ? row : i));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'inbox_notifications', filter: `user_id=eq.${profile.id}` }, (payload: any) => {
+        const row = payload.old as InboxItem;
+        if (!row) return;
+        setItems(prev => prev.filter(i => i.id !== row.id));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profile?.id, fetchAll]);
+  }, [profile?.id, page, pageSize]);
 
   return {
     items, loading, error,
-    fetchAll, create, update, remove,
+    fetchAll, fetchMore,
+    create, update, remove,
     markRead, markAllRead,
   };
 }
-

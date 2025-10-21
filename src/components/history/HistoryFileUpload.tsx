@@ -128,7 +128,7 @@ export function HistoryFileUpload({ onUploadSuccess }: HistoryFileUploadProps) {
           Importar Inadimplência
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="w-5 h-5" />

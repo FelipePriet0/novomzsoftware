@@ -143,7 +143,7 @@ export function HistoryDetailModal({ historyId, isOpen, onClose }: HistoryDetail
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh]">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -158,7 +158,7 @@ export function HistoryDetailModal({ historyId, isOpen, onClose }: HistoryDetail
   if (!detail) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh]">
           <div className="text-center py-8">
             <p className="text-muted-foreground">Detalhes não encontrados.</p>
           </div>
@@ -169,7 +169,7 @@ export function HistoryDetailModal({ historyId, isOpen, onClose }: HistoryDetail
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent aria-describedby={undefined} className="max-w-4xl max-h-[90vh]">
         <DialogHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div>
             <DialogTitle className="text-xl">

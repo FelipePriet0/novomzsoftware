@@ -86,7 +86,7 @@ export function ParecerConfirmModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-full ${config.bgColor} ${config.borderColor} border`}>
@@ -145,9 +145,10 @@ export function ParecerConfirmModal({
 
         <DialogFooter className="gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={onClose}
             disabled={isLoading}
+            className="bg-gray-500 hover:bg-gray-600 text-white border-gray-500 hover:border-gray-600"
           >
             Cancelar
           </Button>

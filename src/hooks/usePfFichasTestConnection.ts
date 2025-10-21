@@ -1,5 +1,6 @@
 import { usePfFichasTest } from './usePfFichasTest';
 import { supabase } from '@/integrations/supabase/client';
+import { dbg } from '@/lib/debug';
 
 interface PfFichaFormData {
   // Cliente
@@ -63,6 +64,7 @@ interface PfFichaFormData {
   conjuge: {
     estadoCivil?: string;
     obs?: string;
+    idade?: string;
     nome?: string;
     telefone?: string;
     whatsapp?: string;
@@ -133,7 +135,7 @@ export function usePfFichasTestConnection() {
         .maybeSingle();
 
       if (existing) {
-        console.log('✅ [usePfFichasTestConnection] PF Ficha já existe:', existing.id);
+        dbg('pf', 'PF Ficha já existe');
         return existing.id;
       }
 
@@ -143,7 +145,7 @@ export function usePfFichasTestConnection() {
       };
 
       const newPfFicha = await createPfFicha(pfFichaData);
-      console.log('✅ [usePfFichasTestConnection] PF Ficha criada:', newPfFicha.id);
+      dbg('pf', 'PF Ficha criada');
       return newPfFicha.id;
 
     } catch (error) {
@@ -159,19 +161,36 @@ export function usePfFichasTestConnection() {
 
       const updateData: any = {};
 
-      // Helper para datas (evita enviar string vazia para colunas DATE)
+      // Helper para datas (converte DD/MM/YYYY para YYYY-MM-DD)
       const normalizeDate = (v?: string | null) => {
         const t = (v || '').trim();
         if (!t) return null;
-        // Aceita apenas YYYY-MM-DD por segurança
-        return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
+        
+        // Se já está em YYYY-MM-DD, retorna
+        if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+        
+        // Se está em DD/MM/YYYY, converte para YYYY-MM-DD
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(t)) {
+          const [day, month, year] = t.split('/');
+          return `${year}-${month}-${day}`;
+        }
+        
+        return null;
       };
 
-      // Map cliente data
+      // Map cliente data (não sobrescrever com vazio)
       if (formData.cliente) {
-        updateData.birth_date = normalizeDate(formData.cliente.nasc);
-        updateData.naturalidade = formData.cliente.naturalidade;
-        updateData.uf_naturalidade = formData.cliente.uf;
+        const bdate = normalizeDate(formData.cliente.nasc);
+        if (bdate) updateData.birth_date = bdate;
+        if (formData.cliente.naturalidade && formData.cliente.naturalidade.trim()) {
+          updateData.naturalidade = formData.cliente.naturalidade;
+        }
+        if (formData.cliente.uf && formData.cliente.uf.trim()) {
+          updateData.uf_naturalidade = formData.cliente.uf;
+        }
+        if (typeof formData.cliente.doPs === 'string' && formData.cliente.doPs.trim()) {
+          updateData.do_ps = formData.cliente.doPs;
+        }
       }
 
       // Map endereco data
@@ -217,13 +236,13 @@ export function usePfFichasTestConnection() {
       if (formData.conjuge) {
         updateData.estado_civil = formData.conjuge.estadoCivil;
         updateData.conjuge_obs = formData.conjuge.obs;
+        updateData.conjuge_idade = formData.conjuge.idade ? Number(formData.conjuge.idade) : undefined;
         updateData.conjuge_nome = formData.conjuge.nome;
         updateData.conjuge_telefone = formData.conjuge.telefone;
         updateData.conjuge_whatsapp = formData.conjuge.whatsapp;
         updateData.conjuge_cpf = formData.conjuge.cpf;
         updateData.conjuge_naturalidade = formData.conjuge.naturalidade;
         updateData.conjuge_uf = formData.conjuge.uf;
-        updateData.conjuge_obs2 = formData.conjuge.obs2;
         updateData.conjuge_do_ps = formData.conjuge.doPs;
       }
 
@@ -250,22 +269,29 @@ export function usePfFichasTestConnection() {
       }
 
       // Map outras informacoes
-      if (formData.outras) {
-        updateData.plano_escolhido = formData.outras.planoEscolhido;
-        updateData.dia_vencimento = formData.outras.diaVencimento;
-        updateData.carne_impresso = formData.outras.carneImpresso;
-        updateData.sva_avulso = formData.outras.svaAvulso;
-      }
+      // NOTA: planoEscolhido, diaVencimento, carneImpresso, svaAvulso são salvos em applicants, não em pf_fichas_test
 
       // Map informacoes relevantes
-      if (formData.infoRelevantes) {
-        updateData.info = formData.infoRelevantes.info;
-        updateData.info_mk = formData.infoRelevantes.infoMk;
-        updateData.parecer_analise = formData.infoRelevantes.parecerAnalise;
+      // NOTA: info, infoMk, parecerAnalise são salvos em applicants, não em pf_fichas_test
+
+      // 🔍 DEBUG TEMPORÁRIO: Verificar campos "do ps"
+      if (import.meta.env.DEV) {
+        dbg('pf', 'Campos DO PS salvos', {
+          'cliente.doPs → do_ps': updateData.do_ps,
+          'endereco.doPs → endereco_do_ps': updateData.endereco_do_ps,
+          'empregoRenda.doPs → emprego_do_ps': updateData.emprego_do_ps,
+          'conjuge.doPs → conjuge_do_ps': updateData.conjuge_do_ps,
+          'formData recebido': {
+            cliente_doPs: formData.cliente?.doPs,
+            endereco_doPs: formData.endereco?.doPs,
+            empregoRenda_doPs: formData.empregoRenda?.doPs,
+            conjuge_doPs: formData.conjuge?.doPs,
+          }
+        });
       }
 
       await updatePfFicha(pfFichaId, updateData);
-      console.log('✅ [usePfFichasTestConnection] Dados pessoais salvos');
+      dbg('pf', 'Dados pessoais salvos');
 
     } catch (error) {
       console.error('❌ [usePfFichasTestConnection] Erro ao salvar dados pessoais:', error);
