@@ -98,6 +98,15 @@ export function ExpandedFichaPJModal({ open, onClose, applicationId, onRefetch, 
   const [expanded, setExpanded] = useState(false);
   const [pjSubmit, setPjSubmit] = useState<(() => void) | null>(null);
 
+  // Lock body scroll and center viewport when modal/page is open
+  useEffect(() => {
+    if (!open && !asPage) return;
+    const prevOverflow = document.body.style.overflow;
+    try { window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); } catch { window.scrollTo(0, 0); }
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open, asPage]);
+
   // Realtime: refletir alterações do applicants enquanto usuário não está editando
   useEffect(() => {
     if (!open) return;

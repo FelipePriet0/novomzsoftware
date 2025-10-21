@@ -74,6 +74,15 @@ export function ExpandedFichaModal({
   const [formApi, setFormApi] = useState<{ getCurrentValues: () => ComercialFormValues; flushAutosave: () => Promise<void> } | null>(null);
   // Removido: fluxo applicants_test (legado)
   const [expanded, setExpanded] = useState(false);
+
+  // When this modal is open (or rendered as page), lock background scroll and center viewport
+  useEffect(() => {
+    if (!open && !asPage) return;
+    const prevOverflow = document.body.style.overflow;
+    try { window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); } catch { window.scrollTo(0, 0); }
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, [open, asPage]);
   
   // Realtime: refletir alterações do applicants enquanto não há edição ativa
   useEffect(() => {

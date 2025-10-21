@@ -149,6 +149,17 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
   const [commentsRefreshKey, setCommentsRefreshKey] = useState(0);
   const [showComments, setShowComments] = useState(false);
 
+  // Lock body scroll and bring viewport to top while modal is open
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    // Scroll to top to avoid partially off-screen dialogs when page was scrolled
+    try { window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }); } catch { window.scrollTo(0, 0); }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
