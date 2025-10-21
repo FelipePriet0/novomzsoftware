@@ -1564,7 +1564,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.unicaNoLoteObs" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Obs</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl><Input {...field} value={field.value ?? ''} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             
@@ -1572,7 +1572,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.comQuemReside" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Com quem reside</FormLabel>
-                <FormControl><Input {...field} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl><Input {...field} value={field.value ?? ''} placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.nasOutras" render={({ field }) => (
@@ -1627,7 +1627,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
                 <FormField control={form.control} name="relacoes.nomeDe" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nome de</FormLabel>
-                    <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                    <FormControl><Input {...field} value={field.value ?? ''} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -1668,7 +1668,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.nomeComprovante" render={({ field }) => (
               <FormItem>
                 <FormLabel>Nome do comprovante</FormLabel>
-                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl><Input {...field} value={field.value ?? ''} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             
@@ -1676,14 +1676,14 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
             <FormField control={form.control} name="relacoes.nomeLocador" render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Nome do Locador(a)</FormLabel>
-                <FormControl><Input {...field} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl><Input {...field} value={field.value ?? ''} autoComplete="off" placeholder="Digite aqui..." className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="relacoes.telefoneLocador" render={({ field }) => (
               <FormItem>
                 <FormLabel>Telefone</FormLabel>
-                <FormControl><Input inputMode="tel" {...field} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
+                <FormControl><Input inputMode="tel" {...field} value={field.value ?? ''} placeholder="Ex: (11) 99999-0000" className="flex h-12 w-full items-center justify-between rounded-[30px] border border-white bg-[rgba(217,217,217,0.20)] px-5 py-3 text-sm text-white placeholder-white/70 shadow-[0_5.447px_5.447px_rgba(0,0,0,0.25)] focus:outline-none focus:ring-4 focus:ring-[rgba(1,137,66,0.25)] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50" /></FormControl>
               </FormItem>
             )} />
             
@@ -2162,7 +2162,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Quem Solicitou</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Nome do colaborador" />
+                  <Input {...field} value={field.value ?? ''} placeholder="Nome do colaborador" />
                 </FormControl>
               </FormItem>
             )} />
@@ -2170,7 +2170,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Tel</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Ex: (11) 99999-0000" />
+                  <Input {...field} value={field.value ?? ''} placeholder="Ex: (11) 99999-0000" />
                 </FormControl>
               </FormItem>
             )} />
@@ -2178,7 +2178,7 @@ export default function NovaFichaComercialForm({ onSubmit, onCancel, initialValu
               <FormItem>
                 <FormLabel>Protocolo MK</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="Número do protocolo" />
+                  <Input {...field} value={field.value ?? ''} placeholder="Número do protocolo" />
                 </FormControl>
               </FormItem>
             )} />
