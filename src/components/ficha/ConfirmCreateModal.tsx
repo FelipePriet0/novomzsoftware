@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +17,54 @@ interface ConfirmCreateModalProps {
 }
 
 export function ConfirmCreateModal({ open, onClose, onConfirm }: ConfirmCreateModalProps) {
+  // Drag support (grab anywhere except inputs)
+  const [dx, setDx] = React.useState(0);
+  const [dy, setDy] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const startRef = React.useRef({ x: 0, y: 0, bdx: 0, bdy: 0 });
+  useEffect(() => { if (open) { setDx(0); setDy(0); } }, [open]);
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+  const excluded = (el: HTMLElement | null) => {
+    if (!el) return false;
+    const t = el.tagName?.toLowerCase();
+    if (t === 'input' || t === 'textarea' || t === 'select' || t === 'button') return true;
+    if ((el as any).isContentEditable) return true;
+    return !!el.closest('input, textarea, select, button, [contenteditable="true"], [data-ignore-drag]');
+  };
+  const onStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const target = (e as any).target as HTMLElement | null;
+    if (excluded(target)) return;
+    const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const cy = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    startRef.current = { x: cx, y: cy, bdx: dx, bdy: dy };
+    setDragging(true);
+    const stop = () => {
+      setDragging(false);
+      window.removeEventListener('mousemove', move as any);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchmove', move as any);
+      window.removeEventListener('touchend', stop);
+    };
+    const move = (ev: MouseEvent | TouchEvent) => {
+      const mx = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientX : (ev as MouseEvent).clientX;
+      const my = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientY : (ev as MouseEvent).clientY;
+      const ndx = startRef.current.bdx + (mx - startRef.current.x);
+      const ndy = startRef.current.bdy + (my - startRef.current.y);
+      setDx(ndx);
+      setDy(ndy);
+    };
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop, { passive: true });
+    window.addEventListener('mousemove', move as any);
+    window.addEventListener('touchmove', move as any, { passive: false });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent aria-describedby={undefined} className="max-w-lg p-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="max-w-lg p-0 overflow-hidden cursor-grab"
+        onMouseDown={onStart} onTouchStart={onStart}
+        style={{ transform: `translate3d(${dx}px, ${dy}px, 0)` }}
+      >
         {/* Header com gradiente moderno */}
         <DialogHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
           <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
@@ -128,3 +174,4 @@ export function ConfirmCreateModal({ open, onClose, onConfirm }: ConfirmCreateMo
     </Dialog>
   );
 }
+import React from "react";

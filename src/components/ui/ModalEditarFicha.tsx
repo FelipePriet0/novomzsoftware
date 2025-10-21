@@ -160,6 +160,65 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
     };
   }, []);
 
+  // ===== Movable (draggable) modal =====
+  const [drag, setDrag] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = React.useRef<{ startX: number; startY: number; baseDx: number; baseDy: number }>({ startX: 0, startY: 0, baseDx: 0, baseDy: 0 });
+
+  const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+  const onDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    dragStartRef.current = { startX: clientX, startY: clientY, baseDx: drag.dx, baseDy: drag.dy };
+    setDragging(true);
+    // Avoid text selection while dragging
+    const prev = (document.body.style as any).userSelect;
+    (document.body.style as any).userSelect = 'none';
+    const stop = () => {
+      setDragging(false);
+      (document.body.style as any).userSelect = prev || '';
+      window.removeEventListener('mousemove', onDragMove as any);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchmove', onDragMove as any);
+      window.removeEventListener('touchend', stop);
+    };
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchend', stop, { passive: true });
+    window.addEventListener('mousemove', onDragMove as any);
+    window.addEventListener('touchmove', onDragMove as any, { passive: false });
+  };
+
+  const onDragMove = (e: MouseEvent | TouchEvent) => {
+    const clientX = (e as TouchEvent).touches ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = (e as TouchEvent).touches ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+    const { startX, startY, baseDx, baseDy } = dragStartRef.current;
+    const ndx = baseDx + (clientX - startX);
+    const ndy = baseDy + (clientY - startY);
+    // Rough clamp to keep modal roughly within viewport while allowing generous movement
+    const maxX = Math.max(0, window.innerWidth / 2 - 40);
+    const maxY = Math.max(0, window.innerHeight / 2 - 40);
+    setDrag({ dx: clamp(ndx, -maxX, maxX), dy: clamp(ndy, -maxY, maxY) });
+  };
+
+  // Allow drag from anywhere except interactive inputs/controls
+  const isDragExcluded = (el: HTMLElement | null): boolean => {
+    if (!el) return false;
+    if (el.tagName) {
+      const t = el.tagName.toLowerCase();
+      if (t === 'input' || t === 'textarea' || t === 'select' || t === 'button') return true;
+    }
+    if ((el as any).isContentEditable) return true;
+    if (el.closest('input, textarea, select, button, [contenteditable="true"], [data-ignore-drag], .dropdown-menu, [role="menuitem"], [data-radix-collection-item]')) return true;
+    return false;
+  };
+
+  const handleDragMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const target = (e as any).target as HTMLElement | null;
+    if (isDragExcluded(target)) return; // don't start drag from inputs/menus
+    onDragStart(e);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -1094,13 +1153,16 @@ export default function ModalEditarFicha({ card, onClose, onSave, onDesingressar
 
   return (
     <div>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => e.preventDefault()}>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={(e) => e.preventDefault()}>
         <div
-          className="bg-white text-gray-900 p-0 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden border border-gray-200"
+          className={"bg-white text-gray-900 p-0 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden border border-gray-200 " + (dragging ? 'cursor-grabbing' : 'cursor-grab')}
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={handleDragMouseDown}
+          onTouchStart={handleDragMouseDown}
+          style={{ position: 'fixed', top: '50%', left: '50%', transform: `translate(-50%, -50%) translate(${drag.dx}px, ${drag.dy}px)` }}
         >
           {/* Header com gradiente moderno */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white">
+          <div className="relative overflow-hidden bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white select-none">
             <div className="absolute inset-0 opacity-10 pointer-events-none" aria-hidden="true"></div>
             <div className="relative px-6 py-4">
               <div className="flex items-center justify-between">

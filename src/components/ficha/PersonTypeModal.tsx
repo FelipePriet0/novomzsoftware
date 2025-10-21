@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { IdCard, Building2, ChevronRight } from "lucide-react";
-import { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 interface PersonTypeModalProps {
   open: boolean;
@@ -21,9 +21,38 @@ export function PersonTypeModal({ open, onClose, onSelect }: PersonTypeModalProp
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onSelect]);
 
+  // Ensure opens centered: reset any drag transform on open
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (open && contentRef.current) {
+      contentRef.current.style.transform = 'translate3d(0px, 0px, 0px)';
+    }
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent aria-describedby={undefined} className="sm:max-w-2xl p-0 overflow-hidden">
+      {/* Drag support */}
+      <DialogContent
+        ref={contentRef}
+        aria-describedby={undefined}
+        className="sm:max-w-2xl p-0 overflow-hidden cursor-grab"
+        onMouseDown={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (target && target.closest('input, textarea, select, button, [contenteditable="true"], [data-ignore-drag]')) return;
+          // simple translate based on mouse move
+          const startX = e.clientX; const startY = e.clientY; const el = e.currentTarget as HTMLDivElement;
+          const style = window.getComputedStyle(el);
+          const matrix = new DOMMatrixReadOnly(style.transform);
+          const baseX = matrix.m41 || 0; const baseY = matrix.m42 || 0;
+          const onMove = (ev: MouseEvent) => {
+            const dx = ev.clientX - startX; const dy = ev.clientY - startY;
+            el.style.transform = `translate3d(${baseX + dx}px, ${baseY + dy}px, 0)`;
+          };
+          const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      >
         {/* Header com gradiente moderno */}
         <DialogHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
           <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>

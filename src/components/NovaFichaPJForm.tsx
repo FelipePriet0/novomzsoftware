@@ -166,9 +166,43 @@ export default function NovaFichaPJForm({ open, onClose, onCreated, onBack }: No
     }
   });
 
+  // Drag support (grab anywhere except inputs)
+  const [dx, setDx] = React.useState(0);
+  const [dy, setDy] = React.useState(0);
+  React.useEffect(() => { if (open) { setDx(0); setDy(0); } }, [open]);
+  const onStart = (e: React.MouseEvent | React.TouchEvent) => {
+    const target = (e as any).target as HTMLElement | null;
+    if (target && target.closest('input, textarea, select, button, [contenteditable="true"], [data-ignore-drag]')) return;
+    const cx = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const cy = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    const baseX = dx; const baseY = dy;
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+    const move = (ev: MouseEvent | TouchEvent) => {
+      const mx = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientX : (ev as MouseEvent).clientX;
+      const my = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientY : (ev as MouseEvent).clientY;
+      const ndx = baseX + (mx - cx);
+      const ndy = baseY + (my - cy);
+      setDx(ndx);
+      setDy(ndy);
+    };
+    const stop = () => {
+      window.removeEventListener('mousemove', move as any);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchmove', move as any);
+      window.removeEventListener('touchend', stop);
+    };
+    window.addEventListener('mousemove', move as any);
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchmove', move as any, { passive: false });
+    window.addEventListener('touchend', stop, { passive: true });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => (!o ? onClose() : undefined)}>
-      <DialogContent aria-describedby={undefined} className="sm:max-w-2xl p-0 overflow-hidden">
+      <DialogContent aria-describedby={undefined} className="sm:max-w-2xl p-0 overflow-hidden cursor-grab"
+        onMouseDown={onStart} onTouchStart={onStart}
+        style={{ transform: `translate3d(${dx}px, ${dy}px, 0)` }}
+      >
         {/* Header com gradiente moderno */}
         <DialogHeader className="bg-gradient-to-br from-[#018942] via-[#016b35] to-[#014d28] text-white p-6 relative overflow-hidden">
           <div className='absolute inset-0 bg-[url("data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23ffffff%22 fill-opacity=%220.05%22%3E%3Ccircle cx=%2230%22 cy=%2230%22 r=%222%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")] opacity-20'></div>
